@@ -1,0 +1,68 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:voicemod="using:MasterHub.Core.Integrations.Voicemod"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyVoicemodSettingsSectionView"
+             x:DataType="vm:KeyItemViewModel">
+
+    <StackPanel Spacing="8">
+        <!-- Pasek statusu i szybkiego połączenia z Voicemod -->
+        <Border Classes="statusBadgeCard" Padding="10,8">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                    <TextBlock Text="{Binding VoicemodConnectionStatusDisplay}" FontSize="12" FontWeight="SemiBold" />
+                    <TextBlock Text="{loc:Loc Voicemod_PortHint, FallbackValue='Port: 59129 | Control WebSocket API'}" Classes="dim" FontSize="10" />
+                </StackPanel>
+                <Button Grid.Column="1" Classes="pillBtn" Padding="8,4"
+                        Command="{Binding OpenVoicemodSettingsCommand}"
+                        Content="{loc:Loc Key_VoicemodOpenSettingsBtn, FallbackValue='⚙️ Ustawienia połączenia'}" />
+            </Grid>
+        </Border>
+
+        <!-- Wybór głosu (VoicemodVoiceSelect) -->
+        <StackPanel Spacing="6" IsVisible="{Binding IsVoicemodVoiceAction}">
+            <TextBlock Text="{loc:Loc Key_VoicemodVoiceSelect, FallbackValue='Wybierz głos Voicemod z listy:'}" Classes="caption" />
+            <ComboBox ItemsSource="{Binding AvailableVoicemodVoices}"
+                      SelectedItem="{Binding SelectedVoicemodVoice, Mode=TwoWay}"
+                      HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="voicemod:VoicemodVoiceItem">
+                        <TextBlock Text="{Binding Name}" />
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+
+            <!-- Szybkie włączenie / wyłączenie dźwięków tła dla modulowanego głosu -->
+            <Button Classes="pillBtn"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Center"
+                    Command="{Binding ToggleVoicemodBackgroundEffectsCommand}"
+                    Content="{Binding VoicemodBackgroundEffectsStatusDisplay}" />
+        </StackPanel>
+
+        <!-- Sterowanie dźwiękiem tła (VoicemodBackgroundToggle) -->
+        <StackPanel Spacing="6" IsVisible="{Binding IsVoicemodBackgroundToggleAction}">
+            <TextBlock Text="{loc:Loc Key_VoicemodBackgroundToggleHelp, FallbackValue='Przełącznik dźwięków otoczenia / tła (Background FX):'}" Classes="caption" />
+            <Button Classes="pillBtn"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Center"
+                    Command="{Binding ToggleVoicemodBackgroundEffectsCommand}"
+                    Content="{Binding VoicemodBackgroundEffectsStatusDisplay}" />
+        </StackPanel>
+
+        <!-- Wybór dźwięku (VoicemodPlaySound) -->
+        <StackPanel Spacing="4" IsVisible="{Binding IsVoicemodSoundAction}">
+            <TextBlock Text="{loc:Loc Key_VoicemodSoundSelect, FallbackValue='Wybierz mema / dźwięk z Soundboardu:'}" Classes="caption" />
+            <ComboBox ItemsSource="{Binding AvailableVoicemodSounds}"
+                      SelectedItem="{Binding SelectedVoicemodSound, Mode=TwoWay}"
+                      HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="voicemod:VoicemodSoundItem">
+                        <TextBlock Text="{Binding Name}" />
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

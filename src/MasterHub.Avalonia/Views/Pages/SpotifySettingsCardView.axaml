@@ -1,0 +1,95 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Pages.SpotifySettingsCardView"
+             x:DataType="vm:SettingsPageViewModel">
+
+    <Border Classes="glassCard" Padding="18">
+        <StackPanel Spacing="14">
+            <!-- Nagłówek i Status Połączenia Spotify -->
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <PathIcon Data="{StaticResource IconSpotify}" Width="18" Height="18"
+                              Foreground="#1DB954" VerticalAlignment="Center" />
+                    <TextBlock Text="{loc:Loc Spotify_Title}" Classes="h3" VerticalAlignment="Center" />
+                </StackPanel>
+
+                <Border Grid.Column="2" Background="{Binding SpotifyConnectionStatusColor}" CornerRadius="10" Padding="8,3" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding SpotifyConnectionStatusText}" FontSize="11" FontWeight="Bold" Foreground="#0F1117" />
+                </Border>
+            </Grid>
+
+            <TextBlock Text="{loc:Loc Spotify_Subtitle}" Classes="dim" FontSize="11" />
+
+            <!-- Spotify Client ID -->
+            <StackPanel Spacing="4">
+                <TextBlock Text="{loc:Loc Spotify_ClientIdLabel}" Classes="caption" />
+                <TextBox Text="{Binding SpotifyClientId, Mode=TwoWay}" PlaceholderText="{loc:Loc Spotify_ClientIdPlaceholder}" />
+            </StackPanel>
+
+            <!-- Status bieżącego odtwarzacza i opcje połączenia -->
+            <Border Classes="statusBadgeCard" Padding="12,10">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="4">
+                        <TextBlock Text="{Binding SpotifyNowPlayingText}" FontWeight="Bold" FontSize="12" Foreground="#38BDF8" />
+                        <WrapPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding SpotifyShuffleStatusText}" FontSize="11" Foreground="#94A3B8" Margin="0,0,12,0" />
+                            <TextBlock Text="{Binding SpotifyRepeatStatusText}" FontSize="11" Foreground="#94A3B8" Margin="0,0,12,0" />
+                            <TextBlock Text="{Binding SpotifyLikedStatusText}" FontSize="11" Foreground="#10B981" />
+                        </WrapPanel>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                        <CheckBox Content="{loc:Loc Spotify_AutoConnect}" IsChecked="{Binding SpotifyAutoConnect, Mode=TwoWay}" />
+                        <CheckBox Content="{loc:Loc Spotify_FallbackHotkeys}" IsChecked="{Binding SpotifyFallbackToDesktopHotkeys, Mode=TwoWay}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Testowanie URI Playlisty lub Utworu (Etap 6.2) -->
+            <StackPanel Spacing="6">
+                <TextBlock Text="{loc:Loc Spotify_TestUriLabel}" Classes="caption" />
+                <Grid ColumnDefinitions="*,8,Auto,8,Auto,8,Auto">
+                    <TextBox Grid.Column="0" Text="{Binding SpotifyTestUri, Mode=TwoWay}"
+                             PlaceholderText="{loc:Loc Spotify_TestUriPlaceholder}" />
+                    <Button Grid.Column="2" Classes="pillBtn" Command="{Binding TestSpotifyPlayUriCommand}"
+                            Content="{loc:Loc Spotify_PlayUriBtn}" />
+                    <Button Grid.Column="4" Classes="pillBtn" Command="{Binding TestSpotifyAddToQueueCommand}"
+                            Content="{loc:Loc Spotify_QueueBtn}" />
+                    <Button Grid.Column="6" Classes="pillBtn" Command="{Binding LoadSpotifyPlaylistsCommand}"
+                            IsEnabled="{Binding IsSpotifyConnected}" Content="{loc:Loc Spotify_LoadPlaylistsBtn}" />
+                </Grid>
+            </StackPanel>
+
+            <!-- Przyciski akcji i testów sterowania -->
+            <StackPanel Spacing="8">
+                <WrapPanel Orientation="Horizontal">
+                    <Button Classes="pillBtn" Command="{Binding LoginSpotifyCommand}"
+                            IsEnabled="{Binding !IsSpotifyConnected}" Margin="0,0,8,8">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="🔑" FontSize="12" />
+                            <TextBlock Text="{loc:Loc Spotify_LoginBtn}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="pillBtn" Command="{Binding DisconnectSpotifyCommand}"
+                            IsEnabled="{Binding IsSpotifyConnected}" Content="{loc:Loc Spotify_DisconnectBtn}" Margin="0,0,8,8" />
+                    <Button Classes="pillBtn" Command="{Binding RefreshSpotifyStateCommand}"
+                            IsEnabled="{Binding IsSpotifyConnected}" Content="{loc:Loc Spotify_RefreshBtn}" Margin="0,0,8,8" />
+                    <Button Classes="pillBtn" Command="{Binding TestSpotifyShuffleCommand}"
+                            Content="{loc:Loc Spotify_TestShuffleBtn}" Margin="0,0,8,8" />
+                    <Button Classes="pillBtn" Command="{Binding TestSpotifyRepeatCommand}"
+                            Content="{loc:Loc Spotify_TestRepeatBtn}" Margin="0,0,8,8" />
+                    <Button Classes="pillBtn" Command="{Binding TestSpotifyLikeCommand}"
+                            Content="{loc:Loc Spotify_TestLikeBtn}" Margin="0,0,8,8" />
+                    <Button Classes="pillBtn" Command="{Binding SaveSpotifySettingsCommand}"
+                            Content="{loc:Loc Spotify_SaveBtn}" Margin="0,0,8,8" />
+                </WrapPanel>
+
+                <!-- Komunikat statusu i wskazówka -->
+                <TextBlock Text="{Binding SpotifyStatusMessage}" Foreground="{Binding SpotifyStatusMessageColor}"
+                           FontWeight="SemiBold" FontSize="11" TextWrapping="Wrap" />
+                <TextBlock Text="{loc:Loc Spotify_ConfigTip}" Classes="dim" FontSize="10" TextWrapping="Wrap" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

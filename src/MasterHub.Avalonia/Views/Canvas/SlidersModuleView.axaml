@@ -1,0 +1,119 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Canvas"
+             xmlns:elem="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Canvas.SlidersModuleView"
+             x:DataType="vm:CanvasViewModel">
+
+    <Border Classes="moduleContainer" HorizontalAlignment="Center">
+        <StackPanel Spacing="12">
+            <!-- Nagłówek modułu -->
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{loc:Loc Canvas_Sliders_Title}" Classes="h3" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Grid.Column="1" Text="{loc:Loc Canvas_Sliders_Subtitle}" Classes="dim" VerticalAlignment="Center" />
+            </Grid>
+
+            <!-- 5 Pionowych torów audio -->
+            <ItemsControl ItemsSource="{Binding Sliders}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="14" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="elem:SliderItemViewModel">
+                        <Border Width="88" Height="220" Classes="glassCard"
+                                Classes.selected="{Binding IsSelected}"
+                                Padding="8" PointerPressed="OnSliderPointerPressed">
+                            <Grid RowDefinitions="Auto,*,Auto,Auto" HorizontalAlignment="Center">
+                                <!-- Etykieta celu audio -->
+                                <TextBlock Grid.Row="0" Text="{Binding SelectedTarget}" Classes="caption"
+                                           TextTrimming="CharacterEllipsis" MaxWidth="80" HorizontalAlignment="Center" />
+
+                                <!-- Pionowy suwak fader (odczyt sprzętowy, sterowanie wyłącznie fizyczne) -->
+                                <Panel Grid.Row="1" HorizontalAlignment="Center" Height="140" Margin="0,6" ClipToBounds="False">
+                                    <!-- Wąski pasek zakresu w tle (0 - 100%) -->
+                                    <Border Width="2" Background="#4E5370" CornerRadius="1"
+                                            HorizontalAlignment="Center" VerticalAlignment="Stretch" />
+
+                                    <!-- Suwak fader: aktywna wartość jest szersza (6px), zakrywa tło i posiada podświetlenie LED -->
+                                    <Slider Orientation="Vertical"
+                                            Minimum="0" Maximum="100" Value="{Binding Percent}"
+                                            Foreground="{Binding ColorBrush}"
+                                            Background="Transparent"
+                                            IsHitTestVisible="False" Focusable="False"
+                                            ClipToBounds="False"
+                                            HorizontalAlignment="Center" Height="140">
+                                        <Slider.Resources>
+                                            <x:Double x:Key="SliderTrackThemeHeight">6</x:Double>
+                                            <CornerRadius x:Key="ControlCornerRadius">0,0,3,3</CornerRadius>
+                                        </Slider.Resources>
+                                        <Slider.Styles>
+                                            <Style Selector="Slider /template/ Grid#SliderContainer">
+                                                <Setter Property="ClipToBounds" Value="False" />
+                                            </Style>
+                                            <Style Selector="Slider /template/ Track#PART_Track">
+                                                <Setter Property="ClipToBounds" Value="False" />
+                                            </Style>
+                                            <!-- Odcinek powyżej gałki (zakres w tle pozostaje widoczny dzięki przezroczystości) -->
+                                            <Style Selector="Slider /template/ RepeatButton#PART_IncreaseButton,
+                                                             Slider:pointerover /template/ RepeatButton#PART_IncreaseButton">
+                                                <Setter Property="Background" Value="Transparent" />
+                                            </Style>
+                                            <Style Selector="Slider /template/ RepeatButton#PART_IncreaseButton /template/ Border,
+                                                             Slider:pointerover /template/ RepeatButton#PART_IncreaseButton /template/ Border">
+                                                <Setter Property="Background" Value="Transparent" />
+                                            </Style>
+                                            <!-- Szerszy aktywny pasek wartości suwaka (6px) z podświetleniem LED glow -->
+                                            <Style Selector="Slider /template/ RepeatButton#PART_DecreaseButton">
+                                                <Setter Property="ClipToBounds" Value="False" />
+                                                <Setter Property="Width" Value="6" />
+                                                <Setter Property="Effect">
+                                                    <DropShadowEffect BlurRadius="{Binding GlowBlurRadius}"
+                                                                      Opacity="{Binding GlowOpacity}"
+                                                                      OffsetX="0" OffsetY="0"
+                                                                      Color="{Binding GlowColor}" />
+                                                </Setter>
+                                            </Style>
+                                            <Style Selector="Slider /template/ RepeatButton#PART_DecreaseButton /template/ Border">
+                                                <Setter Property="Width" Value="6" />
+                                                <Setter Property="CornerRadius" Value="0,0,3,3" />
+                                                <Setter Property="Margin" Value="0,-9,0,0" />
+                                                <Setter Property="ClipToBounds" Value="False" />
+                                            </Style>
+                                            <Style Selector="Slider:pointerover /template/ RepeatButton#PART_DecreaseButton /template/ Border">
+                                                <Setter Property="Background" Value="{Binding ColorBrush}" />
+                                            </Style>
+                                            <!-- Gałka suwaka (kulka bez poświaty, matowe wykończenie, zawsze na wierzchu) -->
+                                            <Style Selector="Slider /template/ Thumb">
+                                                <Setter Property="ZIndex" Value="5" />
+                                                <Setter Property="Effect" Value="{x:Null}" />
+                                                <Setter Property="Width" Value="18" />
+                                                <Setter Property="Height" Value="18" />
+                                                <Setter Property="CornerRadius" Value="9" />
+                                                <Setter Property="Background" Value="#E2E8F0" />
+                                                <Setter Property="BorderBrush" Value="#475569" />
+                                                <Setter Property="BorderThickness" Value="1.5" />
+                                            </Style>
+                                        </Slider.Styles>
+                                    </Slider>
+                                </Panel>
+
+                                <!-- Wartość procentowa -->
+                                <TextBlock Grid.Row="2" Text="{Binding PercentDisplay}" FontSize="11" FontWeight="Bold"
+                                           Foreground="{StaticResource AccentPrimaryBrush}" HorizontalAlignment="Center" />
+
+                                <!-- Numer faderu -->
+                                <TextBlock Grid.Row="3" Text="{Binding Name}" Classes="dim"
+                                           HorizontalAlignment="Center" Margin="0,2,0,0" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </Border>
+</UserControl>

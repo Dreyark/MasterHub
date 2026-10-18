@@ -1,0 +1,58 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Window.TitleBarView"
+             x:DataType="vm:MainViewModel"
+             Height="44"
+             Background="{StaticResource MainBgBrush}">
+
+    <Border BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
+        <Grid ColumnDefinitions="Auto,*,Auto" Margin="16,0,10,0">
+            <!-- Lewa strona: Tytuł i nazwa urządzenia -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <TextBlock Text="COOLER MASTER" FontSize="11" FontWeight="Bold"
+                           Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
+                <Border Width="1" Height="14" Background="{StaticResource BorderSubtleBrush}" />
+                <TextBlock Text="MASTERHUB STUDIO" FontSize="11" FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <!-- Środek: Obszar przeciągania okna -->
+            <Border Grid.Column="1" Background="Transparent"
+                    PointerPressed="OnTitleBarPointerPressed" />
+
+            <!-- Prawa strona: Status USB oraz przyciski okna -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                <!-- Status połączenia USB -->
+                <Border Classes="statusBadgeCard">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Ellipse Width="7" Height="7" Fill="{Binding ConnectionStatusColor}" />
+                        <TextBlock Text="{Binding ConnectionStatusText}" FontSize="9.5" FontWeight="Bold"
+                                   Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Kontrolki okna -->
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <Button Classes="iconBtn" Width="32" Height="28" Click="OnMinimizeToTrayClick" ToolTip.Tip="{loc:Loc Common_MinimizeToTray}">
+                        <PathIcon Data="{StaticResource IconTray}" Width="11" Height="11" Foreground="{StaticResource TextMutedBrush}"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Button>
+                    <Button Classes="iconBtn" Width="32" Height="28" Click="OnMinimizeClick" ToolTip.Tip="{loc:Loc Common_Minimize}">
+                        <TextBlock Text="─" FontSize="11" Foreground="{StaticResource TextMutedBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Button>
+                    <Button Classes="iconBtn" Width="32" Height="28" Click="OnMaximizeClick" ToolTip.Tip="{loc:Loc Common_Maximize}">
+                        <TextBlock Text="◻" FontSize="11" Foreground="{StaticResource TextMutedBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Button>
+                    <Button Classes="iconBtn closeBtn" Width="32" Height="28" Click="OnCloseClick" ToolTip.Tip="{loc:Loc Common_Close}">
+                        <TextBlock Text="✕" FontSize="11" Foreground="{StaticResource AccentWarningBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Button>
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

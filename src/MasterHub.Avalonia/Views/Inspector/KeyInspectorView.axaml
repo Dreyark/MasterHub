@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:ins="using:MasterHub.Avalonia.Views.Inspector"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyInspectorView"
+             x:DataType="vm:KeyItemViewModel">
+
+    <StackPanel Spacing="8">
+        <!-- Nagłówek klawisza -->
+        <Border Classes="inspectorSection">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Border Grid.Column="0" Width="36" Height="36" CornerRadius="8"
+                        Background="{StaticResource CardActiveBgBrush}" Margin="0,0,10,0">
+                    <TextBlock Classes="emoji" Text="{Binding ActionIcon}" FontSize="18"
+                               FontFamily="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji, sans-serif"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding DisplayTitle}" Classes="h3" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding KeyNumberDisplay}" Classes="dim" FontSize="10" />
+                </StackPanel>
+                <Button Grid.Column="2" Classes="iconBtn" Command="{Binding ClearActionCommand}"
+                        IsVisible="{Binding HasAction}"
+                        ToolTip.Tip="{loc:Loc Key_ClearActionTip}" Padding="6">
+                    <TextBlock Text="🗑️" FontSize="13" />
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Zakładki konfiguracji klawisza -->
+        <TabControl>
+            <TabControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Rows="1" />
+                </ItemsPanelTemplate>
+            </TabControl.ItemsPanel>
+            <TabControl.Styles>
+                <Style Selector="TabItem">
+                    <Setter Property="HorizontalAlignment" Value="Stretch" />
+                    <Setter Property="HorizontalContentAlignment" Value="Center" />
+                </Style>
+            </TabControl.Styles>
+            <TabItem Header="{loc:Loc Tab_Action}" FontSize="11" FontWeight="SemiBold">
+                <Border Padding="0,8">
+                    <ins:KeyActionSettingsView />
+                </Border>
+            </TabItem>
+            <TabItem Header="{loc:Loc Tab_Appearance}" FontSize="11" FontWeight="SemiBold">
+                <Border Padding="0,8">
+                    <ins:KeyDisplaySettingsView />
+                </Border>
+            </TabItem>
+        </TabControl>
+    </StackPanel>
+</UserControl>

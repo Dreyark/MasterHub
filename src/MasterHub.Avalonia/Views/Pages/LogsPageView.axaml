@@ -1,0 +1,40 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Pages.LogsPageView"
+             x:DataType="vm:LogsPageViewModel">
+
+    <Grid RowDefinitions="Auto,*" Margin="24">
+        <!-- Nagłówek -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
+            <StackPanel Grid.Column="0" Spacing="4">
+                <TextBlock Text="{loc:Loc Logs_Title}" Classes="h2" />
+                <TextBlock Text="{loc:Loc Logs_Subtitle}" Classes="dim" />
+            </StackPanel>
+            <Button Grid.Column="1" Classes="pillBtn" Command="{Binding ClearLogsCommand}" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Data="{StaticResource IconTrash}" Width="11" Height="11"
+                              Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
+                    <TextBlock Text="{loc:Loc Logs_ClearBtn}" FontSize="11" FontWeight="SemiBold" />
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <!-- Okno logów w stylu terminala / konsoli -->
+        <Border Grid.Row="1" Background="{StaticResource MainBgBrush}"
+                BorderBrush="{StaticResource BorderSubtleBrush}"
+                BorderThickness="1" CornerRadius="12" Padding="14">
+            <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{Binding LogEntries}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Text}" FontFamily="Consolas, Cascadia Code, Courier New"
+                                       FontSize="11.5" Foreground="#00FFCC" Margin="0,2" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

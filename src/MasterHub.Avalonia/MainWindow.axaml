@@ -1,0 +1,78 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+        xmlns:nav="using:MasterHub.Avalonia.Views.Navigation"
+        xmlns:win="using:MasterHub.Avalonia.Views.Window"
+        xmlns:canvas="using:MasterHub.Avalonia.Views.Canvas"
+        xmlns:inspector="using:MasterHub.Avalonia.Views.Inspector"
+        xmlns:pages="using:MasterHub.Avalonia.Views.Pages"
+        x:Class="MasterHub.Avalonia.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Title="Cooler Master MasterHub"
+        Width="1440" Height="900"
+        MinWidth="1180" MinHeight="740"
+        WindowStartupLocation="CenterScreen"
+        WindowDecorations="BorderOnly"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="44"
+        Background="{StaticResource MainBgBrush}">
+
+    <Window.Styles>
+        <Style Selector="TextBlock#PART_Title">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+        <Style Selector="Button#PART_FullScreenButton">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+    </Window.Styles>
+
+    <Grid RowDefinitions="44,*">
+        <!-- Zintegrowany TitleBar -->
+        <win:TitleBarView Grid.Row="0" />
+
+        <!-- Główny układ: Lewa Nawigacja (72px) + Dynamiczna Treść -->
+        <Grid Grid.Row="1" ColumnDefinitions="72,*" Margin="0,8,12,12">
+            <!-- Kolumna 1: Lewa Nawigacja (72px) -->
+            <nav:NavigationSidebarView Grid.Column="0" DataContext="{Binding Navigation}" />
+
+            <!-- Kolumna 2: Główny obszar stron -->
+            <Panel Grid.Column="1" Margin="8,0,0,0">
+                <!-- Strona 1: Studio Konfiguracji (Układ 2-kolumnowy: Środek + Prawy Inspektor) -->
+                <Grid ColumnDefinitions="*,390" IsVisible="{Binding Navigation.IsStudioSelected}">
+                    <Border Grid.Column="0" Background="{StaticResource PanelBgBrush}"
+                            CornerRadius="12" Margin="0,0,8,0" ClipToBounds="True">
+                        <canvas:ModuleCanvasView DataContext="{Binding Canvas}" />
+                    </Border>
+                    <Border Grid.Column="1" Background="{StaticResource PanelBgBrush}"
+                            CornerRadius="12" ClipToBounds="True">
+                        <inspector:InspectorPanelView DataContext="{Binding Inspector}" />
+                    </Border>
+                </Grid>
+
+                <!-- Strona 2: Zarządzanie Profilami -->
+                <Border Background="{StaticResource PanelBgBrush}" CornerRadius="12" ClipToBounds="True"
+                        IsVisible="{Binding Navigation.IsProfilesSelected}">
+                    <pages:ProfilesPageView DataContext="{Binding Profiles}" />
+                </Border>
+
+                <!-- Strona 3: Biblioteka Akcji i Integracji (Action Store) -->
+                <Border Background="{StaticResource PanelBgBrush}" CornerRadius="12" ClipToBounds="True"
+                        IsVisible="{Binding Navigation.IsActionStoreSelected}">
+                    <pages:ActionStorePageView DataContext="{Binding ActionStore}" />
+                </Border>
+
+                <!-- Strona 4: Konsola Logów Zdarzeń -->
+                <Border Background="{StaticResource PanelBgBrush}" CornerRadius="12" ClipToBounds="True"
+                        IsVisible="{Binding Navigation.IsLogsSelected}">
+                    <pages:LogsPageView DataContext="{Binding Logs}" />
+                </Border>
+
+                <!-- Strona 5: Ustawienia -->
+                <Border Background="{StaticResource PanelBgBrush}" CornerRadius="12" ClipToBounds="True"
+                        IsVisible="{Binding Navigation.IsSettingsSelected}">
+                    <pages:SettingsPageView DataContext="{Binding Settings}" />
+                </Border>
+            </Panel>
+        </Grid>
+    </Grid>
+</Window>

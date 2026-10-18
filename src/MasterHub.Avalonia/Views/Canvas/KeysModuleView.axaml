@@ -1,0 +1,52 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Canvas"
+             xmlns:canvas="using:MasterHub.Avalonia.Views.Canvas"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Canvas.KeysModuleView"
+             x:DataType="vm:CanvasViewModel">
+
+    <Border Classes="moduleContainer" HorizontalAlignment="Center">
+        <StackPanel Spacing="12">
+            <!-- Nagłówek modułu & Nawigacja Stron i Folderów -->
+            <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                <TextBlock Grid.Column="0" Text="{loc:Loc Deck_ViewKeys}" Classes="h3" VerticalAlignment="Center" />
+
+                <!-- Pasek nawigacji stron (widoczny poza folderem) -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" IsVisible="{Binding !IsInsideFolder}">
+                    <Button Content="◀" Command="{Binding PreviousPageCommand}" IsEnabled="{Binding CanGoPreviousPage}" Classes="pillBtn" Padding="8,4" ToolTip.Tip="{loc:Loc Action_PreviousPage}" />
+                    <Border Background="{StaticResource CardActiveBgBrush}" CornerRadius="6" Padding="10,4" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding CurrentPageDisplayName}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
+                    </Border>
+                    <Button Content="▶" Command="{Binding NextPageCommand}" IsEnabled="{Binding CanGoNextPage}" Classes="pillBtn" Padding="8,4" ToolTip.Tip="{loc:Loc Action_NextPage}" />
+                    <Button Content="+" Command="{Binding AddNewPageCommand}" Classes="pillBtn" Padding="8,4" FontWeight="Bold" ToolTip.Tip="{loc:Loc Nav_AddPage}" />
+                    <Button Content="✕" Command="{Binding DeleteCurrentPageCommand}" IsEnabled="{Binding CanDeleteCurrentPage}" Classes="pillBtn" Padding="8,4" ToolTip.Tip="{loc:Loc Nav_DeletePage}" />
+                </StackPanel>
+
+                <!-- Pasek nawigacji folderu (widoczny wewnątrz folderu / podmenu) -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" IsVisible="{Binding IsInsideFolder}">
+                    <Button Content="{loc:Loc Nav_Back}" Command="{Binding NavigateBackCommand}" Classes="pillBtn" Padding="8,4" ToolTip.Tip="{loc:Loc Action_GoBack}" />
+                    <Border Background="{StaticResource CardActiveBgBrush}" CornerRadius="6" Padding="10,4" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding CurrentPageDisplayName}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
+                    </Border>
+                    <Button Content="{loc:Loc Nav_Home}" Command="{Binding NavigateHomeCommand}" Classes="pillBtn" Padding="8,4" ToolTip.Tip="{loc:Loc Action_GoHome}" />
+                    <Button Content="{loc:Loc Action_DeleteFolder}" Command="{Binding DeleteCurrentFolderCommand}" Classes="pillBtn" Padding="8,4" ToolTip.Tip="{loc:Loc Action_DeleteFolder}" />
+                </StackPanel>
+            </Grid>
+
+            <!-- Siatka 3x5 klawiszy LCD -->
+            <ItemsControl ItemsSource="{Binding Keys}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <UniformGrid Columns="5" Rows="3" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <canvas:KeyItemView />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </Border>
+</UserControl>

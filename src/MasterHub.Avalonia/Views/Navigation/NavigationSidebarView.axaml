@@ -1,0 +1,109 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:services="using:MasterHub.Avalonia.Services"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Navigation.NavigationSidebarView"
+             x:DataType="vm:NavigationViewModel"
+             Width="72"
+             Background="{StaticResource MainBgBrush}">
+
+    <Border BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,1,0">
+        <Grid RowDefinitions="Auto,*,Auto" Margin="0,16,0,16">
+            <!-- Logo / Brand Header -->
+            <Border Grid.Row="0" Width="44" Height="44" CornerRadius="12"
+                    Background="{StaticResource CardBgBrush}"
+                    BorderBrush="{StaticResource BorderAccentBrush}"
+                    BorderThickness="1" HorizontalAlignment="Center">
+                <TextBlock Text="MH" FontSize="16" FontWeight="ExtraBold"
+                           Foreground="{StaticResource AccentPrimaryBrush}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+
+            <!-- Główne przyciski nawigacyjne (Rail ze stylowymi wektorami SVG) -->
+            <StackPanel Grid.Row="1" Spacing="10" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <!-- Studio / Kanwa -->
+                <Grid>
+                    <Button Classes="navRailBtn"
+                            Classes.active="{Binding IsStudioSelected}"
+                            Command="{Binding SelectPageCommand}"
+                            CommandParameter="{x:Static services:NavigationPage.Studio}"
+                            ToolTip.Tip="{loc:Loc Nav_Studio}">
+                        <PathIcon Data="{StaticResource IconStudio}" Width="18" Height="18" />
+                    </Button>
+                    <Border Width="3" Height="24" CornerRadius="2"
+                            Background="{StaticResource AccentPrimaryBrush}"
+                            IsVisible="{Binding IsStudioSelected}"
+                            HorizontalAlignment="Right" Margin="0,0,-14,0" />
+                </Grid>
+
+                <!-- Profile -->
+                <Grid>
+                    <Button Classes="navRailBtn"
+                            Classes.active="{Binding IsProfilesSelected}"
+                            Command="{Binding SelectPageCommand}"
+                            CommandParameter="{x:Static services:NavigationPage.Profiles}"
+                            ToolTip.Tip="{loc:Loc Nav_Profiles}">
+                        <PathIcon Data="{StaticResource IconProfiles}" Width="18" Height="18" />
+                    </Button>
+                    <Border Width="3" Height="24" CornerRadius="2"
+                            Background="{StaticResource AccentPrimaryBrush}"
+                            IsVisible="{Binding IsProfilesSelected}"
+                            HorizontalAlignment="Right" Margin="0,0,-14,0" />
+                </Grid>
+
+                <!-- Sklep / Biblioteka Akcji -->
+                <Grid>
+                    <Button Classes="navRailBtn"
+                            Classes.active="{Binding IsActionStoreSelected}"
+                            Command="{Binding SelectPageCommand}"
+                            CommandParameter="{x:Static services:NavigationPage.ActionStore}"
+                            ToolTip.Tip="{loc:Loc Nav_Store}">
+                        <PathIcon Data="{StaticResource IconStore}" Width="18" Height="18" />
+                    </Button>
+                    <Border Width="3" Height="24" CornerRadius="2"
+                            Background="{StaticResource AccentPrimaryBrush}"
+                            IsVisible="{Binding IsActionStoreSelected}"
+                            HorizontalAlignment="Right" Margin="0,0,-14,0" />
+                </Grid>
+
+                <!-- Logi -->
+                <Grid>
+                    <Button Classes="navRailBtn"
+                            Classes.active="{Binding IsLogsSelected}"
+                            Command="{Binding SelectPageCommand}"
+                            CommandParameter="{x:Static services:NavigationPage.Logs}"
+                            ToolTip.Tip="{loc:Loc Nav_Logs}">
+                        <PathIcon Data="{StaticResource IconLogs}" Width="18" Height="18" />
+                    </Button>
+                    <Border Width="3" Height="24" CornerRadius="2"
+                            Background="{StaticResource AccentPrimaryBrush}"
+                            IsVisible="{Binding IsLogsSelected}"
+                            HorizontalAlignment="Right" Margin="0,0,-14,0" />
+                </Grid>
+            </StackPanel>
+
+            <!-- Dolna sekcja: Uśpienie i Ustawienia -->
+            <StackPanel Grid.Row="2" Spacing="8" HorizontalAlignment="Center">
+                <Button Classes="navRailBtn"
+                        Command="{Binding ToggleStandbyCommand}"
+                        ToolTip.Tip="{loc:Loc Nav_Standby}">
+                    <PathIcon Data="{StaticResource IconStandby}" Width="17" Height="17" />
+                </Button>
+                <Grid>
+                    <Button Classes="navRailBtn"
+                            Classes.active="{Binding IsSettingsSelected}"
+                            Command="{Binding SelectPageCommand}"
+                            CommandParameter="{x:Static services:NavigationPage.Settings}"
+                            ToolTip.Tip="{loc:Loc Nav_Settings}">
+                        <PathIcon Data="{StaticResource IconSettings}" Width="17" Height="17" />
+                    </Button>
+                    <Border Width="3" Height="24" CornerRadius="2"
+                            Background="{StaticResource AccentPrimaryBrush}"
+                            IsVisible="{Binding IsSettingsSelected}"
+                            HorizontalAlignment="Right" Margin="0,0,-14,0" />
+                </Grid>
+            </StackPanel>
+        </Grid>
+    </Border>
+</UserControl>

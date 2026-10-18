@@ -1,0 +1,54 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.RollerInspectorView"
+             x:DataType="vm:RollerItemViewModel">
+
+    <StackPanel Spacing="12">
+        <!-- Nagłówek rolki -->
+        <Border Classes="inspectorSection">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <TextBlock Grid.Column="0" Text="🎛️" FontSize="20" Margin="0,0,10,0" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Name}" Classes="h3" />
+                    <TextBlock Text="{Binding LastDirectionDisplay}" Classes="dim" FontSize="10" />
+                </StackPanel>
+                <Button Grid.Column="2" Classes="iconBtn" Command="{Binding ClearActionCommand}"
+                        IsVisible="{Binding HasAction}"
+                        ToolTip.Tip="{loc:Loc Roller_ClearActionTip}" Padding="6">
+                    <TextBlock Text="🗑️" FontSize="13" />
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Odczyt kroków enkodera z przyciskiem resetu -->
+        <Border Classes="statusBadgeCard" Padding="12,10">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <TextBlock Grid.Column="0" Text="{loc:Loc Roller_RegisteredSteps}" Classes="caption" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="{Binding StepsDisplay}" FontSize="13" FontWeight="Bold"
+                           Foreground="{StaticResource AccentSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                <Button Grid.Column="2" Classes="iconBtn" Click="OnResetStepsClick" ToolTip.Tip="{loc:Loc Roller_ResetStepsTip}">
+                    <TextBlock Text="🔄" FontSize="11" />
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Przypisana funkcja pokrętła -->
+        <StackPanel Spacing="6" Margin="0,4,0,0">
+            <TextBlock Text="{loc:Loc Roller_AssignedAction}" Classes="caption" />
+            <Border Classes="statusBadgeCard" Padding="12,10">
+                <TextBlock Text="{Binding ActionDisplayName}" FontWeight="SemiBold" FontSize="11.5"
+                           Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" />
+            </Border>
+        </StackPanel>
+
+        <!-- Informacja o sprzęcie -->
+        <Border Classes="glassCard" Padding="12,10" Margin="0,8,0,0">
+            <StackPanel Spacing="4">
+                <TextBlock Text="{loc:Loc Roller_HardwareSpec}" Classes="caption" />
+                <TextBlock Text="{loc:Loc Roller_HardwareSpecDesc}" Classes="dim" FontSize="10" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

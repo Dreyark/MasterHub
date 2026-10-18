@@ -1,0 +1,41 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Canvas"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Canvas.BaseStationView"
+             x:DataType="vm:CanvasViewModel">
+
+    <Border Classes="moduleContainer" HorizontalAlignment="Center">
+        <StackPanel Spacing="10" HorizontalAlignment="Center">
+            <!-- Nagłówek modułu -->
+            <StackPanel Spacing="2" HorizontalAlignment="Center">
+                <TextBlock Text="{loc:Loc Canvas_BaseStation_Title}" Classes="caption" FontWeight="Bold" HorizontalAlignment="Center" />
+                <TextBlock Text="LED RGB" Classes="dim" FontSize="9" HorizontalAlignment="Center" />
+            </StackPanel>
+
+            <!-- Karta podstawki dokującej w układzie pionowym (zajmuje mało miejsca obok klawiatury) -->
+            <Border Classes="glassCard"
+                    Classes.selected="{Binding BaseStation.IsSelected}"
+                    Cursor="Hand"
+                    Padding="14,16"
+                    Width="96"
+                    PointerPressed="OnBasePointerPressed">
+                <StackPanel Spacing="10" HorizontalAlignment="Center">
+                    <!-- Elegancka pionowa listwa świetlna LED Ambient -->
+                    <Border Width="18" Height="130" CornerRadius="9"
+                            Background="{Binding BaseStation.ColorBrush, FallbackValue='#5E81F4'}"
+                            BorderBrush="{StaticResource BorderSubtleBrush}"
+                            BorderThickness="1" HorizontalAlignment="Center" />
+
+                    <!-- Wskaźnik jasności pod listwą -->
+                    <StackPanel Spacing="2" HorizontalAlignment="Center">
+                        <TextBlock Text="{loc:Loc Canvas_Brightness}" Classes="dim" FontSize="9" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding BaseStation.BrightnessDisplay, FallbackValue='100%'}"
+                                   FontSize="12" FontWeight="Bold"
+                                   Foreground="{StaticResource AccentPrimaryBrush}" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </Border>
+</UserControl>

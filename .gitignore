@@ -1,0 +1,125 @@
+# ==============================================================================
+# MasterHub - Comprehensive .gitignore
+# Designed for .NET 10, C# 13, Avalonia 11, Visual Studio, VS Code, and Rider
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Build Results & Artifacts
+# ------------------------------------------------------------------------------
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+[Tt]mp/
+[Tt]emp/
+build/
+dist/
+publish/
+x64/
+x86/
+arm/
+arm64/
+[Dd]ebug/
+[Rr]elease/
+
+# ------------------------------------------------------------------------------
+# Visual Studio
+# ------------------------------------------------------------------------------
+.vs/
+*.user
+*.userprefs
+*.suo
+*.userosscache
+*.sln.docstates
+*.opensdf
+*.sdf
+*.VC.db
+*.VC.opendb
+
+# ------------------------------------------------------------------------------
+# Visual Studio Code & JetBrains Rider / IntelliJ
+# ------------------------------------------------------------------------------
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.idea/
+*.sln.iml
+*.DotSettings.user
+
+# ------------------------------------------------------------------------------
+# Runtime Logs, Crash Dumps & Diagnostic Output
+# ------------------------------------------------------------------------------
+*.log
+crash.log
+app_crash.txt
+*.dmp
+*.stackdump
+*.trace
+TestResults/
+[Cc]overage/
+*.coverage
+*.coveragexml
+
+# ------------------------------------------------------------------------------
+# Sensitive Information, Secrets, Profiles & Local Configuration
+# (MasterHub runtime data defaults to %APPDATA%\MasterHub, but any local mirrors
+#  or test outputs are strictly excluded from git tracking)
+# ------------------------------------------------------------------------------
+profiles/
+settings.json
+*.local.json
+local.settings.json
+appsettings*.local.json
+secrets.json
+*.secret
+*.token
+*.key
+*.pem
+*.pfx
+*.cert
+*.p12
+.env
+.env.*
+!.env.example
+
+# ------------------------------------------------------------------------------
+# Scratch, Testing & Temporary Directories
+# ------------------------------------------------------------------------------
+scratch/
+sandbox/
+*.tmp
+*.bak
+*.orig
+*~
+
+# ------------------------------------------------------------------------------
+# OS-Generated Files
+# ------------------------------------------------------------------------------
+# Windows
+Thumbs.db
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Linux
+*~
+.directory
+
+# ------------------------------------------------------------------------------
+# NuGet & Packages
+# ------------------------------------------------------------------------------
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+project.lock.json
+project.assets.json

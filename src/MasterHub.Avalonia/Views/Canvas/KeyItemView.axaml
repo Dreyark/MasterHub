@@ -1,0 +1,66 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             x:Class="MasterHub.Avalonia.Views.Canvas.KeyItemView"
+             x:DataType="vm:KeyItemViewModel"
+             Width="105" Height="105" Margin="4">
+
+    <UserControl.Styles>
+        <Style Selector="Border.keyCard">
+            <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.15" />
+                    <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.15" />
+                    <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.08" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.keyCard:pointerover">
+            <Setter Property="Background" Value="{StaticResource CardHoverBgBrush}" />
+            <Setter Property="BorderBrush" Value="#805E81F4" />
+        </Style>
+        <Style Selector="Border.keyCard.selected">
+            <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
+            <Setter Property="BorderThickness" Value="2" />
+        </Style>
+        <Style Selector="Border.keyCard.pressed">
+            <Setter Property="RenderTransform" Value="scale(0.95)" />
+        </Style>
+    </UserControl.Styles>
+
+    <Border Classes="keyCard"
+            Classes.selected="{Binding IsSelected}"
+            Classes.pressed="{Binding IsPressed}"
+            Cursor="Hand"
+            PointerPressed="OnKeyPointerPressed">
+        <Border CornerRadius="12" ClipToBounds="True">
+            <Grid>
+                <!-- Podgląd wyrenderowanej grafiki LCD SkiaSharp -->
+                <Image Source="{Binding CachedBitmap}"
+                       Stretch="UniformToFill"
+                       IsVisible="{Binding CachedBitmap, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                <!-- Fallback tekstowy i ikona akcji -->
+                <Grid IsVisible="{Binding CachedBitmap, Converter={x:Static ObjectConverters.IsNull}}"
+                      RowDefinitions="Auto,*,Auto" Margin="8">
+                    <TextBlock Grid.Row="0" Text="{Binding Number}" FontSize="9.5" FontWeight="Bold"
+                               Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Left"
+                               IsVisible="{Binding HasAction}" />
+                    <TextBlock Grid.Row="1" Classes="emoji" Text="{Binding ActionIcon}" FontSize="24"
+                               FontFamily="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji, sans-serif"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsVisible="{Binding HasAction}" />
+                    <TextBlock Grid.Row="2" Text="{Binding DisplayTitle}" FontSize="10.5" FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis" HorizontalAlignment="Center" />
+                </Grid>
+
+                <!-- Wskaźnik fizycznego wciśnięcia przycisku -->
+                <Border Background="#305E81F4" IsVisible="{Binding IsPressed}" />
+            </Grid>
+        </Border>
+    </Border>
+</UserControl>

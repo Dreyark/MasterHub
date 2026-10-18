@@ -1,0 +1,133 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             xmlns:inspector="using:MasterHub.Avalonia.Views.Inspector"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyActionSettingsView"
+             x:DataType="vm:KeyItemViewModel">
+
+    <StackPanel Spacing="10">
+        <!-- Przypisana akcja -->
+        <StackPanel Spacing="4">
+            <TextBlock Text="{loc:Loc Key_ActionType}" Classes="caption" />
+            <Border Classes="statusBadgeCard" Padding="10,8">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                    <TextBlock Grid.Column="0" Classes="emoji" Text="{Binding ActionIcon}" FontSize="18"
+                               FontFamily="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji, sans-serif"
+                               VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock Grid.Column="1" Text="{Binding ActionDisplayName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <Border Grid.Column="2" Background="{StaticResource CardActiveBgBrush}" CornerRadius="6" Padding="6,2" Margin="4,0,0,0" IsVisible="{Binding IsMonitoringAction}">
+                        <TextBlock Text="{Binding LiveValueText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
+                    </Border>
+                </Grid>
+            </Border>
+        </StackPanel>
+
+        <!-- Tryb wciśnięcia przycisku -->
+        <StackPanel Spacing="4">
+            <TextBlock Text="{loc:Loc Key_ActivationMode}" Classes="caption" />
+            <ComboBox ItemsSource="{Binding AvailablePressModes}"
+                      SelectedItem="{Binding SelectedPressModeOption}"
+                      HorizontalAlignment="Stretch" />
+        </StackPanel>
+
+        <!-- Wybór karty graficznej GPU (Monitor GPU) -->
+        <StackPanel Spacing="4" IsVisible="{Binding IsGpuAction}">
+            <TextBlock Text="{loc:Loc Key_GpuSelect}" Classes="caption" />
+            <ComboBox ItemsSource="{Binding AvailableGpuNames}"
+                      SelectedItem="{Binding SelectedGpuName}"
+                      HorizontalAlignment="Stretch" />
+        </StackPanel>
+
+        <!-- Razer: Ustawienie czułości DPI -->
+        <StackPanel Spacing="4" IsVisible="{Binding IsRazerDpiAction}">
+            <TextBlock Text="{loc:Loc Key_DpiSelect}" Classes="caption" />
+            <ComboBox ItemsSource="{x:Static vm:KeyItemViewModel.DpiDropdownOptions}" SelectedItem="{Binding SelectedDpi}" HorizontalAlignment="Stretch" />
+            <TextBox Text="{Binding ActionParameter}" PlaceholderText="{loc:Loc Key_CustomDpiPrompt}" Margin="0,2,0,0" />
+        </StackPanel>
+
+        <!-- Razer: Polling Rate (Częstotliwość Hz) -->
+        <StackPanel Spacing="4" IsVisible="{Binding IsRazerPollingAction}">
+            <TextBlock Text="{loc:Loc Key_PollingSelect}" Classes="caption" />
+            <ComboBox ItemsSource="{x:Static vm:KeyItemViewModel.PollingDropdownOptions}" SelectedItem="{Binding SelectedPollingRate}" HorizontalAlignment="Stretch" />
+        </StackPanel>
+
+        <!-- Razer: Profile myszy -->
+        <StackPanel Spacing="6" IsVisible="{Binding IsRazerProfileAction}">
+            <TextBlock Text="{loc:Loc Key_ProfilesSelect}" Classes="caption" />
+            <ItemsControl ItemsSource="{x:Static vm:KeyItemViewModel.ProfilePresets}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Content="{Binding}" Classes="pillBtn" Margin="2" Padding="8,4"
+                                Command="{Binding $parent[UserControl].((vm:KeyItemViewModel)DataContext).SelectProfileCommand}"
+                                CommandParameter="{Binding}" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+
+        <!-- Wybór pliku / folderu z dysku -->
+        <StackPanel Spacing="4" IsVisible="{Binding IsFileBrowseSupported}">
+            <TextBlock Text="{Binding ActionParameterLabel}" Classes="caption" />
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <TextBox Grid.Column="0" Text="{Binding ActionParameter}" PlaceholderText="{loc:Loc Key_PathPlaceholder}" Margin="0,0,6,0" />
+                <Button Grid.Column="1" Content="{loc:Loc Key_BrowseFile}" Click="OnBrowseFileClick" Classes="pillBtn" Padding="8,6" Margin="0,0,4,0" ToolTip.Tip="{loc:Loc Key_BrowseFileTip}" />
+                <Button Grid.Column="2" Content="{loc:Loc Key_BrowseFolder}" Click="OnBrowseFolderClick" Classes="pillBtn" Padding="8,6" ToolTip.Tip="{loc:Loc Key_BrowseFolderTip}" />
+            </Grid>
+        </StackPanel>
+
+        <!-- Monitor sieci: Wybór jednostki prędkości -->
+        <StackPanel Spacing="4" IsVisible="{Binding IsNetworkMonitorAction}">
+            <TextBlock Text="{loc:Loc Key_NetworkUnit}" Classes="caption" />
+            <ComboBox ItemsSource="{x:Static vm:KeyItemViewModel.NetworkUnitOptions}" SelectedItem="{Binding SelectedNetworkUnit}" HorizontalAlignment="Stretch" />
+            <TextBlock Text="{loc:Loc Key_NetworkScaling}" Classes="caption" Opacity="0.7" Margin="0,2,0,0" />
+        </StackPanel>
+
+        <!-- Monitor dysku: Wybór partycji dysku -->
+        <StackPanel Spacing="4" IsVisible="{Binding IsDiskAction}">
+            <TextBlock Text="{loc:Loc Key_DiskSelect}" Classes="caption" />
+            <ComboBox ItemsSource="{Binding AvailableDrives}" SelectedItem="{Binding SelectedDrive}" HorizontalAlignment="Stretch" />
+        </StackPanel>
+
+        <!-- Nawigacja: Przełącz na profil -->
+        <StackPanel Spacing="4" IsVisible="{Binding IsGoToProfileAction}">
+            <TextBlock Text="{loc:Loc Key_TargetProfileSelect}" Classes="caption" />
+            <ComboBox ItemsSource="{Binding AvailableProfiles}" SelectedItem="{Binding SelectedProfile}" PlaceholderText="{loc:Loc Key_SelectProfilePlaceholder}" HorizontalAlignment="Stretch" />
+        </StackPanel>
+
+        <!-- Nawigacja: Przejdź do strony -->
+        <StackPanel Spacing="4" IsVisible="{Binding IsGoToPageAction}">
+            <TextBlock Text="{loc:Loc Key_TargetPageSelect}" Classes="caption" />
+            <ComboBox ItemsSource="{Binding AvailablePages}" SelectedItem="{Binding SelectedPage}" PlaceholderText="{loc:Loc Key_SelectPagePlaceholder}" HorizontalAlignment="Stretch" />
+        </StackPanel>
+
+        <!-- Nawigacja: Wejdź do folderu -->
+        <StackPanel Spacing="4" IsVisible="{Binding IsOpenFolderAction}">
+            <TextBlock Text="{loc:Loc Key_FolderName}" Classes="caption" />
+            <TextBox Text="{Binding FolderNameInput}" PlaceholderText="{loc:Loc Key_FolderPlaceholder}" />
+            <TextBlock Text="{loc:Loc Key_SelectFolder}" Classes="caption" Margin="0,2,0,0" />
+            <ComboBox ItemsSource="{Binding AvailableFolders}" SelectedItem="{Binding SelectedFolder}" PlaceholderText="{loc:Loc Key_SelectFolderPlaceholder}" HorizontalAlignment="Stretch" />
+            <Grid ColumnDefinitions="*,*" Margin="0,2,0,0">
+                <Button Grid.Column="0" Content="{loc:Loc Key_OpenFolderBtn}" Command="{Binding EnterFolderCommand}" Classes="accentBtn" HorizontalAlignment="Stretch" Margin="0,0,3,0" Padding="8,6" ToolTip.Tip="{loc:Loc Key_OpenFolderTip}" />
+                <Button Grid.Column="1" Content="{loc:Loc Key_DeleteFolderBtn}" Command="{Binding DeleteSelectedFolderCommand}" Classes="pillBtn" HorizontalAlignment="Stretch" Margin="3,0,0,0" Padding="8,6" ToolTip.Tip="{loc:Loc Key_DeleteFolderTip}" />
+            </Grid>
+        </StackPanel>
+
+        <!-- Nawigacja: Wróć / Następna / Poprzednia / Strona główna -->
+        <inspector:KeyNavigationSettingsSectionView IsVisible="{Binding IsNavigationAction}" />
+
+        <!-- Voicemod: Status połączenia, wybór głosu i dźwięku -->
+        <inspector:KeyVoicemodSettingsSectionView IsVisible="{Binding IsVoicemodAnyAction}" />
+
+        <!-- Parametr ogólny -->
+        <StackPanel Spacing="4" IsVisible="{Binding IsGenericParameterAction}">
+            <TextBlock Text="{Binding ActionParameterLabel, FallbackValue='Parametr akcji:'}" Classes="caption" />
+            <TextBox Text="{Binding ActionParameter}" PlaceholderText="{Binding ActionParameterWatermark, FallbackValue='Wprowadź parametr...'}" />
+            <TextBlock Text="{loc:Loc Key_DiscordTip}"
+                       Classes="caption" TextWrapping="Wrap" Foreground="{StaticResource AccentPrimaryBrush}" IsVisible="{Binding IsDiscordJoinAction}" Margin="0,2,0,0" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>

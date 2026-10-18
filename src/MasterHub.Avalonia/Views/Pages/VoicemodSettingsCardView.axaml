@@ -1,0 +1,99 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
+             xmlns:voicemod="using:MasterHub.Core.Integrations.Voicemod"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Pages.VoicemodSettingsCardView"
+             x:DataType="vm:SettingsPageViewModel">
+
+    <Border Classes="glassCard" Padding="18">
+        <StackPanel Spacing="14">
+            <!-- Nagłówek i Status Połączenia Voicemod -->
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <PathIcon Data="{StaticResource IconVoicemod}" Width="18" Height="18"
+                              Foreground="#00E5FF" VerticalAlignment="Center" />
+                    <TextBlock Text="{loc:Loc Voicemod_Title}" Classes="h3" VerticalAlignment="Center" />
+                </StackPanel>
+
+                <Border Grid.Column="2" Background="{Binding VoicemodConnectionStatusColor}" CornerRadius="10" Padding="8,3" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding VoicemodConnectionStatusText}" FontSize="11" FontWeight="Bold" Foreground="#0F1117" />
+                </Border>
+            </Grid>
+
+            <TextBlock Text="{loc:Loc Voicemod_Subtitle}" Classes="dim" FontSize="11" />
+
+            <!-- Host i Port WebSocket API -->
+            <Grid ColumnDefinitions="2*,12,1*">
+                <StackPanel Grid.Column="0" Spacing="4">
+                    <TextBlock Text="{loc:Loc Voicemod_HostLabel}" Classes="caption" />
+                    <TextBox Text="{Binding VoicemodHost, Mode=TwoWay}" PlaceholderText="127.0.0.1" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="4">
+                    <TextBlock Text="{loc:Loc Voicemod_PortLabel}" Classes="caption" />
+                    <TextBox Text="{Binding VoicemodPort, Mode=TwoWay}" PlaceholderText="59129" />
+                </StackPanel>
+            </Grid>
+
+            <!-- Klucz klienta / API Key (Opcjonalny) -->
+            <StackPanel Spacing="4">
+                <TextBlock Text="{loc:Loc Voicemod_ApiKeyLabel}" Classes="caption" />
+                <TextBox Text="{Binding VoicemodApiKey, Mode=TwoWay}" PasswordChar="●"
+                         PlaceholderText="{loc:Loc Voicemod_ApiKeyPlaceholder}" />
+            </StackPanel>
+
+            <!-- Opcje automatycznego łączenia i fallbacku -->
+            <StackPanel Spacing="8">
+                <CheckBox IsChecked="{Binding VoicemodAutoConnect, Mode=TwoWay}"
+                          Content="{loc:Loc Voicemod_AutoConnectLabel}" FontSize="12" />
+                <CheckBox IsChecked="{Binding VoicemodFallbackToDesktopHotkeys, Mode=TwoWay}"
+                          Content="{loc:Loc Voicemod_FallbackHotkeysLabel}" FontSize="12" />
+            </StackPanel>
+
+            <!-- Status bieżącej modulacji i odsłuchu -->
+            <Border Classes="statusBadgeCard" Padding="12,10">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="{Binding VoicemodActiveVoiceText}" FontWeight="Bold" FontSize="12" Foreground="#38BDF8" />
+                    <WrapPanel Orientation="Horizontal">
+                        <TextBlock Text="{Binding VoicemodVoiceChangerStatusText}" FontSize="11" Foreground="#94A3B8" Margin="0,0,12,0" />
+                        <TextBlock Text="{Binding VoicemodHearStatusText}" FontSize="11" Foreground="#94A3B8" Margin="0,0,12,0" />
+                        <TextBlock Text="{Binding VoicemodMicStatusText}" FontSize="11" Foreground="#94A3B8" Margin="0,0,12,0" />
+                        <TextBlock Text="{Binding VoicemodBgStatusText}" FontSize="11" Foreground="#94A3B8" />
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Przyciski akcji, testów i zapisu -->
+            <StackPanel Spacing="8">
+                <WrapPanel Orientation="Horizontal">
+                    <Button Classes="pillBtn" Command="{Binding ConnectVoicemodCommand}"
+                            IsEnabled="{Binding !IsVoicemodConnected}" Margin="0,0,8,8">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="🔗" FontSize="12" />
+                            <TextBlock Text="{loc:Loc Voicemod_ConnectBtn}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="pillBtn" Command="{Binding DisconnectVoicemodCommand}"
+                            IsEnabled="{Binding IsVoicemodConnected}" Content="{loc:Loc Voicemod_DisconnectBtn}" Margin="0,0,8,8" />
+                    <Button Classes="pillBtn" Command="{Binding RefreshVoicemodStateCommand}"
+                            IsEnabled="{Binding IsVoicemodConnected}" Content="{loc:Loc Voicemod_RefreshBtn}" Margin="0,0,8,8" />
+                    <Button Classes="pillBtn" Command="{Binding TestVoicemodToggleVoiceChangerCommand}"
+                            Content="{loc:Loc Voicemod_TestToggleVoiceBtn}" Margin="0,0,8,8" />
+                    <Button Classes="pillBtn" Command="{Binding TestVoicemodToggleHearCommand}"
+                            Content="{loc:Loc Voicemod_TestToggleHearBtn}" Margin="0,0,8,8" />
+                    <Button Classes="pillBtn" Command="{Binding TestVoicemodToggleMuteCommand}"
+                            Content="{loc:Loc Voicemod_TestToggleMuteBtn}" Margin="0,0,8,8" />
+                    <Button Classes="pillBtn" Command="{Binding TestVoicemodToggleBgCommand}"
+                            Content="{loc:Loc Voicemod_TestToggleBgBtn, FallbackValue='🎧 Przełącz tło'}" Margin="0,0,8,8" />
+                    <Button Classes="pillBtn" Command="{Binding SaveVoicemodSettingsCommand}"
+                            Content="{loc:Loc Voicemod_SaveBtn}" Margin="0,0,8,8" />
+                </WrapPanel>
+
+                <!-- Komunikat statusu i wskazówka -->
+                <TextBlock Text="{Binding VoicemodStatusMessage}" Foreground="{Binding VoicemodStatusMessageColor}"
+                           FontWeight="SemiBold" FontSize="11" TextWrapping="Wrap" />
+                <TextBlock Text="{loc:Loc Voicemod_ConfigTip}" Classes="dim" FontSize="10" TextWrapping="Wrap" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

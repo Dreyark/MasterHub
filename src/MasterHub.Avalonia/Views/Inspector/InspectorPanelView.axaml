@@ -1,0 +1,73 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Inspector"
+             xmlns:ins="using:MasterHub.Avalonia.Views.Inspector"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.InspectorPanelView"
+             x:DataType="vm:InspectorViewModel">
+
+    <Grid RowDefinitions="Auto,*" Margin="4,6">
+        <!-- Górna sekcja: Mini-karty stanu urządzeń -->
+        <ins:DeviceHeaderCardView Grid.Row="0" DataContext="{Binding Header}" Margin="0,0,0,8" />
+
+        <!-- Dolna sekcja: Zakładki [Biblioteka Akcji | Właściwości Zaznaczenia] -->
+        <TabControl Grid.Row="1" SelectedIndex="{Binding SelectedTabIndex}">
+            <TabControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <UniformGrid Rows="1" />
+                </ItemsPanelTemplate>
+            </TabControl.ItemsPanel>
+            <TabControl.Styles>
+                <Style Selector="TabItem">
+                    <Setter Property="HorizontalAlignment" Value="Stretch" />
+                    <Setter Property="HorizontalContentAlignment" Value="Center" />
+                </Style>
+            </TabControl.Styles>
+            <!-- Zakładka 1: Biblioteka Akcji (ukrywana dla stacji dokującej, która nie wykonuje akcji) -->
+            <TabItem Header="{loc:Loc Tab_ActionLibrary}" FontSize="11.5" FontWeight="SemiBold"
+                     IsVisible="{Binding IsActionLibraryVisible}">
+                <Border Padding="2,8">
+                    <ins:ActionLibraryView DataContext="{Binding ActionLibrary}" />
+                </Border>
+            </TabItem>
+
+            <!-- Zakładka 2: Inspektor Zaznaczenia -->
+            <TabItem Header="{loc:Loc Tab_Properties}" FontSize="11.5" FontWeight="SemiBold">
+                <ScrollViewer Margin="0,8,0,0" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="8" Margin="2,0">
+                        <!-- Tryb 1: Klawisz LCD -->
+                        <Border IsVisible="{Binding Canvas.IsKeySelected}">
+                            <ins:KeyInspectorView DataContext="{Binding Canvas.SelectedKey}" />
+                        </Border>
+
+                        <!-- Tryb 2: Suwak Audio -->
+                        <Border IsVisible="{Binding Canvas.IsSliderSelected}">
+                            <ins:SliderInspectorView DataContext="{Binding Canvas.SelectedSlider}" />
+                        </Border>
+
+                        <!-- Tryb 3: Rolka obrotowa -->
+                        <Border IsVisible="{Binding Canvas.IsRollerSelected}">
+                            <ins:RollerInspectorView DataContext="{Binding Canvas.SelectedRoller}" />
+                        </Border>
+
+                        <!-- Tryb 4: Baza dokująca -->
+                        <Border IsVisible="{Binding Canvas.IsBaseSelected}">
+                            <ins:BaseStationInspectorView DataContext="{Binding Canvas.BaseStation}" />
+                        </Border>
+
+                        <!-- Tryb 5: Brak zaznaczenia -->
+                        <Border Classes="glassCard" Margin="0,8,0,0"
+                                IsVisible="{Binding Canvas.SelectedElement, Converter={x:Static ObjectConverters.IsNull}}">
+                            <StackPanel HorizontalAlignment="Center" Spacing="10" Margin="10,24">
+                                <TextBlock Text="🖱️" FontSize="36" HorizontalAlignment="Center" />
+                                <TextBlock Text="{loc:Loc Inspector_NoSelection}" Classes="h3" HorizontalAlignment="Center" />
+                                <TextBlock Text="{loc:Loc Inspector_NoSelectionDesc}"
+                                           Classes="dim" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="280" />
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</UserControl>

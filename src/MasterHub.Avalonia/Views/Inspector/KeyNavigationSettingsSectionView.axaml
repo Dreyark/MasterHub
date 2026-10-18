@@ -1,0 +1,25 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyNavigationSettingsSectionView"
+             x:DataType="vm:KeyItemViewModel">
+
+    <StackPanel Spacing="6">
+        <!-- Nawigacja: Wróć / Następna / Poprzednia / Strona główna -->
+        <StackPanel Spacing="4" IsVisible="{Binding IsGoBackAction}">
+            <Border Classes="statusBadgeCard" Padding="8,6"><TextBlock Text="{loc:Loc Key_GoBackDesc}" TextWrapping="Wrap" Classes="caption" /></Border>
+            <Button Content="{loc:Loc Key_GoBackBtn}" Command="{Binding TriggerGoBackCommand}" Classes="pillBtn" HorizontalAlignment="Stretch" Padding="8,5" />
+        </StackPanel>
+        <StackPanel Spacing="4" IsVisible="{Binding IsGoHomeAction}">
+            <Border Classes="statusBadgeCard" Padding="8,6"><TextBlock Text="{loc:Loc Key_GoHomeDesc}" TextWrapping="Wrap" Classes="caption" /></Border>
+            <Button Content="{loc:Loc Key_GoHomeBtn}" Command="{Binding TriggerGoHomeCommand}" Classes="pillBtn" HorizontalAlignment="Stretch" Padding="8,5" />
+        </StackPanel>
+        <StackPanel Spacing="4" IsVisible="{Binding IsNextPageAction}">
+            <Border Classes="statusBadgeCard" Padding="8,6"><TextBlock Text="{loc:Loc Key_NextPageDesc}" TextWrapping="Wrap" Classes="caption" /></Border>
+        </StackPanel>
+        <StackPanel Spacing="4" IsVisible="{Binding IsPreviousPageAction}">
+            <Border Classes="statusBadgeCard" Padding="8,6"><TextBlock Text="{loc:Loc Key_PrevPageDesc}" TextWrapping="Wrap" Classes="caption" /></Border>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

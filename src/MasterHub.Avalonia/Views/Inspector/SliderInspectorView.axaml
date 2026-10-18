@@ -1,0 +1,77 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.SliderInspectorView"
+             x:DataType="vm:SliderItemViewModel">
+
+    <StackPanel Spacing="12">
+        <!-- Nagłówek suwaka -->
+        <Border Classes="inspectorSection">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <TextBlock Grid.Column="0" Text="🎚️" FontSize="20" Margin="0,0,10,0" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Name}" Classes="h3" />
+                    <TextBlock Text="{Binding SelectedTarget}" Classes="caption" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+                <Button Grid.Column="2" Classes="iconBtn" Command="{Binding ClearCommand}"
+                        IsVisible="{Binding HasTarget}"
+                        ToolTip.Tip="{loc:Loc Slider_ClearTargetTip}" Padding="6">
+                    <TextBlock Text="🗑️" FontSize="13" />
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Cel audio -->
+        <StackPanel Spacing="4">
+            <TextBlock Text="{loc:Loc Slider_AudioTargetLabel}" Classes="caption" />
+            <TextBox Text="{Binding SelectedTarget}" PlaceholderText="{loc:Loc Slider_AudioTargetPlaceholder}" />
+        </StackPanel>
+
+        <!-- Poziom suwaka (Odczyt fizyczny ze sprzętu) -->
+        <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+            <TextBlock Grid.Column="0" Text="{loc:Loc Slider_PhysicalPosition}" Classes="caption" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding PercentDisplay}" FontSize="12" FontWeight="Bold"
+                       Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
+        </Grid>
+        <Slider Minimum="0" Maximum="100" Value="{Binding Percent}" IsHitTestVisible="False" Focusable="False" />
+
+        <!-- Paleta kolorów diody LED toru faderu z próbnikiem ColorPicker -->
+        <StackPanel Spacing="6" Margin="0,4,0,0">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{loc:Loc Slider_LedBacklightLabel}" Classes="caption" VerticalAlignment="Center" />
+                <ColorPicker Grid.Column="1" Color="{Binding Color, Mode=TwoWay}" IsAlphaEnabled="False" ToolTip.Tip="{loc:Loc Common_ColorPickerTip}" />
+            </Grid>
+
+            <!-- Paleta kafelków barwnych -->
+            <ItemsControl ItemsSource="{Binding PresetColors}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Width="26" Height="26" Margin="3" CornerRadius="13" Padding="0"
+                                Background="{Binding Hex}"
+                                Tag="{Binding Hex}"
+                                Click="OnPresetColorClick"
+                                BorderBrush="{StaticResource BorderSubtleBrush}"
+                                BorderThickness="1"
+                                ToolTip.Tip="{Binding Name}" Cursor="Hand" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+
+        <!-- Jasność diody LED faderu -->
+        <StackPanel Spacing="6" Margin="0,6,0,0">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{loc:Loc Slider_LedBrightness}" Classes="caption" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="{Binding BrightnessDisplay}" FontSize="12" FontWeight="Bold"
+                           Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
+            </Grid>
+            <Slider Minimum="0" Maximum="100" Value="{Binding Brightness}" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>

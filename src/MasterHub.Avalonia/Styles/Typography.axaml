@@ -1,0 +1,55 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Domyślny krój pisma i kolor dla TextBlock -->
+    <Style Selector="TextBlock">
+        <Setter Property="FontFamily" Value="Inter, Segoe UI Variable Display, Segoe UI, sans-serif" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+
+    <!-- Nagłówek główny H1 -->
+    <Style Selector="TextBlock.h1">
+        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+
+    <!-- Nagłówek sekcji H2 -->
+    <Style Selector="TextBlock.h2">
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+
+    <!-- Nagłówek modułu H3 -->
+    <Style Selector="TextBlock.h3">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+
+    <!-- Etykieta pomocnicza (Muted Caption) -->
+    <Style Selector="TextBlock.caption">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="Medium" />
+        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+    </Style>
+
+    <!-- Etykieta przyciemniona (Dim) -->
+    <Style Selector="TextBlock.dim">
+        <Setter Property="FontSize" Value="10.5" />
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}" />
+    </Style>
+
+    <!-- Wskaźnik statusu / Badge -->
+    <Style Selector="TextBlock.badge">
+        <Setter Property="FontSize" Value="10" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="{StaticResource AccentPrimaryBrush}" />
+    </Style>
+
+    <!-- Ikona Emoji (zawsze pełnokolorowa z Segoe UI Emoji) -->
+    <Style Selector="TextBlock.emoji">
+        <Setter Property="FontFamily" Value="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji, sans-serif" />
+    </Style>
+</Styles>

@@ -1,0 +1,136 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:ins="using:MasterHub.Avalonia.Views.Inspector"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyDisplaySettingsView"
+             x:DataType="vm:KeyItemViewModel">
+
+    <StackPanel Spacing="10">
+        <!-- Przełącznik Stanu: Stan 1 (Wyłączony/Domyślny) vs Stan 2 (Włączony/Aktywny) -->
+        <Grid ColumnDefinitions="*,*">
+            <Button Grid.Column="0" Classes="pillBtn" Classes.active="{Binding IsEditStateDefault}"
+                    Command="{Binding SetEditStateCommand}" CommandParameter="0"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,0,3,0"
+                    Content="{loc:Loc Key_StateDefault}" ToolTip.Tip="{loc:Loc Key_StateTip}" />
+            <Button Grid.Column="1" Classes="pillBtn" Classes.active="{Binding IsEditStateActive}"
+                    Command="{Binding SetEditStateCommand}" CommandParameter="1"
+                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="3,0,0,0"
+                    Content="{loc:Loc Key_StateActive}" ToolTip.Tip="{loc:Loc Key_StateTip}" />
+        </Grid>
+
+        <!-- Tytuł kafelka z wyborem koloru tekstu -->
+        <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{loc:Loc Key_TitleMain}" Classes="caption" VerticalAlignment="Center" />
+                <ColorPicker Grid.Column="1" Color="{Binding CurrentEditTitleColor, Mode=TwoWay}" IsAlphaEnabled="False" ToolTip.Tip="{loc:Loc Key_TitleColorTip}" />
+            </Grid>
+            <TextBox Text="{Binding CurrentEditTitle}" PlaceholderText="{loc:Loc Key_TitlePlaceholder}" />
+        </StackPanel>
+
+        <!-- Galeria ikon / symboli na LCD -->
+        <StackPanel Spacing="5">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <TextBlock Grid.Column="0" Text="{loc:Loc Key_IconsGallery}" Classes="caption" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="pillBtn" Padding="7,3" Content="{loc:Loc Key_AllIcons}" Margin="0,0,4,0">
+                    <Button.Flyout>
+                        <Flyout Placement="LeftEdgeAlignedTop">
+                            <Border Width="340" MaxHeight="380" Background="{StaticResource PanelBgBrush}" CornerRadius="12" Padding="12">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{x:Static vm:KeyItemViewModel.CategorizedIcons}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:KeyItemViewModel+IconCategory">
+                                                <StackPanel Spacing="4" Margin="0,0,0,10">
+                                                    <TextBlock Text="{Binding CategoryName}" Classes="caption" FontWeight="Bold" />
+                                                    <ItemsControl ItemsSource="{Binding Icons}">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate x:DataType="vm:KeyItemViewModel+IconPreset">
+                                                                <Button Width="30" Height="30" Margin="2" CornerRadius="6" Padding="0"
+                                                                        Background="{StaticResource CardActiveBgBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                                                                        Command="{Binding $parent[UserControl].((vm:KeyItemViewModel)DataContext).SetPresetIconCommand}"
+                                                                        CommandParameter="{Binding Glyph}" ToolTip.Tip="{Binding Label}" Cursor="Hand">
+                                                                    <TextBlock Text="{Binding Glyph}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                                                </Button>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Border>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+                <Button Grid.Column="2" Classes="pillBtn" Padding="6,2" Content="{loc:Loc Key_ClearIcon}" Command="{Binding ClearPresetIconCommand}" ToolTip.Tip="{loc:Loc Key_ClearIconTip}" />
+            </Grid>
+            <ItemsControl ItemsSource="{x:Static vm:KeyItemViewModel.PresetIcons}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:KeyItemViewModel+IconPreset">
+                        <Button Width="28" Height="28" Margin="2" CornerRadius="6" Padding="0"
+                                Background="{StaticResource CardActiveBgBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                                Command="{Binding $parent[UserControl].((vm:KeyItemViewModel)DataContext).SetPresetIconCommand}"
+                                CommandParameter="{Binding Glyph}" ToolTip.Tip="{Binding Label}" Cursor="Hand">
+                            <TextBlock Text="{Binding Glyph}" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+
+        <!-- Podtytuł kafelka z wyborem koloru podtytułu -->
+        <StackPanel Spacing="4">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{loc:Loc Key_SubtitleMain}" Classes="caption" VerticalAlignment="Center" />
+                <ColorPicker Grid.Column="1" Color="{Binding CurrentEditSubtitleColor, Mode=TwoWay}" IsAlphaEnabled="False" ToolTip.Tip="{loc:Loc Key_SubtitleColorTip}" />
+            </Grid>
+            <TextBox Text="{Binding CurrentEditSubtitle}" PlaceholderText="{Binding SubtitleWatermark, FallbackValue='Wpisz podtytuł...'}" />
+        </StackPanel>
+
+        <!-- Typografia klawisza: Font, Rozmiar, Bold, Italic, Strikethrough -->
+        <ins:KeyTypographySettingsView />
+
+        <!-- Paleta koloru tła kafelka -->
+        <StackPanel Spacing="5" Margin="0,2,0,0">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{loc:Loc Key_BgColorLabel}" Classes="caption" VerticalAlignment="Center" />
+                <ColorPicker Grid.Column="1" Color="{Binding CurrentEditBgColor, Mode=TwoWay}" IsAlphaEnabled="False" ToolTip.Tip="{loc:Loc Key_BgColorTip}" />
+            </Grid>
+            <ItemsControl ItemsSource="{Binding PresetColors}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Width="22" Height="22" Margin="2" CornerRadius="11" Padding="0"
+                                Background="{Binding Hex}" Tag="{Binding Hex}" Click="OnPresetBgColorClick"
+                                BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                                ToolTip.Tip="{Binding Name}" Cursor="Hand" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+
+        <!-- Własna grafika / Obrazek z dysku -->
+        <StackPanel Spacing="4" Margin="0,2,0,0">
+            <TextBlock Text="{loc:Loc Key_CustomImageLabel}" Classes="caption" />
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <TextBlock Grid.Column="0" Text="{Binding CurrentEditImageFileName}" TextTrimming="CharacterEllipsis" Classes="dim" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="pillBtn" Content="{loc:Loc Key_UploadImage}" Click="OnBrowseImageClick" Margin="0,0,4,0" />
+                <Button Grid.Column="2" Classes="pillBtn" Content="{loc:Loc Key_RemoveImage}" Click="OnClearImageClick" IsVisible="{Binding HasCurrentEditImage}" />
+            </Grid>
+            <TextBlock Text="{Binding MediaValidationMessage}" Foreground="#EF4444" FontSize="11" TextWrapping="Wrap"
+                       IsVisible="{Binding HasMediaValidationMessage}" Margin="0,2,0,0" />
+        </StackPanel>
+
+        <!-- Dopasowanie i kadrowanie mediów (Zoom, Pan, Fit Mode) -->
+        <ins:KeyMediaTransformView IsVisible="{Binding HasCurrentEditImage}" />
+    </StackPanel>
+</UserControl>

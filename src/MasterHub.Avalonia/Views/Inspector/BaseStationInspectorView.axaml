@@ -1,0 +1,68 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.BaseStationInspectorView"
+             x:DataType="vm:BaseStationItemViewModel">
+
+    <StackPanel Spacing="12">
+        <!-- Nagłówek bazy dokującej -->
+        <Border Classes="inspectorSection">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <PathIcon Grid.Column="0" Data="{StaticResource IconBase}" Width="18" Height="18"
+                          Foreground="{StaticResource AccentPrimaryBrush}" Margin="0,0,10,0" VerticalAlignment="Center" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Name}" Classes="h3" />
+                    <TextBlock Text="{Binding ModelName}" Classes="dim" FontSize="10" />
+                </StackPanel>
+                <Button Grid.Column="2" Classes="iconBtn" Command="{Binding TurnOffLedCommand}"
+                        ToolTip.Tip="{loc:Loc Base_TurnOffTip}" Padding="6">
+                    <TextBlock Text="💡" FontSize="13" />
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Paleta kolorów LED Ambient z próbnikiem ColorPicker -->
+        <StackPanel Spacing="8">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{loc:Loc Base_LedColorLabel}" Classes="caption" VerticalAlignment="Center" />
+                <ColorPicker Grid.Column="1" Color="{Binding Color, Mode=TwoWay}" IsAlphaEnabled="False" ToolTip.Tip="{loc:Loc Common_ColorPickerTip}" />
+            </Grid>
+
+            <!-- Paleta kafelków barwnych -->
+            <ItemsControl ItemsSource="{Binding PresetColors}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Button Width="26" Height="26" Margin="3" CornerRadius="13" Padding="0"
+                                Background="{Binding Hex}"
+                                Tag="{Binding Hex}"
+                                Click="OnPresetColorClick"
+                                BorderBrush="{StaticResource BorderSubtleBrush}"
+                                BorderThickness="1"
+                                ToolTip.Tip="{Binding Name}" Cursor="Hand" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+
+        <!-- Suwak jasności paska RGB -->
+        <StackPanel Spacing="6" Margin="0,6,0,0">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{loc:Loc Base_RgbBrightness}" Classes="caption" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="{Binding BrightnessDisplay}" FontSize="12" FontWeight="Bold"
+                           Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
+            </Grid>
+            <Slider Minimum="0" Maximum="100" Value="{Binding Brightness}" />
+        </StackPanel>
+
+        <!-- Wizualny podgląd aktywnego podświetlenia podstawki (bez tekstu) -->
+        <Border Height="20" CornerRadius="10" Margin="0,6,0,0"
+                Background="{Binding ColorBrush}"
+                BoxShadow="0 0 16 2 #505E81F4" />
+    </StackPanel>
+</UserControl>

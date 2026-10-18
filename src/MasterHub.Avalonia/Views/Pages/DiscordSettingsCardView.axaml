@@ -1,0 +1,107 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Pages.DiscordSettingsCardView"
+             x:DataType="vm:SettingsPageViewModel">
+
+    <Border Classes="glassCard" Padding="18">
+        <StackPanel Spacing="14">
+            <!-- Nagłówek i Status Połączenia -->
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <PathIcon Data="{StaticResource IconDiscord}" Width="18" Height="18"
+                              Foreground="#5865F2" VerticalAlignment="Center" />
+                    <TextBlock Text="{loc:Loc Discord_Title}" Classes="h3" VerticalAlignment="Center" />
+                </StackPanel>
+
+                <Border Grid.Column="2" Background="{Binding DiscordConnectionStatusColor}" CornerRadius="10" Padding="8,3" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding DiscordConnectionStatusText}" FontSize="11" FontWeight="Bold" Foreground="#0F1117" />
+                </Border>
+            </Grid>
+
+            <TextBlock Text="{loc:Loc Discord_Subtitle}" Classes="dim" FontSize="11" />
+
+            <!-- Tryb integracji (Przełącznik Hotkey vs RPC) -->
+            <Border Classes="statusBadgeCard" Padding="12,10">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Text="{loc:Loc Discord_UseRpc}" FontWeight="SemiBold" FontSize="12" />
+                        <TextBlock Text="{loc:Loc Discord_UseRpcDesc}" Classes="dim" FontSize="10" />
+                    </StackPanel>
+                    <CheckBox Grid.Column="1" IsChecked="{Binding DiscordUseRpc}" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+
+            <!-- Tryb Skrótów Klawiszowych (gdy !DiscordUseRpc) -->
+            <StackPanel Spacing="10" IsVisible="{Binding !DiscordUseRpc}">
+                <Grid ColumnDefinitions="*,12,*">
+                    <StackPanel Grid.Column="0" Spacing="4">
+                        <TextBlock Text="{loc:Loc Discord_MuteHotkey}" Classes="caption" />
+                        <TextBox Text="{Binding DiscordMuteHotkey}" PlaceholderText="np. Ctrl+Shift+M" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Spacing="4">
+                        <TextBlock Text="{loc:Loc Discord_DeafenHotkey}" Classes="caption" />
+                        <TextBox Text="{Binding DiscordDeafenHotkey}" PlaceholderText="np. Ctrl+Shift+D" />
+                    </StackPanel>
+                </Grid>
+                <TextBlock Text="{loc:Loc Discord_HotkeyTip}"
+                           Classes="dim" FontSize="10" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <!-- Tryb Discord RPC (Natywny) -->
+            <StackPanel Spacing="10" IsVisible="{Binding DiscordUseRpc}">
+                <!-- Informacja o aktywnej autoryzacji -->
+                <Border Classes="statusBadgeCard" Padding="14,10" IsVisible="{Binding IsDiscordAuthenticated}">
+                    <StackPanel VerticalAlignment="Center" Spacing="3">
+                        <TextBlock Text="{loc:Loc Discord_RpcActive}" FontWeight="Bold" FontSize="12" Foreground="#10B981" />
+                        <TextBlock Text="{Binding DiscordUsername, StringFormat='Zalogowano jako: {0}. Wyciszanie działa w 100% bezpośrednio przez API.'}"
+                                   Classes="dim" FontSize="10" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Pola Client ID i Client Secret -->
+                <Grid ColumnDefinitions="*,12,*">
+                    <StackPanel Grid.Column="0" Spacing="4">
+                        <TextBlock Text="{loc:Loc Discord_ClientIdLabel}" Classes="caption" />
+                        <TextBox Text="{Binding DiscordClientId}" PlaceholderText="Wklej Client ID..." />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Spacing="4">
+                        <TextBlock Text="{loc:Loc Discord_ClientSecretLabel}" Classes="caption" />
+                        <TextBox Text="{Binding DiscordClientSecret}" PlaceholderText="Wklej Client Secret..." PasswordChar="•" />
+                    </StackPanel>
+                </Grid>
+
+                <Grid ColumnDefinitions="Auto,8,Auto,*,Auto">
+                    <Button Grid.Column="0" Classes="pillBtn" Command="{Binding AuthorizeDiscordCommand}"
+                            Content="{loc:Loc Discord_ConnectBtn}" IsEnabled="{Binding !IsDiscordAuthenticated}" />
+                    <Button Grid.Column="2" Classes="pillBtn" Command="{Binding DisconnectDiscordCommand}"
+                            Content="{loc:Loc Discord_DisconnectBtn}" IsEnabled="{Binding IsDiscordAuthenticated}" />
+                    <TextBlock Grid.Column="4" Text="{loc:Loc Discord_RedirectUriTip}"
+                               Classes="dim" FontSize="10" VerticalAlignment="Center" />
+                </Grid>
+            </StackPanel>
+
+            <!-- Pasek akcji testowania i komunikatów -->
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="pillBtn" Command="{Binding SaveDiscordSettingsCommand}" Content="{loc:Loc Discord_SaveSettings}" />
+                    <Button Classes="pillBtn" Command="{Binding TestMuteCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconMic}" Width="12" Height="12" />
+                            <TextBlock Text="{loc:Loc Discord_TestMute}" />
+                        </StackPanel>
+                    </Button>
+                    <Button Classes="pillBtn" Command="{Binding TestDeafenCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <PathIcon Data="{StaticResource IconHeadphones}" Width="12" Height="12" />
+                            <TextBlock Text="{loc:Loc Discord_TestDeafen}" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <TextBlock Text="{Binding DiscordStatusMessage}" Classes="dim" FontSize="11" TextWrapping="Wrap" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

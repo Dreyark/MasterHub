@@ -1,0 +1,64 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Inspector"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.DeviceHeaderCardView"
+             x:DataType="vm:DeviceHeaderViewModel">
+
+    <Border Classes="inspectorSection">
+        <StackPanel Spacing="10">
+            <!-- Tytuł sekcji -->
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{loc:Loc DeviceHeader_ModuleStatus}" Classes="caption" FontWeight="Bold" />
+                <TextBlock Grid.Column="1" Text="COOLER MASTER" Classes="dim" FontSize="9.5" />
+            </Grid>
+
+            <!-- Siatka 4 mini-kart modułów z wektorowymi ikonami SVG i dynamicznym stanem połączenia -->
+            <UniformGrid Columns="4">
+                <!-- Klawiatura LCD -->
+                <Border Classes="statusBadgeCard" Margin="2" Padding="6,8" Opacity="{Binding KeypadOpacity}">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
+                        <PathIcon Data="{StaticResource IconKeypad}" Width="16" Height="16"
+                                  Foreground="{StaticResource AccentPrimaryBrush}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc DeviceHeader_Keys}" FontSize="9" FontWeight="Medium"
+                                   Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" />
+                        <Ellipse Width="5" Height="5" Fill="{Binding KeypadStatusColor}" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Suwaki Audio -->
+                <Border Classes="statusBadgeCard" Margin="2" Padding="6,8" Opacity="{Binding SliderOpacity}">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
+                        <PathIcon Data="{StaticResource IconFaders}" Width="16" Height="16"
+                                  Foreground="{StaticResource AccentPrimaryBrush}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc DeviceHeader_Sliders}" FontSize="9" FontWeight="Medium"
+                                   Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" />
+                        <Ellipse Width="5" Height="5" Fill="{Binding SliderStatusColor}" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Rolki Obrotowe -->
+                <Border Classes="statusBadgeCard" Margin="2" Padding="6,8" Opacity="{Binding RollerOpacity}">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
+                        <PathIcon Data="{StaticResource IconDials}" Width="16" Height="16"
+                                  Foreground="{StaticResource AccentPrimaryBrush}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc DeviceHeader_Rollers}" FontSize="9" FontWeight="Medium"
+                                   Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" />
+                        <Ellipse Width="5" Height="5" Fill="{Binding RollerStatusColor}" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Stacja Dokująca Base -->
+                <Border Classes="statusBadgeCard" Margin="2" Padding="6,8" Opacity="{Binding BaseOpacity}">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
+                        <PathIcon Data="{StaticResource IconBase}" Width="16" Height="16"
+                                  Foreground="{StaticResource AccentPrimaryBrush}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc DeviceHeader_Base}" FontSize="9" FontWeight="Medium"
+                                   Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" />
+                        <Ellipse Width="5" Height="5" Fill="{Binding BaseStatusColor}" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+        </StackPanel>
+    </Border>
+</UserControl>

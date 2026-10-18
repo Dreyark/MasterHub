@@ -1,0 +1,86 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Pages.KickSettingsCardView"
+             x:DataType="vm:SettingsPageViewModel">
+
+    <Border Classes="glassCard" Padding="18">
+        <StackPanel Spacing="14">
+            <!-- Nagłówek i Status Połączenia Kick -->
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <PathIcon Data="{StaticResource IconKick}" Width="18" Height="18"
+                              Foreground="#53FC18" VerticalAlignment="Center" />
+                    <TextBlock Text="{loc:Loc Kick_Title}" Classes="h3" VerticalAlignment="Center" />
+                </StackPanel>
+
+                <Border Grid.Column="2" Background="{Binding KickConnectionStatusColor}" CornerRadius="10" Padding="8,3" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding KickConnectionStatusText}" FontSize="11" FontWeight="Bold" Foreground="#0F1117" />
+                </Border>
+            </Grid>
+
+            <TextBlock Text="{loc:Loc Kick_Subtitle}" Classes="dim" FontSize="11" />
+
+            <!-- Konfiguracja: Kanał, Bot Username, Token autoryzacji -->
+            <Grid ColumnDefinitions="*,12,*">
+                <StackPanel Grid.Column="0" Spacing="4">
+                    <TextBlock Text="{loc:Loc Kick_ChannelLabel}" Classes="caption" />
+                    <TextBox Text="{Binding KickChannel, Mode=TwoWay}" PlaceholderText="{loc:Loc Kick_ChannelPlaceholder}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="4">
+                    <TextBlock Text="{loc:Loc Kick_BotUsernameLabel}" Classes="caption" />
+                    <TextBox Text="{Binding KickBotUsername, Mode=TwoWay}" PlaceholderText="{loc:Loc Kick_BotUsernamePlaceholder}" />
+                </StackPanel>
+            </Grid>
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="{loc:Loc Kick_AuthTokenLabel}" Classes="caption" />
+                <TextBox Text="{Binding KickAuthToken, Mode=TwoWay}" PasswordChar="•" PlaceholderText="{loc:Loc Kick_AuthTokenPlaceholder}" />
+            </StackPanel>
+
+            <!-- Opcja Auto-Connect -->
+            <Border Classes="statusBadgeCard" Padding="12,10">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Text="{loc:Loc Kick_AutoConnect}" FontWeight="SemiBold" FontSize="12" />
+                        <TextBlock Text="{loc:Loc Kick_AutoConnectDesc}" Classes="dim" FontSize="10" />
+                    </StackPanel>
+                    <CheckBox Grid.Column="1" IsChecked="{Binding KickAutoConnect, Mode=TwoWay}" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+
+            <!-- Przyciski akcji: Połącz/Rozłącz, Zapisz, Test czatu, Test klipu -->
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="pillBtn" Command="{Binding ConnectKickCommand}"
+                            Content="{loc:Loc Kick_ConnectBtn}" IsEnabled="{Binding !IsKickConnected}" />
+                    <Button Classes="pillBtn" Command="{Binding DisconnectKickCommand}"
+                            Content="{loc:Loc Kick_DisconnectBtn}" IsEnabled="{Binding IsKickConnected}" />
+
+                    <Button Classes="pillBtn" Command="{Binding SaveKickSettingsCommand}"
+                            Content="{loc:Loc Kick_SaveSettings}" />
+
+                    <Button Classes="pillBtn" Command="{Binding TestKickMessageCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="💬" FontSize="12" />
+                            <TextBlock Text="{loc:Loc Kick_TestChat}" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button Classes="pillBtn" Command="{Binding TestKickClipCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock Text="🎬" FontSize="12" />
+                            <TextBlock Text="{loc:Loc Kick_TestClip}" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+
+                <!-- Komunikat statusu i wskazówka konfiguracyjna -->
+                <TextBlock Text="{Binding KickStatusMessage}" Foreground="{Binding KickStatusMessageColor}"
+                           FontWeight="SemiBold" FontSize="11" TextWrapping="Wrap" />
+                <TextBlock Text="{loc:Loc Kick_ConfigTip}" Classes="dim" FontSize="10" TextWrapping="Wrap" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -1,0 +1,89 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Inspector"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.ActionLibraryView"
+             x:DataType="vm:ActionLibraryViewModel">
+
+    <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,4">
+        <!-- Nagłówek kontekstowy wybranego manipulatora -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+            <TextBlock Grid.Column="0" Text="{Binding ContextTitle}" FontSize="12" FontWeight="Bold"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <Border Grid.Column="1" Classes="statusBadgeCard" Padding="6,2" CornerRadius="6">
+                <TextBlock Text="{Binding ManipulatorBadge}" FontSize="9.5" FontWeight="SemiBold"
+                           Foreground="{StaticResource AccentPrimaryBrush}" />
+            </Border>
+        </Grid>
+
+        <!-- Pole wyszukiwania -->
+        <TextBox Grid.Row="1" Text="{Binding SearchQuery}"
+                 PlaceholderText="{loc:Loc Action_SearchPlaceholder}" Margin="0,0,0,8" />
+
+        <!-- Pasek chipsów kategorii -->
+        <ItemsControl Grid.Row="2" ItemsSource="{Binding Categories}" Margin="0,0,0,8">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <WrapPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:CategoryFilterItem">
+                    <Button Classes="pillBtn" Classes.active="{Binding IsSelected}" Margin="0,0,5,5" Padding="8,4"
+                            Command="{Binding $parent[UserControl].((vm:ActionLibraryViewModel)DataContext).SelectCategoryCommand}"
+                            CommandParameter="{Binding Name}">
+                        <TextBlock Text="{Binding Name}" FontSize="10" />
+                    </Button>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <!-- Lista akcji z zaokrąglonym podświetleniem (CornerRadius 10) i natychmiastowym przypisywaniem -->
+        <ListBox Grid.Row="3" ItemsSource="{Binding FilteredItems}"
+                 SelectedItem="{Binding SelectedAction, Mode=TwoWay}"
+                 Background="Transparent" BorderThickness="0" Padding="0">
+            <ListBox.Styles>
+                <Style Selector="ListBoxItem">
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="Margin" Value="0,2" />
+                    <Setter Property="CornerRadius" Value="10" />
+                    <Setter Property="Background" Value="Transparent" />
+                </Style>
+                <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter">
+                    <Setter Property="Background" Value="Transparent" />
+                </Style>
+                <Style Selector="ListBoxItem:selected /template/ ContentPresenter">
+                    <Setter Property="Background" Value="Transparent" />
+                </Style>
+            </ListBox.Styles>
+            <ListBox.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Spacing="4" />
+                </ItemsPanelTemplate>
+            </ListBox.ItemsPanel>
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:ActionCatalogItem">
+                    <Button Classes="ghostBtn" Padding="0" Margin="0" HorizontalAlignment="Stretch"
+                            Command="{Binding $parent[UserControl].((vm:ActionLibraryViewModel)DataContext).ChooseActionCommand}"
+                            CommandParameter="{Binding}"
+                            CornerRadius="10">
+                        <Border Classes="statusBadgeCard" Padding="10,8" CornerRadius="10" HorizontalAlignment="Stretch">
+                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                <TextBlock Grid.Column="0" Classes="emoji" Text="{Binding Icon}" FontSize="18"
+                                           FontFamily="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji, sans-serif"
+                                           VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Text="{Binding Title}" FontSize="11.5" FontWeight="SemiBold"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Text="{Binding Category}" Classes="dim" FontSize="9.5" />
+                                </StackPanel>
+                                <PathIcon Grid.Column="2" Data="{StaticResource IconPlus}" Width="10" Height="10"
+                                          Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                    </Button>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </Grid>
+</UserControl>

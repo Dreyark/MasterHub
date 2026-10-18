@@ -1,0 +1,25 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Tła bazowe (Dark Modern 2026) -->
+    <Color x:Key="MainBgColor">#181824</Color>
+    <Color x:Key="PanelBgColor">#202131</Color>
+    <Color x:Key="CardBgColor">#28293D</Color>
+    <Color x:Key="CardHoverBgColor">#32344D</Color>
+    <Color x:Key="CardActiveBgColor">#3B3D59</Color>
+
+    <!-- Subtelne obramowania i poświaty -->
+    <Color x:Key="BorderSubtleColor">#18FFFFFF</Color>
+    <Color x:Key="BorderAccentColor">#405E81F4</Color>
+    <Color x:Key="BorderGlowColor">#608A64EB</Color>
+
+    <!-- Akcenty pastelowo-neonowe -->
+    <Color x:Key="AccentPrimaryColor">#5E81F4</Color>
+    <Color x:Key="AccentSecondaryColor">#8A64EB</Color>
+    <Color x:Key="AccentWarningColor">#F45E6D</Color>
+    <Color x:Key="AccentSuccessColor">#00E5A3</Color>
+
+    <!-- Typografia i etykiety -->
+    <Color x:Key="TextPrimaryColor">#FFFFFF</Color>
+    <Color x:Key="TextMutedColor">#7C7E93</Color>
+    <Color x:Key="TextDimColor">#535567</Color>
+</ResourceDictionary>

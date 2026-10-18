@@ -1,0 +1,106 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyMediaTransformView"
+             x:DataType="vm:KeyItemViewModel">
+
+    <Border Background="{StaticResource CardBgBrush}" CornerRadius="8" Padding="10" Margin="0,4,0,0">
+        <StackPanel Spacing="10">
+            <!-- Nagłówek sekcji -->
+            <TextBlock Text="{loc:Loc Key_MediaTransformTitle}" Classes="caption" FontWeight="SemiBold" />
+
+            <!-- Tryby dopasowania (Cover / Contain / Stretch) -->
+            <Grid ColumnDefinitions="*,*,*">
+                <Button Grid.Column="0" Classes="actionBtn" Classes.tabActive="{Binding IsFitCover}"
+                        Command="{Binding SetFitModeCommand}" CommandParameter="Cover"
+                        HorizontalAlignment="Stretch" Padding="4,6" Margin="0,0,3,0"
+                        Content="{loc:Loc Key_FitCover}" ToolTip.Tip="{loc:Loc Key_FitCoverTip}" />
+                <Button Grid.Column="1" Classes="actionBtn" Classes.tabActive="{Binding IsFitContain}"
+                        Command="{Binding SetFitModeCommand}" CommandParameter="Contain"
+                        HorizontalAlignment="Stretch" Padding="4,6" Margin="2,0,2,0"
+                        Content="{loc:Loc Key_FitContain}" ToolTip.Tip="{loc:Loc Key_FitContainTip}" />
+                <Button Grid.Column="2" Classes="actionBtn" Classes.tabActive="{Binding IsFitStretch}"
+                        Command="{Binding SetFitModeCommand}" CommandParameter="Stretch"
+                        HorizontalAlignment="Stretch" Padding="4,6" Margin="3,0,0,0"
+                        Content="{loc:Loc Key_FitStretch}" ToolTip.Tip="{loc:Loc Key_FitStretchTip}" />
+            </Grid>
+
+            <!-- Skalowanie / Zoom (20% - 400%) -->
+            <StackPanel Spacing="4">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0" Text="{loc:Loc Key_MediaZoom}" Classes="caption" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{Binding CurrentEditImageScaleDisplay}" Classes="dim" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </Grid>
+                <Grid ColumnDefinitions="Auto,*,Auto" VerticalAlignment="Center">
+                    <Button Grid.Column="0" Classes="actionBtn" Width="30" Height="28" Padding="0"
+                            Command="{Binding ZoomOutCommand}" ToolTip.Tip="{loc:Loc Media_ZoomOut}" Margin="0,0,6,0">
+                        <PathIcon Data="{StaticResource IconMinus}" Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Button>
+                    <Slider Grid.Column="1" Minimum="20" Maximum="400" Value="{Binding CurrentEditImageScale}" VerticalAlignment="Center" />
+                    <Button Grid.Column="2" Classes="actionBtn" Width="30" Height="28" Padding="0"
+                            Command="{Binding ZoomInCommand}" ToolTip.Tip="{loc:Loc Media_ZoomIn}" Margin="6,0,0,0">
+                        <PathIcon Data="{StaticResource IconPlus}" Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Button>
+                </Grid>
+            </StackPanel>
+
+            <!-- Pozycja kadru: D-Pad + Suwaki osi X i Y -->
+            <StackPanel Spacing="4">
+                <TextBlock Text="{loc:Loc Key_MediaPan}" Classes="caption" />
+
+                <Grid ColumnDefinitions="Auto,*" Margin="0,2,0,0">
+                    <!-- Precyzyjny D-Pad nawigacyjny (3x3 ze spójnymi wektorowymi strzałkami i subtelnym środkiem) -->
+                    <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,Auto,Auto"
+                          VerticalAlignment="Center" Margin="0,0,12,0">
+                        <Button Grid.Row="0" Grid.Column="1" Classes="actionBtn" Width="28" Height="28" Padding="0" Margin="1"
+                                Command="{Binding PanCommand}" CommandParameter="Up" ToolTip.Tip="{loc:Loc Media_PanUp}">
+                            <PathIcon Data="{StaticResource IconArrowUp}" Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button Grid.Row="1" Grid.Column="0" Classes="actionBtn" Width="28" Height="28" Padding="0" Margin="1"
+                                Command="{Binding PanCommand}" CommandParameter="Left" ToolTip.Tip="{loc:Loc Media_PanLeft}">
+                            <PathIcon Data="{StaticResource IconArrowLeft}" Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Border Grid.Row="1" Grid.Column="1" Width="28" Height="28" Margin="1">
+                            <Ellipse Width="4" Height="4" Fill="{StaticResource TextMutedBrush}" Opacity="0.4"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <Button Grid.Row="1" Grid.Column="2" Classes="actionBtn" Width="28" Height="28" Padding="0" Margin="1"
+                                Command="{Binding PanCommand}" CommandParameter="Right" ToolTip.Tip="{loc:Loc Media_PanRight}">
+                            <PathIcon Data="{StaticResource IconArrowRight}" Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button Grid.Row="2" Grid.Column="1" Classes="actionBtn" Width="28" Height="28" Padding="0" Margin="1"
+                                Command="{Binding PanCommand}" CommandParameter="Down" ToolTip.Tip="{loc:Loc Media_PanDown}">
+                            <PathIcon Data="{StaticResource IconArrowDown}" Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+
+                    <!-- Płynne suwaki osi X i Y z czytelnym podglądem wartości -->
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="6">
+                        <Grid ColumnDefinitions="24,*,42" VerticalAlignment="Center">
+                            <TextBlock Grid.Column="0" Text="X:" Classes="dim" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Slider Grid.Column="1" Minimum="-100" Maximum="100" Value="{Binding CurrentEditImageOffsetX}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="{Binding CurrentEditImageOffsetXDisplay}" Classes="dim" FontSize="11"
+                                       TextAlignment="Right" VerticalAlignment="Center" />
+                        </Grid>
+                        <Grid ColumnDefinitions="24,*,42" VerticalAlignment="Center">
+                            <TextBlock Grid.Column="0" Text="Y:" Classes="dim" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Slider Grid.Column="1" Minimum="-100" Maximum="100" Value="{Binding CurrentEditImageOffsetY}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="{Binding CurrentEditImageOffsetYDisplay}" Classes="dim" FontSize="11"
+                                       TextAlignment="Right" VerticalAlignment="Center" />
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+
+            <!-- Pojedynczy, czytelny przycisk resetowania kadru -->
+            <Button Classes="actionBtn" HorizontalAlignment="Stretch" Padding="8,6" Margin="0,2,0,0"
+                    Command="{Binding ResetImageTransformCommand}" ToolTip.Tip="{loc:Loc Key_MediaReset}">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="6">
+                    <PathIcon Data="{StaticResource IconRotate}" Width="12" Height="12" VerticalAlignment="Center" />
+                    <TextBlock Text="{loc:Loc Key_MediaReset}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </StackPanel>
+            </Button>
+        </StackPanel>
+    </Border>
+</UserControl>

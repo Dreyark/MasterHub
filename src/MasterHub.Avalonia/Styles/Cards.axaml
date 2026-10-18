@@ -1,0 +1,59 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Szklana karta interfejsu (Glassmorphism Card) -->
+    <Style Selector="Border.glassCard">
+        <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="12" />
+        <Setter Property="Transitions">
+            <Transitions>
+                <BrushTransition Property="BorderBrush" Duration="0:0:0.15" />
+                <BoxShadowsTransition Property="BoxShadow" Duration="0:0:0.15" />
+            </Transitions>
+        </Setter>
+    </Style>
+    <Style Selector="Border.glassCard:pointerover">
+        <Setter Property="BorderBrush" Value="#805E81F4" />
+    </Style>
+    <Style Selector="Border.glassCard.selected">
+        <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
+        <Setter Property="BorderThickness" Value="2" />
+    </Style>
+
+    <!-- Kontener modułu sprzętowego MasterHub -->
+    <Style Selector="Border.moduleContainer">
+        <Setter Property="Background" Value="{StaticResource PanelBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="14" />
+    </Style>
+
+    <!-- Aktywne podświetlenie / poświata neonowa (Active Glow) -->
+    <Style Selector="Border.activeGlow">
+        <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
+        <Setter Property="BoxShadow" Value="0 0 12 0 #405E81F4" />
+    </Style>
+
+    <!-- Sekcja w prawym panelu inspektora -->
+    <Style Selector="Border.inspectorSection">
+        <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="10" />
+        <Setter Property="Margin" Value="0,0,0,8" />
+    </Style>
+
+    <!-- Mini-karta statusu urządzenia -->
+    <Style Selector="Border.statusBadgeCard">
+        <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="8,6" />
+    </Style>
+</Styles>

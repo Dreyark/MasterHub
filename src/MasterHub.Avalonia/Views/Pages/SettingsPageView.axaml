@@ -1,0 +1,132 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
+             xmlns:pages="using:MasterHub.Avalonia.Views.Pages"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Pages.SettingsPageView"
+             x:DataType="vm:SettingsPageViewModel">
+
+    <ScrollViewer Margin="24">
+        <StackPanel Spacing="18" Width="720" HorizontalAlignment="Left">
+            <!-- Nagłówek -->
+            <StackPanel Spacing="4">
+                <TextBlock Text="{loc:Loc Settings_Title}" Classes="h2" />
+                <TextBlock Text="{loc:Loc Settings_Subtitle}" Classes="dim" />
+            </StackPanel>
+
+            <!-- Karta 1: Jasność i Synchronizacja Podświetlenia -->
+            <Border Classes="glassCard" Padding="18">
+                <StackPanel Spacing="14">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <PathIcon Data="{StaticResource IconSun}" Width="16" Height="16"
+                                  Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc Settings_BrightnessHeader}" Classes="h3" VerticalAlignment="Center" />
+                    </StackPanel>
+
+                    <!-- Opcja spięcia całości: Synchronizuj jasność wszystkich modułów -->
+                    <Border Classes="statusBadgeCard" Padding="14,10">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                                <TextBlock Text="{loc:Loc Settings_SyncBrightness}" FontWeight="SemiBold" FontSize="12" />
+                                <TextBlock Text="{loc:Loc Settings_SyncBrightnessDesc}" Classes="dim" FontSize="10" />
+                            </StackPanel>
+                            <CheckBox Grid.Column="1" IsChecked="{Binding Canvas.IsSyncBrightness}" VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
+
+                    <!-- Suwak jasności ekranu LCD -->
+                    <StackPanel Spacing="6">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="{loc:Loc Settings_LcdBrightness}" Classes="caption" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding Canvas.KeypadBrightness, StringFormat='{}{0}%'}"
+                                       FontWeight="Bold" Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
+                        </Grid>
+                        <Slider Minimum="0" Maximum="100" Value="{Binding Canvas.KeypadBrightness}" />
+                    </StackPanel>
+
+                    <!-- Suwak jasności podstawki dock -->
+                    <StackPanel Spacing="6">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="{loc:Loc Settings_BaseBrightness}" Classes="caption" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding Canvas.BaseStation.BrightnessDisplay}"
+                                       FontWeight="Bold" Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
+                        </Grid>
+                        <Slider Minimum="0" Maximum="100" Value="{Binding Canvas.BaseStation.Brightness}" />
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- Karta 2: Zasilanie i Uśpienie -->
+            <Border Classes="glassCard" Padding="18">
+                <StackPanel Spacing="12">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <PathIcon Data="{StaticResource IconStandby}" Width="16" Height="16"
+                                  Foreground="{StaticResource AccentSecondaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc Settings_PowerHeader}" Classes="h3" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Text="{loc:Loc Settings_StandbyTitle}" FontWeight="SemiBold" FontSize="12" />
+                            <TextBlock Text="{loc:Loc Settings_StandbyDesc}" Classes="dim" FontSize="10" />
+                        </StackPanel>
+                        <Button Grid.Column="1" Classes="pillBtn" Command="{Binding ToggleStandbyCommand}" Content="{loc:Loc Settings_StandbyToggle}" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Karta 3: Język i Aplikacja (Dropdown ComboBox) -->
+            <Border Classes="glassCard" Padding="18">
+                <StackPanel Spacing="12">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <PathIcon Data="{StaticResource IconSettings}" Width="16" Height="16"
+                                  Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc Settings_LanguageHeader}" Classes="h3" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <Grid ColumnDefinitions="*,Auto">
+                        <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock Text="{loc:Loc Settings_LanguageTitle}" FontWeight="SemiBold" FontSize="12" />
+                            <TextBlock Text="{loc:Loc Settings_LanguageDesc}" Classes="dim" FontSize="10" />
+                        </StackPanel>
+                        <ComboBox Grid.Column="1" Width="180"
+                                  ItemsSource="{Binding AvailableLanguages}"
+                                  SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}"
+                                  VerticalAlignment="Center" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Karta 4: Integracja z Discord -->
+            <pages:DiscordSettingsCardView />
+
+            <!-- Karta 5: Integracja z OBS Studio -->
+            <pages:ObsSettingsCardView />
+
+            <!-- Karta 6: Integracja z Twitch -->
+            <pages:TwitchSettingsCardView />
+
+            <!-- Karta 7: Integracja z Kick -->
+            <pages:KickSettingsCardView />
+
+            <!-- Karta 8: Integracja z JetKVM (Zdalne zasilanie serwera ATX) -->
+            <pages:JetKvmSettingsCardView />
+
+            <!-- Karta 9: Integracja ze Spotify (Rozszerzone sterowanie) -->
+            <pages:SpotifySettingsCardView />
+
+            <!-- Karta 10: Integracja z VLC Media Player -->
+            <pages:VlcSettingsCardView />
+
+            <!-- Karta 11: Integracja z Voicemod (Zmiana Głosu na Żywo) -->
+            <pages:VoicemodSettingsCardView x:Name="VoicemodCard" />
+
+            <!-- Karta 12: Informacje o oprogramowaniu -->
+            <Border Classes="glassCard" Padding="18">
+                <StackPanel Spacing="6">
+                    <TextBlock Text="{loc:Loc Settings_AppInfoTitle}" Classes="h3" />
+                    <TextBlock Text="{loc:Loc Settings_AppInfoDesc}" Classes="caption" />
+                    <TextBlock Text="{loc:Loc Settings_AppInfoModules}" Classes="dim" FontSize="10" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
