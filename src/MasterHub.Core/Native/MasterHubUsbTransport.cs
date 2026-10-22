@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -261,6 +262,12 @@ public sealed class MasterHubDeviceHandle : IDisposable
             return 7;
         }
 
+        if (IsForbiddenReport(report))
+        {
+            Debug.WriteLine($"[SECURITY] Zablokowano niebezpieczny rozkaz HID Output Report: ID=0x{report[0]:X2}, CMD=0x{report[1]:X2}");
+            return -1;
+        }
+
         lock (_writeLock)
         {
             if (_writeEvent == IntPtr.Zero || _writeBuffer == IntPtr.Zero || _writeOverlapped == IntPtr.Zero) return -1;
@@ -313,6 +320,12 @@ public sealed class MasterHubDeviceHandle : IDisposable
             return 7;
         }
 
+        if (IsForbiddenReport(report))
+        {
+            Debug.WriteLine($"[SECURITY] Zablokowano niebezpieczny rozkaz HID Feature Report: ID=0x{report[0]:X2}, CMD=0x{report[1]:X2}");
+            return -1;
+        }
+
         lock (_writeLock)
         {
             bool ok = HidD_SetFeature(_handle, report, report.Length);
@@ -352,6 +365,42 @@ public sealed class MasterHubDeviceHandle : IDisposable
         }
     }
 
+    /// <summary>
+    /// Filtr bezpieczeństwa sprzętowego (Safety Guard).
+    /// Blokuje wysyłanie niebezpiecznych rozkazów mogących uszkodzić kontroler lub zużyć pamięć flash:
+    /// - Update firmware / Test firmware recovery / Factory reset
+    /// - Set serial number (zamazanie fabrycznych numerów seryjnych modułów)
+    /// - Calibrate_Direction (0x02 0x2F - nieodwracalne zniszczenie fabrycznej kalibracji sensora stacji bazowej)
+    /// - Save screen picture to flash (0x02 0x38, 0x02 0x47 - degradacja komórek pamięci SPI flash)
+    /// </summary>
+    public static bool IsForbiddenReport(byte[] report)
+    {
+        if (report == null || report.Length < 2) return false;
+        byte id = report[0];
+        byte cmd = report[1];
+
+        return (id == 0x02 && cmd == 0x2A) || // Update firmware (M0)
+               (id == 0x02 && cmd == 0x2B) || // Set serial number (M0)
+               (id == 0x02 && cmd == 0x31) || // Save factory data (M0)
+               (id == 0x02 && cmd == 0x49) || // Test firmware recovery (M0)
+               (id == 0x02 && cmd == 0x4A) || // Test factory reset (M0)
+               (id == 0x02 && cmd == 0x2F) || // Recalibrate base tilt sensor (Calibrate_Direction)
+               (id == 0x02 && cmd == 0x34) || // Update firmware (Keys)
+               (id == 0x03 && cmd == 0x35) || // Set serial number (Keys)
+               (id == 0x03 && cmd == 0x39) || // Test firmware recovery (Keys)
+               (id == 0x03 && cmd == 0x3C) || // Save factory data (Keys)
+               (id == 0x03 && cmd == 0x3D) || // Test factory reset (Keys)
+               (id == 0x03 && cmd == 0x3E) || // Test animation recovery (Keys)
+               (id == 0x02 && cmd == 0x38) || // Save screen picture to flash (Keys)
+               (id == 0x02 && cmd == 0x44) || // Update firmware (Dial)
+               (id == 0x03 && cmd == 0x45) || // Set serial number (Dial)
+               (id == 0x03 && cmd == 0x48) || // Test firmware recovery (Dial)
+               (id == 0x03 && cmd == 0x4B) || // Save factory data (Dial)
+               (id == 0x03 && cmd == 0x4C) || // Test factory reset (Dial)
+               (id == 0x03 && cmd == 0x4D) || // Test animation recovery (Dial)
+               (id == 0x02 && cmd == 0x47);   // Save screen picture to flash (Dial)
+    }
+
     // High-Level Key Deck 15 (M4315) Protocol Helpers
     public int SetSwMode(bool isSoftwareMode)
     {
@@ -367,7 +416,23 @@ public sealed class MasterHubDeviceHandle : IDisposable
         byte[] rep = new byte[32];
         rep[0] = 0x03;
         rep[1] = 0x34;
-        rep[2] = Math.Clamp(brightness, (byte)0, (byte)100);
+        // Wartość 0 powoduje zawieszenie MCU klawiszy (I/O Timeout) wymagające fizycznego odłączenia USB.
+        // Bezpieczny zakres minimalny to 1 (wygaszenie realizuje się przez czarny obraz lub FillScreen).
+        rep[2] = Math.Clamp(brightness, (byte)1, (byte)100);
+        return SetFeatureReport(rep);
+    }
+
+    /// <summary>
+    /// Błyskawiczne wypełnienie całego ekranu klawiszy (wszystkie 15 przycisków) jednym kolorem RGB w pojedynczym raporcie.
+    /// </summary>
+    public int FillScreen(byte r, byte g, byte b)
+    {
+        byte[] rep = new byte[32];
+        rep[0] = 0x03;
+        rep[1] = 0x36;
+        rep[2] = r;
+        rep[3] = g;
+        rep[4] = b;
         return SetFeatureReport(rep);
     }
 
@@ -396,6 +461,53 @@ public sealed class MasterHubDeviceHandle : IDisposable
         report[0] = 0x02;
         report[1] = 0x36;
         report[6] = buttonId;
+
+        while (remaining > 0)
+        {
+            int chunkLen = Math.Min(remaining, ChunkMax);
+            byte isLast = (byte)(remaining <= ChunkMax ? 1 : 0);
+
+            report[2] = (byte)(chunkIndex & 0xFF);
+            report[3] = (byte)((chunkIndex >> 8) & 0xFF);
+            report[4] = (byte)(chunkLen & 0xFF);
+            report[5] = (byte)((chunkLen >> 8) & 0xFF);
+            report[7] = isLast;
+
+            int srcOffset = total - remaining;
+            Buffer.BlockCopy(jpegBuf, srcOffset, report, 8, chunkLen);
+
+            if (chunkLen < ChunkMax)
+            {
+                Array.Clear(report, 8 + chunkLen, ReportLen - (8 + chunkLen));
+            }
+
+            int res = WriteOutputReport(report);
+            if (res != 0) return res;
+
+            chunkIndex++;
+            remaining -= chunkLen;
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Przesyła pełnopanelowy obraz panoramiczny 480x272 JPEG do wszystkich 15 ekranów LCD jednocześnie
+    /// za pomocą sprzętowego rozkazu 0x35 (11 ms transfer bez tearingu).
+    /// </summary>
+    public int DisplayPanoramicPicture(byte[] jpegBuf, int bufLen)
+    {
+        const int ReportLen = 320;
+        const int ChunkMax = 312;
+
+        int total = Math.Min(jpegBuf.Length, bufLen);
+        int remaining = total;
+        ushort chunkIndex = 0;
+
+        byte[] report = new byte[ReportLen];
+        report[0] = 0x02; // Report ID
+        report[1] = 0x35; // Opcode: Full Panel 480x272 JPEG Stream
+        report[6] = 0x00; // Reserved / unused
 
         while (remaining > 0)
         {
@@ -473,6 +585,114 @@ public sealed class MasterHubDeviceHandle : IDisposable
         return WriteOutputReport(rep);
     }
 
+    // High-Level 3 Knobs (M003K / 0x0202) Protocol Helpers
+    public int SetKnobLedMode(byte knobIndex, byte mode, bool persist = false)
+    {
+        return AdjustLedMode(2, knobIndex, mode, persist);
+    }
+
+    public int SetKnobLedColor(byte knobIndex, byte r, byte g, byte b, bool persist = false)
+    {
+        return AdjustLedColor(2, knobIndex, r, g, b, persist);
+    }
+
+    public int SetKnobLedBrightness(byte knobIndex, byte brightness)
+    {
+        return AdjustLedBrightness(2, knobIndex, brightness);
+    }
+
+    public int SetKnobLedSpeed(byte speed)
+    {
+        return AdjustLedSpeed(speed);
+    }
+
+    // High-Level Dial with IPS Display (M131E / 0x0206) Protocol Helpers
+    /// <summary>
+    /// Aktywuje tryb oprogramowania (Software Mode) dla pokrętła z ekranem IPS (0x0206).
+    /// WAŻNE: Wymagane natychmiast po połączeniu, aby zapobiec zawieszeniu MCU!
+    /// </summary>
+    public int SetDialSwMode(bool isSoftwareMode)
+    {
+        byte[] rep = new byte[32];
+        rep[0] = 0x03;
+        rep[1] = 0x49;
+        rep[2] = (byte)(isSoftwareMode ? 0x01 : 0x00);
+        return SetFeatureReport(rep);
+    }
+
+    /// <summary>
+    /// Regulacja jasności podświetlenia ekranu IPS 240x240 (0..100%).
+    /// </summary>
+    public int AdjustDialBacklight(byte brightness)
+    {
+        byte[] rep = new byte[32];
+        rep[0] = 0x03;
+        rep[1] = 0x44;
+        // Wartość 0 powoduje zablokowanie kontrolera Dial IPS (I/O Timeout). Bezpieczna minimalna wartość to 1.
+        rep[2] = Math.Clamp(brightness, (byte)1, (byte)100);
+        return SetFeatureReport(rep);
+    }
+
+    /// <summary>
+    /// Wypełnienie ekranu IPS jednolitym kolorem RGB.
+    /// </summary>
+    public int FillDialColor(byte r, byte g, byte b)
+    {
+        byte[] rep = new byte[32];
+        rep[0] = 0x03;
+        rep[1] = 0x46;
+        rep[2] = r;
+        rep[3] = g;
+        rep[4] = b;
+        return SetFeatureReport(rep);
+    }
+
+    /// <summary>
+    /// Przesyła obraz 240x240 JPEG do okrągłego ekranu IPS za pomocą rozkazu 0x45 (pakiety 320 B, 312 B payloadu).
+    /// </summary>
+    public int DisplayPictureOnDial(byte[] jpegBuf, int bufLen)
+    {
+        const int ReportLen = 320;
+        const int ChunkMax = 312;
+
+        int total = Math.Min(jpegBuf.Length, bufLen);
+        int remaining = total;
+        ushort chunkIndex = 0;
+
+        byte[] report = new byte[ReportLen];
+        report[0] = 0x02; // Report ID
+        report[1] = 0x45; // Opcode: Dial 240x240 JPEG stream
+        report[6] = 0x00; // Reserved
+
+        while (remaining > 0)
+        {
+            int chunkLen = Math.Min(remaining, ChunkMax);
+            byte isLast = (byte)(remaining <= ChunkMax ? 1 : 0);
+
+            report[2] = (byte)(chunkIndex & 0xFF);
+            report[3] = (byte)((chunkIndex >> 8) & 0xFF);
+            report[4] = (byte)(chunkLen & 0xFF);
+            report[5] = (byte)((chunkLen >> 8) & 0xFF);
+            report[7] = isLast;
+
+            int srcOffset = total - remaining;
+            Buffer.BlockCopy(jpegBuf, srcOffset, report, 8, chunkLen);
+
+            if (chunkLen < ChunkMax)
+            {
+                Array.Clear(report, 8 + chunkLen, ReportLen - (8 + chunkLen));
+            }
+
+            int res = WriteOutputReport(report);
+            if (res != 0) return res;
+
+            chunkIndex++;
+            remaining -= chunkLen;
+        }
+
+        return 0;
+    }
+
     public int GetSliderValues(byte[] buf)
     {
         byte[] rep = new byte[32];
@@ -481,6 +701,24 @@ public sealed class MasterHubDeviceHandle : IDisposable
         if (res == 0 && buf != null)
         {
             Buffer.BlockCopy(rep, 2, buf, 0, Math.Min(buf.Length, 5));
+        }
+        return res;
+    }
+
+    public int GetBaseOrientation(out DeckOrientation orientation)
+    {
+        orientation = DeckOrientation.Horizontal;
+        byte[] rep = new byte[32];
+        rep[0] = 0x35;
+        int res = GetFeatureReport(rep);
+        if (res == 0)
+        {
+            // Feature Report 0x35 format: [0x35, 0x00, value, ...]
+            // Przełącznik przechylenia stacji bazowej (tilt sensor):
+            // 1 = płasko poziomo na biurku (Horizontal, kąt obrotu 0°)
+            // 0 = postawiona pionowo na podstawce (Vertical, kąt obrotu 90° lub 180°)
+            byte val = rep.Length > 2 ? rep[2] : (byte)0;
+            orientation = (val == 1) ? DeckOrientation.Horizontal : DeckOrientation.Vertical;
         }
         return res;
     }
@@ -749,6 +987,14 @@ public static class MasterHubUsbTransport
                             case 0x01F6:
                                 info.ModuleType = MasterHubModuleType.BaseStation;
                                 info.Name = "MasterHub Base (Stacja Bazowa)";
+                                break;
+                            case 0x0202:
+                                info.ModuleType = MasterHubModuleType.Knob3;
+                                info.Name = "MasterHub 3 Knobs (3 Pokrętła Enkodery)";
+                                break;
+                            case 0x0206:
+                                info.ModuleType = MasterHubModuleType.DialDisplay;
+                                info.Name = "MasterHub Dial (Pokrętło z Ekranem IPS 240x240)";
                                 break;
                             case 0x131E:
                             case 0x1312:

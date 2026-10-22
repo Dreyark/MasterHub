@@ -1,0 +1,44 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyPanoramicSettingsSectionView"
+             x:DataType="vm:KeyItemViewModel">
+
+    <Border Background="{StaticResource CardBgBrush}" CornerRadius="8" Padding="10" Margin="0,4,0,0">
+        <StackPanel Spacing="8">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{loc:Loc Panoramic_SectionTitle}" Classes="caption" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <Border Grid.Column="1" Background="{StaticResource CardActiveBgBrush}" CornerRadius="4" Padding="6,2">
+                    <TextBlock Text="480×272 (15 LCD)" Classes="dim" FontSize="10" />
+                </Border>
+            </Grid>
+
+            <TextBlock Text="{loc:Loc Panoramic_SectionDesc}" Classes="dim" FontSize="11" TextWrapping="Wrap" />
+
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <TextBlock Grid.Column="0" Text="{Binding PanoramicFileName}" TextTrimming="CharacterEllipsis" Classes="dim" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="pillBtn" Content="{loc:Loc Panoramic_UploadBtn}" Click="OnBrowsePanoramicClick" Margin="0,0,4,0" ToolTip.Tip="{loc:Loc Panoramic_UploadTip}" />
+                <Button Grid.Column="2" Classes="pillBtn" Content="{loc:Loc Panoramic_ClearBtn}" Click="OnClearPanoramicClick" IsVisible="{Binding IsPanoramicWallpaperActive}" ToolTip.Tip="{loc:Loc Panoramic_ClearTip}" />
+            </Grid>
+
+            <StackPanel Spacing="4" IsVisible="{Binding IsPanoramicWallpaperActive}">
+                <TextBlock Text="{loc:Loc Key_FitMode}" Classes="caption" />
+                <Grid ColumnDefinitions="*,*,*">
+                    <Button Grid.Column="0" Classes="actionBtn" Classes.tabActive="{Binding IsPanoramicFitCover}"
+                            Command="{Binding SetPanoramicFitModeCommand}" CommandParameter="Cover"
+                            HorizontalAlignment="Stretch" Padding="4,5" Margin="0,0,2,0"
+                            Content="{loc:Loc Key_FitCover}" ToolTip.Tip="{loc:Loc Key_FitCoverTip}" />
+                    <Button Grid.Column="1" Classes="actionBtn" Classes.tabActive="{Binding IsPanoramicFitContain}"
+                            Command="{Binding SetPanoramicFitModeCommand}" CommandParameter="Contain"
+                            HorizontalAlignment="Stretch" Padding="4,5" Margin="2,0,2,0"
+                            Content="{loc:Loc Key_FitContain}" ToolTip.Tip="{loc:Loc Key_FitContainTip}" />
+                    <Button Grid.Column="2" Classes="actionBtn" Classes.tabActive="{Binding IsPanoramicFitStretch}"
+                            Command="{Binding SetPanoramicFitModeCommand}" CommandParameter="Stretch"
+                            HorizontalAlignment="Stretch" Padding="4,5" Margin="2,0,0,0"
+                            Content="{loc:Loc Key_FitStretch}" ToolTip.Tip="{loc:Loc Key_FitStretchTip}" />
+                </Grid>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

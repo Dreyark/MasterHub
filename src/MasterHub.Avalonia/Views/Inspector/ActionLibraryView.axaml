@@ -69,9 +69,14 @@
                             CornerRadius="10">
                         <Border Classes="statusBadgeCard" Padding="10,8" CornerRadius="10" HorizontalAlignment="Stretch">
                             <Grid ColumnDefinitions="Auto,*,Auto">
-                                <TextBlock Grid.Column="0" Classes="emoji" Text="{Binding Icon}" FontSize="18"
-                                           FontFamily="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji, sans-serif"
-                                           VerticalAlignment="Center" Margin="0,0,10,0" />
+                                <Panel Grid.Column="0" Width="20" Height="20" Margin="0,0,10,0" VerticalAlignment="Center">
+                                    <Image Source="{Binding IconBitmap}" Width="20" Height="20"
+                                           IsVisible="{Binding IconBitmap, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                    <TextBlock Classes="emoji" Text="{Binding Icon}" FontSize="18"
+                                               FontFamily="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji, sans-serif"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               IsVisible="{Binding IconBitmap, Converter={x:Static ObjectConverters.IsNull}}" />
+                                </Panel>
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
                                     <TextBlock Text="{Binding Title}" FontSize="11.5" FontWeight="SemiBold"
                                                TextTrimming="CharacterEllipsis" />

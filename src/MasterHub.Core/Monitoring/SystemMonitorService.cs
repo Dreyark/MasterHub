@@ -4,9 +4,11 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Management;
+using System.Net.Http;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 
 namespace MasterHub.Core.Monitoring;
@@ -912,6 +914,11 @@ public sealed class SystemMonitorService : ISystemMonitorService
 
         // 3. Fallback (Intel Arc/Iris/UHD lub brak dedykowanego API producenta)
         gpuLoad = pdhLoad;
+        if (gpuTemp <= 0f && TryReadLibreHardwareMonitor(out _, out float lhmGpuTemp, out float lhmGpuLoad))
+        {
+            if (lhmGpuTemp > 0f) gpuTemp = lhmGpuTemp;
+            if (lhmGpuLoad >= 0f && gpuLoad <= 0f) gpuLoad = lhmGpuLoad;
+        }
     }
 
     private bool TryReadAdlPmLog(int adapterIndex, out float gfxActivityPercent, out float gpuTempC, out float cpuOrSocTempC)
@@ -976,12 +983,133 @@ public sealed class SystemMonitorService : ISystemMonitorService
         }
     }
 
+    private static readonly HttpClient s_lhmClient = new()
+    {
+        Timeout = TimeSpan.FromMilliseconds(500)
+    };
+    private static DateTime s_lastLhmCheck = DateTime.MinValue;
+    private static float s_cachedLhmCpuTemp = 0f;
+    private static float s_cachedLhmGpuTemp = 0f;
+    private static float s_cachedLhmGpuLoad = -1f;
+
+    private static bool TryReadLibreHardwareMonitor(out float cpuTemp, out float gpuTemp, out float gpuLoad)
+    {
+        cpuTemp = 0f;
+        gpuTemp = 0f;
+        gpuLoad = -1f;
+
+        if ((DateTime.UtcNow - s_lastLhmCheck).TotalMilliseconds < 1500)
+        {
+            if (s_cachedLhmCpuTemp > 0 || s_cachedLhmGpuTemp > 0)
+            {
+                cpuTemp = s_cachedLhmCpuTemp;
+                gpuTemp = s_cachedLhmGpuTemp;
+                gpuLoad = s_cachedLhmGpuLoad;
+                return true;
+            }
+            return false;
+        }
+
+        s_lastLhmCheck = DateTime.UtcNow;
+
+        try
+        {
+            using var resp = s_lhmClient.GetAsync("http://127.0.0.1:8085/data.json").GetAwaiter().GetResult();
+            if (!resp.IsSuccessStatusCode) return false;
+
+            string json = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            using var doc = JsonDocument.Parse(json);
+
+            float foundCpuTemp = 0f;
+            float foundGpuTemp = 0f;
+            float foundGpuLoad = -1f;
+
+            void WalkNode(JsonElement node)
+            {
+                if (node.TryGetProperty("SensorId", out var idElem) && node.TryGetProperty("Type", out var typeElem))
+                {
+                    string id = idElem.GetString() ?? "";
+                    string type = typeElem.GetString() ?? "";
+                    string text = node.TryGetProperty("Text", out var textElem) ? (textElem.GetString() ?? "") : "";
+
+                    float val = 0f;
+                    bool hasVal = false;
+                    if (node.TryGetProperty("RawValue", out var rawElem) && rawElem.TryGetSingle(out float rawFloat))
+                    {
+                        val = rawFloat;
+                        hasVal = true;
+                    }
+                    else if (node.TryGetProperty("Value", out var valElem))
+                    {
+                        string vStr = valElem.GetString() ?? "";
+                        string part = vStr.Split(' ')[0].Replace(',', '.');
+                        if (float.TryParse(part, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float parsed))
+                        {
+                            val = parsed;
+                            hasVal = true;
+                        }
+                    }
+
+                    if (hasVal)
+                    {
+                        if (type == "Temperature")
+                        {
+                            if (id.Contains("cpu/") || text.Contains("Core (Tctl", StringComparison.OrdinalIgnoreCase) || text.Contains("Package", StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (val > foundCpuTemp && val < 120f) foundCpuTemp = val;
+                            }
+                            else if (id.StartsWith("/gpu") || text.Contains("GPU Core", StringComparison.OrdinalIgnoreCase))
+                            {
+                                if (val > foundGpuTemp && val < 120f) foundGpuTemp = val;
+                            }
+                        }
+                        else if (type == "Load" && (id.StartsWith("/gpu") || text.Contains("GPU Core", StringComparison.OrdinalIgnoreCase) || text.Contains("D3D 3D", StringComparison.OrdinalIgnoreCase)))
+                        {
+                            if (val > foundGpuLoad && val <= 100f) foundGpuLoad = val;
+                        }
+                    }
+                }
+
+                if (node.TryGetProperty("Children", out var childrenElem) && childrenElem.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var child in childrenElem.EnumerateArray())
+                    {
+                        WalkNode(child);
+                    }
+                }
+            }
+
+            WalkNode(doc.RootElement);
+
+            if (foundCpuTemp > 0 || foundGpuTemp > 0)
+            {
+                s_cachedLhmCpuTemp = foundCpuTemp;
+                s_cachedLhmGpuTemp = foundGpuTemp;
+                s_cachedLhmGpuLoad = foundGpuLoad;
+
+                cpuTemp = foundCpuTemp;
+                gpuTemp = foundGpuTemp;
+                gpuLoad = foundGpuLoad;
+                return true;
+            }
+        }
+        catch { }
+
+        return false;
+    }
+
     private float SampleRealCpuTemperature(float currentGpuTemp)
     {
         // 1. Sprawdź pamięć współdzieloną CoreTemp (CoreTempMappingObject)
         if (TryReadCoreTempSharedMemory(out float coreTemp) && coreTemp > 15f && coreTemp < 120f)
         {
             return coreTemp;
+        }
+
+        // 2. Sprawdź czujniki LibreHardwareMonitor (LHM web server na localhost:8085)
+        if (TryReadLibreHardwareMonitor(out float lhmCpu, out _, out _) && lhmCpu > 15f && lhmCpu < 120f)
+        {
+            return lhmCpu;
         }
 
         // 2. Sprawdź AMD ADL2 PMLog (dla procesorów AMD Ryzen 7000/9000/APU raportujących temperaturę CPU/SoC)

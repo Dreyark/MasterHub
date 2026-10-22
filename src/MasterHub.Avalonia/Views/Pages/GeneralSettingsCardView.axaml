@@ -1,0 +1,52 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Pages.GeneralSettingsCardView"
+             x:DataType="vm:SettingsPageViewModel">
+
+    <Border Classes="glassCard" Padding="18">
+        <StackPanel Spacing="14">
+            <!-- Nagłówek sekcji: Ustawienia Aplikacji -->
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <PathIcon Data="{StaticResource IconSettings}" Width="16" Height="16"
+                          Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
+                <TextBlock Text="{loc:Loc Settings_GeneralHeader}" Classes="h3" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <!-- Opcja 1: Język interfejsu (Dropdown) -->
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                    <TextBlock Text="{loc:Loc Settings_LanguageTitle}" FontWeight="SemiBold" FontSize="12" />
+                    <TextBlock Text="{loc:Loc Settings_LanguageDesc}" Classes="dim" FontSize="10" />
+                </StackPanel>
+                <ComboBox Grid.Column="1" Width="180"
+                          ItemsSource="{Binding AvailableLanguages}"
+                          SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}"
+                          VerticalAlignment="Center" />
+            </Grid>
+
+            <!-- Opcja 2: Autostart ze startem systemu Windows -->
+            <Border Classes="statusBadgeCard" Padding="14,10">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Text="{loc:Loc Settings_StartupTitle}" FontWeight="SemiBold" FontSize="12" />
+                        <TextBlock Text="{loc:Loc Settings_StartupDesc}" Classes="dim" FontSize="10" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <CheckBox Grid.Column="1" IsChecked="{Binding StartWithWindows, Mode=TwoWay}" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+
+            <!-- Opcja 3: Uruchamiaj zminimalizowany w zasobniku systemowym -->
+            <Border Classes="statusBadgeCard" Padding="14,10" IsVisible="{Binding StartWithWindows}">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Text="{loc:Loc Settings_StartMinimizedTitle}" FontWeight="SemiBold" FontSize="12" />
+                        <TextBlock Text="{loc:Loc Settings_StartMinimizedDesc}" Classes="dim" FontSize="10" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <CheckBox Grid.Column="1" IsChecked="{Binding StartMinimizedToTray, Mode=TwoWay}" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+        </StackPanel>
+    </Border>
+</UserControl>

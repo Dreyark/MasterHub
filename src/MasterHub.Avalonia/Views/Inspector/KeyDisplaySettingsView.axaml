@@ -132,5 +132,8 @@
 
         <!-- Dopasowanie i kadrowanie mediów (Zoom, Pan, Fit Mode) -->
         <ins:KeyMediaTransformView IsVisible="{Binding HasCurrentEditImage}" />
+
+        <!-- Tapeta panoramiczna rozciągnięta na wszystkie 15 klawiszy LCD (480x272) -->
+        <ins:KeyPanoramicSettingsSectionView />
     </StackPanel>
 </UserControl>

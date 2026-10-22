@@ -50,6 +50,7 @@ public partial class KeyActionSettingsView : UserControl
                 if (files.Count > 0)
                 {
                     vm.ActionParameter = files[0].Path.LocalPath;
+                    vm.AutoExtractIconIfApplicable();
                 }
             }
         }

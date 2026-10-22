@@ -1,16 +1,20 @@
 using System;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
+using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MasterHub.Core.Actions;
 using MasterHub.Core.Audio;
 using MasterHub.Core.Integrations.Discord;
 using MasterHub.Core.Integrations.Obs;
+using MasterHub.Core.Integrations.StreamDeck;
 using MasterHub.Core.Integrations.Teams;
 using MasterHub.Core.Media;
 using MasterHub.Core.Monitoring;
 using MasterHub.Core.Localization;
+using MasterHub.Core.Rendering;
 
 namespace MasterHub.Avalonia.ViewModels.Inspector;
 
@@ -18,7 +22,9 @@ public enum ManipulatorType
 {
     Key,
     Slider,
-    Roller
+    Roller,
+    Knob,
+    Dial
 }
 
 /// <summary>
@@ -33,7 +39,12 @@ public record ActionCatalogItem(
     RollerActionType RollerAction = RollerActionType.None,
     AudioTargetType SliderTargetType = AudioTargetType.None,
     string SliderProcessName = "",
-    string Description = "");
+    string Description = "",
+    string? StreamDeckPluginUuid = null,
+    string? StreamDeckActionUuid = null,
+    string? IconImagePath = null,
+    Bitmap? IconBitmap = null,
+    bool ShowTitle = true);
 
 public partial class CategoryFilterItem : ObservableObject
 {
@@ -60,6 +71,8 @@ public partial class ActionLibraryViewModel : ObservableObject
     private readonly ISystemMonitorService? _systemMonitorService;
     private readonly INowPlayingService? _nowPlayingService;
     private readonly IAudioService? _audioService;
+    private readonly IStreamDeckPluginHost? _streamDeckHost;
+    private readonly IAppIconExtractorService? _iconExtractor;
 
     private readonly ObservableCollection<ActionCatalogItem> _allItems = new();
 
@@ -103,7 +116,9 @@ public partial class ActionLibraryViewModel : ObservableObject
         ITeamsService? teamsService = null,
         ISystemMonitorService? systemMonitorService = null,
         INowPlayingService? nowPlayingService = null,
-        IAudioService? audioService = null)
+        IAudioService? audioService = null,
+        IStreamDeckPluginHost? streamDeckHost = null,
+        IAppIconExtractorService? iconExtractor = null)
     {
         _obsService = obsService;
         _discordService = discordService;
@@ -111,6 +126,13 @@ public partial class ActionLibraryViewModel : ObservableObject
         _systemMonitorService = systemMonitorService;
         _nowPlayingService = nowPlayingService;
         _audioService = audioService;
+        _streamDeckHost = streamDeckHost;
+        _iconExtractor = iconExtractor;
+
+        if (_streamDeckHost != null)
+        {
+            _streamDeckHost.PluginInstalled += _ => global::Avalonia.Threading.Dispatcher.UIThread.Post(() => SetManipulator(CurrentManipulator));
+        }
 
         LocalizationService.Instance.LanguageChanged += _ => SetManipulator(CurrentManipulator);
         SetManipulator(ManipulatorType.Key);
@@ -143,6 +165,18 @@ public partial class ActionLibraryViewModel : ObservableObject
             case ManipulatorType.Roller:
                 ContextTitle = LocalizationService.Instance.GetString("Roller_Action", "Akcje dla pokrętła / rolki");
                 ManipulatorBadge = "🎛️ " + LocalizationService.Instance.GetString("Deck_ViewRollers", "Rolka / Pokrętło");
+                LoadRollerCatalog();
+                break;
+
+            case ManipulatorType.Knob:
+                ContextTitle = LocalizationService.Instance.GetString("Knob_Action", "Akcje dla pokrętła enkodera");
+                ManipulatorBadge = "🔘 " + LocalizationService.Instance.GetString("Deck_ViewKnobs", "3 Pokrętła");
+                LoadRollerCatalog();
+                break;
+
+            case ManipulatorType.Dial:
+                ContextTitle = LocalizationService.Instance.GetString("Dial_Action", "Akcje dla pokrętła Dial IPS");
+                ManipulatorBadge = "🎯 " + LocalizationService.Instance.GetString("Deck_ViewDial", "Pokrętło Dial IPS");
                 LoadRollerCatalog();
                 break;
         }
@@ -365,6 +399,61 @@ public partial class ActionLibraryViewModel : ObservableObject
         Add(DeckActionType.OpenFolder, "Cat_Nav", "📁");
         Add(DeckActionType.GoBack, "Cat_Nav", "⬅️");
         Add(DeckActionType.GoHome, "Cat_Nav", "🏠");
+
+        // Smart Home: Home Assistant
+        Add(DeckActionType.HomeAssistantToggle, "Cat_SmartHome", "💡");
+        Add(DeckActionType.HomeAssistantTurnOn, "Cat_SmartHome", "💡");
+        Add(DeckActionType.HomeAssistantTurnOff, "Cat_SmartHome", "🔌");
+        Add(DeckActionType.HomeAssistantCallService, "Cat_SmartHome", "⚙️");
+
+        // Elgato Stream Deck Plugins
+        if (_streamDeckHost != null)
+        {
+            foreach (var plugin in _streamDeckHost.InstalledPlugins)
+            {
+                string catName = string.IsNullOrWhiteSpace(plugin.Manifest.Category)
+                    ? $"Stream Deck: {plugin.Name}"
+                    : plugin.Manifest.Category;
+
+                foreach (var act in plugin.Manifest.Actions)
+                {
+                    string? iconPath = null;
+                    if (!string.IsNullOrEmpty(act.Icon))
+                    {
+                        string p1 = Path.Combine(plugin.FolderPath, act.Icon);
+                        if (File.Exists(p1)) iconPath = p1;
+                        else if (File.Exists(p1 + ".png")) iconPath = p1 + ".png";
+                        else if (File.Exists(p1 + "@2x.png")) iconPath = p1 + "@2x.png";
+                        else if (File.Exists(p1 + ".svg")) iconPath = p1 + ".svg";
+                    }
+
+                    if (string.IsNullOrEmpty(iconPath) && !string.IsNullOrEmpty(plugin.IconPath) && File.Exists(plugin.IconPath))
+                    {
+                        iconPath = plugin.IconPath;
+                    }
+
+                    Bitmap? iconBmp = null;
+                    if (!string.IsNullOrEmpty(iconPath))
+                    {
+                        iconBmp = KeyItemViewModel.LoadMediaBitmap(iconPath);
+                    }
+
+                    bool showTitle = act.States.Count > 0 ? act.States[0].ShowTitle : true;
+                    _allItems.Add(new(
+                        act.Name,
+                        catName,
+                        "🔌",
+                        ManipulatorType.Key,
+                        KeyAction: DeckActionType.StreamDeckPluginAction,
+                        Description: act.Tooltip ?? plugin.Description,
+                        StreamDeckPluginUuid: plugin.PluginUuid,
+                        StreamDeckActionUuid: act.UUID,
+                        IconImagePath: iconPath,
+                        IconBitmap: iconBmp,
+                        ShowTitle: showTitle));
+                }
+            }
+        }
     }
 
     private void LoadSliderCatalog()
@@ -374,6 +463,7 @@ public partial class ActionLibraryViewModel : ObservableObject
 
         _allItems.Add(new(LocalizationService.Instance.GetString("Fader_Master", "Główna głośność"), catMain, "🔊", ManipulatorType.Slider, SliderTargetType: AudioTargetType.MasterPlayback));
         _allItems.Add(new(LocalizationService.Instance.GetString("Fader_Mic", "Głośność mikrofonu"), catMain, "🎙️", ManipulatorType.Slider, SliderTargetType: AudioTargetType.MasterRecording));
+        _allItems.Add(new(LocalizationService.Instance.GetString("Roller_HomeAssistantLightBrightness", "💡 Home Assistant: Jasność światła"), catMain, "💡", ManipulatorType.Slider, SliderTargetType: AudioTargetType.HomeAssistantLight));
         _allItems.Add(new(LocalizationService.Instance.GetString("Fader_None", "Brak (Nieprzypisany)"), catMain, "⚪", ManipulatorType.Slider, SliderTargetType: AudioTargetType.None));
 
         try
@@ -415,7 +505,7 @@ public partial class ActionLibraryViewModel : ObservableObject
         string catMedia = LocalizationService.Instance.GetString("Cat_Media", "Media");
         string catRazer = LocalizationService.Instance.GetString("Cat_Razer", "Razer");
         string catWooting = LocalizationService.Instance.GetString("Cat_Wooting", "Wooting");
-
+        string catSmartHome = LocalizationService.Instance.GetString("Cat_SmartHome", "Smart Home");
         string catSystem = LocalizationService.Instance.GetString("Cat_System", "System");
 
         _allItems.Add(new(LocalizationService.Instance.GetString("Roller_Volume"), catAudio, "🔊", ManipulatorType.Roller, RollerAction: RollerActionType.MasterVolume));
@@ -426,6 +516,7 @@ public partial class ActionLibraryViewModel : ObservableObject
         _allItems.Add(new(LocalizationService.Instance.GetString("Roller_RazerProfiles"), catRazer, "🐍", ManipulatorType.Roller, RollerAction: RollerActionType.RazerProfileCycle));
         _allItems.Add(new(LocalizationService.Instance.GetString("Roller_RazerPolling"), catRazer, "⚡", ManipulatorType.Roller, RollerAction: RollerActionType.RazerPollingRateCycle));
         _allItems.Add(new(LocalizationService.Instance.GetString("Roller_WootingProfiles"), catWooting, "⌨️", ManipulatorType.Roller, RollerAction: RollerActionType.WootingProfileCycle));
+        _allItems.Add(new(LocalizationService.Instance.GetString("Roller_HomeAssistantLightBrightness", "💡 Home Assistant: Jasność światła"), catSmartHome, "💡", ManipulatorType.Roller, RollerAction: RollerActionType.HomeAssistantLightBrightness));
         _allItems.Add(new(LocalizationService.Instance.GetString("Action_None"), catSystem, "⚪", ManipulatorType.Roller, RollerAction: RollerActionType.None));
     }
 

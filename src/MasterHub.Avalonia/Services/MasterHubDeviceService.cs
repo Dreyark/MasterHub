@@ -18,14 +18,35 @@ public class MasterHubDeviceService : IMasterHubDeviceService
     public bool IsSliderConnected => _manager.IsSliderConnected;
     public bool IsRollerConnected => _manager.IsRollerConnected;
     public bool IsBaseConnected => _manager.IsBaseConnected;
+    public bool IsKnobConnected => _manager.IsKnobConnected;
+    public bool IsDialConnected => _manager.IsDialConnected;
     public bool IsStandby => _manager.IsStandby;
     public byte CurrentBrightness => _manager.CurrentBrightness;
+
+    public DeckOrientation HardwareBaseOrientation => _manager.HardwareBaseOrientation;
+    public DeckRotationAngle EffectiveRotationAngle => _manager.EffectiveRotationAngle;
+    public DeckRotationMode RotationMode
+    {
+        get => _manager.RotationMode;
+        set => _manager.RotationMode = value;
+    }
+    public int ManualRotationAngle
+    {
+        get => _manager.ManualRotationAngle;
+        set => _manager.ManualRotationAngle = value;
+    }
 
     public IReadOnlyList<DeviceInfo> ConnectedDevices => _manager.ConnectedDevices;
 
     public event Action<int, bool>? KeyStateChanged;
     public event Action<int, byte, int>? SliderValueChanged;
     public event Action<int, int>? RollerRotated;
+    public event Action<int, int>? KnobRotated;
+    public event Action<int, bool>? KnobPressed;
+    public event Action<int>? DialRotated;
+    public event Action<bool>? DialPressed;
+    public event Action<DeckOrientation>? BaseOrientationChanged;
+    public event Action<DeckRotationAngle>? EffectiveRotationChanged;
     public event Action<bool>? StandbyStateChanged;
     public event Action? DevicesUpdated;
 
@@ -36,6 +57,12 @@ public class MasterHubDeviceService : IMasterHubDeviceService
         _manager.KeyStateChanged += OnKeyStateChanged;
         _manager.SliderValueChanged += OnSliderValueChanged;
         _manager.RollerRotated += OnRollerRotated;
+        _manager.KnobRotated += OnKnobRotated;
+        _manager.KnobPressed += OnKnobPressed;
+        _manager.DialRotated += OnDialRotated;
+        _manager.DialPressed += OnDialPressed;
+        _manager.BaseOrientationChanged += OnBaseOrientationChanged;
+        _manager.EffectiveRotationChanged += OnEffectiveRotationChanged;
         _manager.StandbyStateChanged += OnStandbyStateChanged;
         _manager.DevicesDiscovered += OnDevicesDiscovered;
     }
@@ -58,6 +85,36 @@ public class MasterHubDeviceService : IMasterHubDeviceService
     private void OnRollerRotated(int rollerIndex, int direction)
     {
         Dispatcher.UIThread.Post(() => RollerRotated?.Invoke(rollerIndex, direction));
+    }
+
+    private void OnKnobRotated(int knobIndex, int delta)
+    {
+        Dispatcher.UIThread.Post(() => KnobRotated?.Invoke(knobIndex, delta));
+    }
+
+    private void OnKnobPressed(int knobIndex, bool isPressed)
+    {
+        Dispatcher.UIThread.Post(() => KnobPressed?.Invoke(knobIndex, isPressed));
+    }
+
+    private void OnDialRotated(int delta)
+    {
+        Dispatcher.UIThread.Post(() => DialRotated?.Invoke(delta));
+    }
+
+    private void OnDialPressed(bool isPressed)
+    {
+        Dispatcher.UIThread.Post(() => DialPressed?.Invoke(isPressed));
+    }
+
+    private void OnBaseOrientationChanged(DeckOrientation orientation)
+    {
+        Dispatcher.UIThread.Post(() => BaseOrientationChanged?.Invoke(orientation));
+    }
+
+    private void OnEffectiveRotationChanged(DeckRotationAngle angle)
+    {
+        Dispatcher.UIThread.Post(() => EffectiveRotationChanged?.Invoke(angle));
     }
 
     private void OnStandbyStateChanged(bool isStandby)
@@ -98,6 +155,16 @@ public class MasterHubDeviceService : IMasterHubDeviceService
         _manager.SetKeyImage(keyIndex, jpegData);
     }
 
+    public void SetPanoramicWallpaper(byte[] jpegData)
+    {
+        _manager.SetPanoramicWallpaper(jpegData);
+    }
+
+    public System.Threading.Tasks.Task<bool> SetPanoramicWallpaperAsync(byte[] imageBytes)
+    {
+        return _manager.SetPanoramicWallpaperAsync(imageBytes);
+    }
+
     public void SetSliderLedColor(int sliderIndex, byte r, byte g, byte b)
     {
         _manager.SetSliderLedColor(sliderIndex, r, g, b);
@@ -113,6 +180,41 @@ public class MasterHubDeviceService : IMasterHubDeviceService
         _manager.SetRollerLedColor(rollerIndex, r, g, b);
     }
 
+    public void SetKnobLedColor(int knobIndex, byte r, byte g, byte b)
+    {
+        _manager.SetKnobLedColor(knobIndex, r, g, b);
+    }
+
+    public void SetKnobLedBrightness(int knobIndex, byte brightness)
+    {
+        _manager.SetKnobLedBrightness(knobIndex, brightness);
+    }
+
+    public void SetKnobLedMode(int knobIndex, MasterHub.Core.Profiles.KnobLedMode mode)
+    {
+        _manager.SetKnobLedMode(knobIndex, mode);
+    }
+
+    public void SetDialBrightness(byte brightness)
+    {
+        _manager.SetDialBrightness(brightness);
+    }
+
+    public void SetDialColor(byte r, byte g, byte b)
+    {
+        _manager.SetDialColor(r, g, b);
+    }
+
+    public void SetDialImage(byte[] jpeg)
+    {
+        _manager.SetDialImage(jpeg);
+    }
+
+    public System.Threading.Tasks.Task<bool> SetDialImageAsync(byte[] imageBytes)
+    {
+        return _manager.SetDialImageAsync(imageBytes);
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -121,6 +223,10 @@ public class MasterHubDeviceService : IMasterHubDeviceService
         _manager.KeyStateChanged -= OnKeyStateChanged;
         _manager.SliderValueChanged -= OnSliderValueChanged;
         _manager.RollerRotated -= OnRollerRotated;
+        _manager.KnobRotated -= OnKnobRotated;
+        _manager.KnobPressed -= OnKnobPressed;
+        _manager.DialRotated -= OnDialRotated;
+        _manager.DialPressed -= OnDialPressed;
         _manager.StandbyStateChanged -= OnStandbyStateChanged;
         _manager.DevicesDiscovered -= OnDevicesDiscovered;
         _manager.Dispose();

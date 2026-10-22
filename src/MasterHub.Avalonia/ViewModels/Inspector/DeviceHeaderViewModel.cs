@@ -23,17 +23,29 @@ public partial class DeviceHeaderViewModel : ObservableObject
     private bool _isBaseConnected;
 
     [ObservableProperty]
+    private bool _isKnobConnected;
+
+    [ObservableProperty]
+    private bool _isDialConnected;
+
+    [ObservableProperty]
     private byte _brightness;
 
     public string KeypadStatusColor => IsKeypadConnected ? "#00E5A3" : "#FF5252";
     public string SliderStatusColor => IsSliderConnected ? "#00E5A3" : "#FF5252";
     public string RollerStatusColor => IsRollerConnected ? "#00E5A3" : "#FF5252";
     public string BaseStatusColor => IsBaseConnected ? "#00E5A3" : "#FF5252";
+    public string KnobStatusColor => IsKnobConnected ? "#00E5A3" : "#FF5252";
+    public string DialStatusColor => IsDialConnected ? "#00E5A3" : "#FF5252";
 
     public double KeypadOpacity => IsKeypadConnected ? 1.0 : 0.45;
     public double SliderOpacity => IsSliderConnected ? 1.0 : 0.45;
     public double RollerOpacity => IsRollerConnected ? 1.0 : 0.45;
     public double BaseOpacity => IsBaseConnected ? 1.0 : 0.45;
+    public double KnobOpacity => IsKnobConnected ? 1.0 : 0.45;
+    public double DialOpacity => IsDialConnected ? 1.0 : 0.45;
+
+    public int VisibleColumns => 4 + (IsKnobConnected ? 1 : 0) + (IsDialConnected ? 1 : 0);
 
     public DeviceHeaderViewModel(IMasterHubDeviceService deviceService)
     {
@@ -50,15 +62,22 @@ public partial class DeviceHeaderViewModel : ObservableObject
         IsSliderConnected = _deviceService.IsSliderConnected;
         IsRollerConnected = _deviceService.IsRollerConnected;
         IsBaseConnected = _deviceService.IsBaseConnected;
+        IsKnobConnected = _deviceService.IsKnobConnected;
+        IsDialConnected = _deviceService.IsDialConnected;
 
         OnPropertyChanged(nameof(KeypadStatusColor));
         OnPropertyChanged(nameof(SliderStatusColor));
         OnPropertyChanged(nameof(RollerStatusColor));
         OnPropertyChanged(nameof(BaseStatusColor));
+        OnPropertyChanged(nameof(KnobStatusColor));
+        OnPropertyChanged(nameof(DialStatusColor));
         OnPropertyChanged(nameof(KeypadOpacity));
         OnPropertyChanged(nameof(SliderOpacity));
         OnPropertyChanged(nameof(RollerOpacity));
         OnPropertyChanged(nameof(BaseOpacity));
+        OnPropertyChanged(nameof(KnobOpacity));
+        OnPropertyChanged(nameof(DialOpacity));
+        OnPropertyChanged(nameof(VisibleColumns));
     }
 
     partial void OnBrightnessChanged(byte value)

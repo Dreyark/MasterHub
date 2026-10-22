@@ -38,7 +38,7 @@
             <ItemsControl ItemsSource="{Binding Keys}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <UniformGrid Columns="5" Rows="3" />
+                        <UniformGrid Columns="{Binding KeypadColumns}" Rows="{Binding KeypadRows}" />
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
