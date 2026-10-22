@@ -16,6 +16,14 @@
                 <Border Classes="statusBadgeCard">
                     <TextBlock Text="{loc:Loc Canvas_ModularLayout}" Classes="badge" />
                 </Border>
+                <Button Classes="pillBtn" Command="{Binding CycleRotationCommand}"
+                        ToolTip.Tip="{loc:Loc Canvas_RotationTooltip}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <PathIcon Data="{StaticResource IconRotate}" Width="13" Height="13"
+                                  Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding OrientationStatusText}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
             </StackPanel>
 
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
@@ -51,7 +59,13 @@
                 <!-- Rząd dolny: Suwaki + Rolki w układzie horyzontalnym z zawijaniem -->
                 <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center">
                     <canvas:SlidersModuleView Margin="0,0,16,16" IsVisible="{Binding ShowSliders}" />
-                    <canvas:RollersModuleView Margin="0,0,0,16" IsVisible="{Binding ShowRollers}" />
+                    <canvas:RollersModuleView Margin="0,0,16,16" IsVisible="{Binding ShowRollers}" />
+                </WrapPanel>
+
+                <!-- Trzeci rząd: Dodatkowe moduły Cooler Master (3 Pokrętła + Dial IPS) -->
+                <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                    <canvas:KnobsModuleView Margin="0,0,16,16" IsVisible="{Binding ShowKnobs}" />
+                    <canvas:DialModuleView Margin="0,0,0,16" IsVisible="{Binding ShowDial}" />
                 </WrapPanel>
             </StackPanel>
         </ScrollViewer>

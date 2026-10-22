@@ -122,6 +122,9 @@
         <!-- Voicemod: Status połączenia, wybór głosu i dźwięku -->
         <inspector:KeyVoicemodSettingsSectionView IsVisible="{Binding IsVoicemodAnyAction}" />
 
+        <!-- Home Assistant: Status połączenia, wybór encji lub ręczna nazwa -->
+        <inspector:KeyHomeAssistantSettingsSectionView IsVisible="{Binding IsHomeAssistantAction}" />
+
         <!-- Parametr ogólny -->
         <StackPanel Spacing="4" IsVisible="{Binding IsGenericParameterAction}">
             <TextBlock Text="{Binding ActionParameterLabel, FallbackValue='Parametr akcji:'}" Classes="caption" />

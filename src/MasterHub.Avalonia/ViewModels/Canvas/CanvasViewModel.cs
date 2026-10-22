@@ -8,8 +8,10 @@ using MasterHub.Avalonia.Services;
 using MasterHub.Core.Actions;
 using MasterHub.Core.Audio;
 using MasterHub.Core.Integrations.Discord;
+using MasterHub.Core.Integrations.HomeAssistant;
 using MasterHub.Core.Integrations.Obs;
 using MasterHub.Core.Integrations.Streamlabs;
+using MasterHub.Core.Integrations.StreamDeck;
 using MasterHub.Core.Integrations.Teams;
 using MasterHub.Core.Integrations.Kick;
 using MasterHub.Core.Integrations.JetKvm;
@@ -57,15 +59,21 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
     private readonly IYouTubeService _youtubeService;
     private readonly IStreamlabsService _streamlabsService;
     private readonly IProfileService _profileService;
+    private readonly IHomeAssistantService? _homeAssistantService;
     private readonly IKeyInteractionEngine _keyInteractionEngine;
+    private readonly IStreamDeckPluginHost? _streamDeckPluginHost;
     private bool _disposed;
 
     public ObservableCollection<KeyItemViewModel> Keys { get; } = new();
     public ObservableCollection<SliderItemViewModel> Sliders { get; } = new();
     public ObservableCollection<RollerItemViewModel> Rollers { get; } = new();
+    public ObservableCollection<KnobItemViewModel> Knobs { get; } = new();
 
     [ObservableProperty]
     private BaseStationItemViewModel _baseStation;
+
+    [ObservableProperty]
+    private DialItemViewModel _dial;
 
     [ObservableProperty]
     private object? _selectedElement;
@@ -76,6 +84,8 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
     public bool ShowKeys => ActiveFilter == "Wszystko" || ActiveFilter == "Przyciski";
     public bool ShowSliders => ActiveFilter == "Wszystko" || ActiveFilter == "Suwaki";
     public bool ShowRollers => ActiveFilter == "Wszystko" || ActiveFilter == "Pokrętła";
+    public bool ShowKnobs => IsKnobConnected && (ActiveFilter == "Wszystko" || ActiveFilter == "Pokrętła" || ActiveFilter == "3 Knobs" || ActiveFilter == "All" || ActiveFilter == "Rollers" || ActiveFilter == "Knobs");
+    public bool ShowDial => IsDialConnected && (ActiveFilter == "Wszystko" || ActiveFilter == "Pokrętła" || ActiveFilter == "Dial IPS" || ActiveFilter == "All" || ActiveFilter == "Rollers" || ActiveFilter == "Dial");
     public bool ShowBase => ActiveFilter == "Wszystko" || ActiveFilter == "Podstawka";
 
     public bool IsFilterAll => ActiveFilter == "Wszystko";
@@ -87,6 +97,8 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
     public bool IsKeySelected => SelectedElement is KeyItemViewModel;
     public bool IsSliderSelected => SelectedElement is SliderItemViewModel;
     public bool IsRollerSelected => SelectedElement is RollerItemViewModel;
+    public bool IsKnobSelected => SelectedElement is KnobItemViewModel;
+    public bool IsDialSelected => SelectedElement is DialItemViewModel;
     public bool IsBaseSelected => SelectedElement is BaseStationItemViewModel;
 
     [ObservableProperty]
@@ -94,6 +106,35 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private bool _isSyncBrightness = false;
+
+    [ObservableProperty]
+    private DeckRotationMode _rotationMode = DeckRotationMode.Auto;
+
+    [ObservableProperty]
+    private int _manualRotationAngle = 0;
+
+    [ObservableProperty]
+    private int _keypadColumns = 5;
+
+    [ObservableProperty]
+    private int _keypadRows = 3;
+
+    [ObservableProperty]
+    private string _orientationStatusText = "0° (Pozioma) [Auto]";
+
+    [ObservableProperty]
+    private bool _isPortraitLayout = false;
+
+    [ObservableProperty]
+    private DeckWallpaperMode _wallpaperMode = DeckWallpaperMode.PerKey;
+
+    [ObservableProperty]
+    private string? _panoramicWallpaperPath;
+
+    [ObservableProperty]
+    private string _panoramicWallpaperFitMode = "Cover";
+
+    public bool IsPanoramicWallpaperActive => WallpaperMode == DeckWallpaperMode.PanoramicDeck && !string.IsNullOrWhiteSpace(PanoramicWallpaperPath);
 
     private bool _isSyncing;
     private volatile bool _isUiSuspended;
@@ -113,6 +154,12 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
     {
         Dispatcher.UIThread.Post(() =>
         {
+            if (IsPanoramicWallpaperActive && !string.IsNullOrEmpty(PanoramicWallpaperPath) && System.IO.File.Exists(PanoramicWallpaperPath))
+            {
+                ApplyPanoramicWallpaper(PanoramicWallpaperPath, PanoramicWallpaperFitMode);
+                return;
+            }
+
             for (int i = 0; i < Keys.Count; i++)
             {
                 RenderKeyVisual(Keys[i], sendToHardware: false);
@@ -177,9 +224,35 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _isBaseConnected;
 
+    [ObservableProperty]
+    private bool _isKnobConnected;
+
+    [ObservableProperty]
+    private bool _isDialConnected;
+
+    partial void OnIsKnobConnectedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowKnobs));
+        if (!value && SelectedElement is KnobItemViewModel)
+        {
+            SelectedElement = null;
+        }
+    }
+
+    partial void OnIsDialConnectedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(ShowDial));
+        if (!value && SelectedElement is DialItemViewModel)
+        {
+            SelectedElement = null;
+        }
+    }
+
     public KeyItemViewModel? SelectedKey => SelectedElement as KeyItemViewModel;
     public SliderItemViewModel? SelectedSlider => SelectedElement as SliderItemViewModel;
     public RollerItemViewModel? SelectedRoller => SelectedElement as RollerItemViewModel;
+    public KnobItemViewModel? SelectedKnob => SelectedElement as KnobItemViewModel;
+    public DialItemViewModel? SelectedDial => SelectedElement as DialItemViewModel;
     public BaseStationItemViewModel? SelectedBase => SelectedElement as BaseStationItemViewModel;
 
     private int _currentPageIndex = 0;
@@ -608,7 +681,9 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
         IYouTubeService youtubeService,
         IStreamlabsService streamlabsService,
         IProfileService profileService,
-        IKeyInteractionEngine? keyInteractionEngine = null)
+        IKeyInteractionEngine? keyInteractionEngine = null,
+        IStreamDeckPluginHost? streamDeckPluginHost = null,
+        IHomeAssistantService? homeAssistantService = null)
     {
         _deviceService = deviceService ?? throw new ArgumentNullException(nameof(deviceService));
         _keyRenderer = keyRenderer ?? throw new ArgumentNullException(nameof(keyRenderer));
@@ -631,9 +706,115 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
         _youtubeService = youtubeService ?? throw new ArgumentNullException(nameof(youtubeService));
         _streamlabsService = streamlabsService ?? throw new ArgumentNullException(nameof(streamlabsService));
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
+        _homeAssistantService = homeAssistantService;
+        if (_homeAssistantService != null)
+        {
+            _homeAssistantService.EntityStateChanged += OnHomeAssistantEntityStateChanged;
+        }
+        _streamDeckPluginHost = streamDeckPluginHost;
         _keyInteractionEngine = keyInteractionEngine ?? new KeyInteractionEngine();
         _keyInteractionEngine.KeyTriggered += OnKeyTriggered;
         _baseStation = new BaseStationItemViewModel();
+        _dial = new DialItemViewModel();
+
+        if (_streamDeckPluginHost != null)
+        {
+            _streamDeckPluginHost.KeyImageUpdated += (keyIndex, jpegBytes) =>
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (keyIndex >= 0 && keyIndex < Keys.Count)
+                    {
+                        var key = Keys[keyIndex];
+                        if (key.AssignedAction == DeckActionType.StreamDeckPluginAction)
+                        {
+                            key.SetPluginDynamicImage(jpegBytes);
+                            RenderKeyVisual(key, sendToHardware: true);
+                        }
+                    }
+                });
+            };
+
+            _streamDeckPluginHost.KeyTitleUpdated += (keyIndex, title) =>
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (keyIndex >= 0 && keyIndex < Keys.Count)
+                    {
+                        var key = Keys[keyIndex];
+                        if (key.AssignedAction == DeckActionType.StreamDeckPluginAction)
+                        {
+                            key.CustomTitle = title;
+                            RenderKeyVisual(key, sendToHardware: true);
+                        }
+                    }
+                });
+            };
+
+            _streamDeckPluginHost.KeyStateUpdated += (keyIndex, state) =>
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (keyIndex >= 0 && keyIndex < Keys.Count)
+                    {
+                        var key = Keys[keyIndex];
+                        if (key.AssignedAction == DeckActionType.StreamDeckPluginAction)
+                        {
+                            key.IsActiveToggleState = (state != 0);
+                            RenderKeyVisual(key, sendToHardware: true);
+                        }
+                    }
+                });
+            };
+
+            _streamDeckPluginHost.KeyAlertRequested += (keyIndex) =>
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (keyIndex >= 0 && keyIndex < Keys.Count)
+                    {
+                        var key = Keys[keyIndex];
+                        if (key.AssignedAction == DeckActionType.StreamDeckPluginAction)
+                        {
+                            key.IsStreamDeckAlert = true;
+                            RenderKeyVisual(key, sendToHardware: true);
+                            Task.Delay(1500).ContinueWith(_ =>
+                            {
+                                Dispatcher.UIThread.Post(() =>
+                                {
+                                    key.IsStreamDeckAlert = false;
+                                    RenderKeyVisual(key, sendToHardware: true);
+                                });
+                            });
+                        }
+                    }
+                });
+            };
+
+            _streamDeckPluginHost.KeyOkRequested += (keyIndex) =>
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (keyIndex >= 0 && keyIndex < Keys.Count)
+                    {
+                        var key = Keys[keyIndex];
+                        if (key.AssignedAction == DeckActionType.StreamDeckPluginAction)
+                        {
+                            key.IsStreamDeckOk = true;
+                            RenderKeyVisual(key, sendToHardware: true);
+                            Task.Delay(1500).ContinueWith(_ =>
+                            {
+                                Dispatcher.UIThread.Post(() =>
+                                {
+                                    key.IsStreamDeckOk = false;
+                                    RenderKeyVisual(key, sendToHardware: true);
+                                });
+                            });
+                        }
+                    }
+                });
+            };
+        }
 
         InitializeHardwareCollections();
         WireHardwareEvents();
@@ -676,16 +857,24 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
         {
             roller.NotifyLanguageChanged();
         }
+        foreach (var knob in Knobs)
+        {
+            knob.NotifyLanguageChanged();
+        }
+        Dial?.NotifyLanguageChanged();
         foreach (var slider in Sliders)
         {
             slider.NotifyLanguageChanged();
         }
+        UpdateRotationDisplayState(_deviceService.EffectiveRotationAngle);
     }
 
     private bool _wasKeypadConnected;
     private bool _wasSliderConnected;
     private bool _wasBaseConnected;
     private bool _wasRollerConnected;
+    private bool _wasKnobConnected;
+    private bool _wasDialConnected;
 
     private void UpdateConnectionStates()
     {
@@ -693,23 +882,31 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
         bool sliderNow = _deviceService.IsSliderConnected;
         bool rollerNow = _deviceService.IsRollerConnected;
         bool baseNow = _deviceService.IsBaseConnected;
+        bool knobNow = _deviceService.IsKnobConnected;
+        bool dialNow = _deviceService.IsDialConnected;
 
         bool keypadReconnected = keypadNow && !_wasKeypadConnected;
         bool sliderReconnected = sliderNow && !_wasSliderConnected;
         bool baseReconnected = baseNow && !_wasBaseConnected;
         bool rollerReconnected = rollerNow && !_wasRollerConnected;
+        bool knobReconnected = knobNow && !_wasKnobConnected;
+        bool dialReconnected = dialNow && !_wasDialConnected;
 
         _wasKeypadConnected = keypadNow;
         _wasSliderConnected = sliderNow;
         _wasBaseConnected = baseNow;
         _wasRollerConnected = rollerNow;
+        _wasKnobConnected = knobNow;
+        _wasDialConnected = dialNow;
 
         IsKeypadConnected = keypadNow;
         IsSliderConnected = sliderNow;
         IsRollerConnected = rollerNow;
         IsBaseConnected = baseNow;
+        IsKnobConnected = knobNow;
+        IsDialConnected = dialNow;
 
-        if (keypadReconnected || sliderReconnected || baseReconnected || rollerReconnected)
+        if (keypadReconnected || sliderReconnected || baseReconnected || rollerReconnected || knobReconnected || dialReconnected)
         {
             Dispatcher.UIThread.Post(() =>
             {
@@ -729,6 +926,8 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(ShowKeys));
         OnPropertyChanged(nameof(ShowSliders));
         OnPropertyChanged(nameof(ShowRollers));
+        OnPropertyChanged(nameof(ShowKnobs));
+        OnPropertyChanged(nameof(ShowDial));
         OnPropertyChanged(nameof(ShowBase));
         OnPropertyChanged(nameof(IsFilterAll));
         OnPropertyChanged(nameof(IsFilterKeys));
@@ -756,6 +955,8 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
                 Title = $"Klawisz {i + 1}"
             };
             key.ActionChangedCallback = OnKeyChanged;
+            key.ApplyPanoramicWallpaperRequested = (path, fitMode) => ApplyPanoramicWallpaper(path, fitMode);
+            key.ClearPanoramicWallpaperRequested = () => ClearPanoramicWallpaper();
             key.NavigationRequestedCallback = (k, act, p) =>
             {
                 Dispatcher.UIThread.Post(() =>
@@ -827,6 +1028,95 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
         BaseStation.Brightness = 100;
         BaseStation.ColorChangedCallback = OnBaseColorChanged;
         BaseStation.BrightnessChangedCallback = OnBaseBrightnessChanged;
+
+        // 3 Pokrętła (Knobs)
+        for (int i = 0; i < 3; i++)
+        {
+            var knob = new KnobItemViewModel
+            {
+                Index = i,
+                RotateAction = RollerActionType.MasterVolume,
+                PressAction = DeckActionType.MasterMute,
+                ColorHex = "#A855F7",
+                Brightness = 100,
+                Speed = 50,
+                LedMode = KnobLedMode.Static
+            };
+            knob.ActionChangedCallback = OnKnobActionChanged;
+            knob.ColorChangedCallback = OnKnobColorChanged;
+            knob.BrightnessChangedCallback = OnKnobBrightnessChanged;
+            knob.LedModeChangedCallback = OnKnobLedModeChanged;
+            Knobs.Add(knob);
+        }
+
+        // 1 Dial IPS
+        Dial = new DialItemViewModel
+        {
+            RotateAction = RollerActionType.MasterVolume,
+            PressAction = DeckActionType.MediaPlayPause,
+            Brightness = 100,
+            ColorHex = "#06B6D4"
+        };
+        Dial.ActionChangedCallback = OnDialActionChanged;
+        Dial.ColorChangedCallback = OnDialColorChanged;
+        Dial.BrightnessChangedCallback = OnDialBrightnessChanged;
+        Dial.ImageChangedCallback = OnDialImageChanged;
+    }
+
+    private void OnKnobActionChanged(KnobItemViewModel knob) => ScheduleAutoSave();
+
+    private void OnKnobColorChanged(KnobItemViewModel knob, string hex)
+    {
+        if (global::Avalonia.Media.Color.TryParse(hex, out var col))
+        {
+            var (r, g, b) = ColorStudioHelper.CalibrateForHardwareLed(col.R, col.G, col.B, knob.Brightness);
+            _deviceService.SetKnobLedColor(knob.Index, r, g, b);
+        }
+        ScheduleAutoSave();
+    }
+
+    private void OnKnobBrightnessChanged(KnobItemViewModel knob, byte brightness)
+    {
+        OnKnobColorChanged(knob, knob.ColorHex);
+        _deviceService.SetKnobLedBrightness(knob.Index, brightness);
+        ScheduleAutoSave();
+    }
+
+    private void OnKnobLedModeChanged(KnobItemViewModel knob, KnobLedMode mode)
+    {
+        _deviceService.SetKnobLedMode(knob.Index, mode);
+        ScheduleAutoSave();
+    }
+
+    private void OnDialActionChanged(DialItemViewModel dial) => ScheduleAutoSave();
+
+    private void OnDialColorChanged(DialItemViewModel dial, string hex)
+    {
+        if (global::Avalonia.Media.Color.TryParse(hex, out var col))
+        {
+            _deviceService.SetDialColor(col.R, col.G, col.B);
+        }
+        ScheduleAutoSave();
+    }
+
+    private void OnDialBrightnessChanged(DialItemViewModel dial, byte brightness)
+    {
+        _deviceService.SetDialBrightness(brightness);
+        ScheduleAutoSave();
+    }
+
+    private void OnDialImageChanged(DialItemViewModel dial, string? imagePath)
+    {
+        if (!string.IsNullOrEmpty(imagePath) && System.IO.File.Exists(imagePath))
+        {
+            byte[] dialJpeg = ButtonImageRenderer.RenderDialImage(imagePath, "Cover");
+            _ = _deviceService.SetDialImageAsync(dialJpeg);
+        }
+        else
+        {
+            OnDialColorChanged(dial, dial.ColorHex);
+        }
+        ScheduleAutoSave();
     }
 
     private void OnBaseColorChanged(BaseStationItemViewModel baseStation, string hex)
@@ -900,7 +1190,13 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
         _deviceService.KeyStateChanged += OnKeyStateChanged;
         _deviceService.SliderValueChanged += OnSliderValueChanged;
         _deviceService.RollerRotated += OnRollerRotated;
+        _deviceService.KnobRotated += OnKnobRotated;
+        _deviceService.KnobPressed += OnKnobPressed;
+        _deviceService.DialRotated += OnDialRotated;
+        _deviceService.DialPressed += OnDialPressed;
         _deviceService.StandbyStateChanged += OnStandbyStateChanged;
+        _deviceService.BaseOrientationChanged += OnBaseOrientationChanged;
+        _deviceService.EffectiveRotationChanged += OnEffectiveRotationChanged;
     }
 
     private void WireRenderingPipeline()
@@ -1623,6 +1919,18 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
                 _ = _discordService.SetPushToTalkActiveAsync(isPressed);
             }
 
+            if (key.AssignedAction == DeckActionType.StreamDeckPluginAction && !string.IsNullOrEmpty(key.StreamDeckPluginUuid))
+            {
+                if (isPressed)
+                {
+                    _ = _streamDeckPluginHost?.SendKeyDownAsync(key.Index, key.StreamDeckPluginUuid, key.StreamDeckActionUuid, key.StreamDeckSettingsJson);
+                }
+                else
+                {
+                    _ = _streamDeckPluginHost?.SendKeyUpAsync(key.Index, key.StreamDeckPluginUuid, key.StreamDeckActionUuid, key.StreamDeckSettingsJson);
+                }
+            }
+
             if (key.HasActiveImage || !string.IsNullOrWhiteSpace(key.ActiveCustomTitle) || !string.IsNullOrWhiteSpace(key.ActiveBackgroundColorHex) || key.IsActiveToggleState)
             {
                 RenderKeyVisual(key, sendToHardware: true);
@@ -2298,6 +2606,79 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
                 case DeckActionType.DisplayFps:
                 case DeckActionType.NowPlaying:
                     break;
+
+                // Smart Home: Home Assistant
+                case DeckActionType.HomeAssistantToggle:
+                    if (!string.IsNullOrWhiteSpace(key.ActionParameter) && _homeAssistantService != null)
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            bool ok = await _homeAssistantService.ToggleAsync(key.ActionParameter);
+                            var entity = _homeAssistantService.GetEntity(key.ActionParameter);
+                            Dispatcher.UIThread.Post(() =>
+                            {
+                                if (entity != null)
+                                {
+                                    key.IsActiveToggleState = entity.IsOn;
+                                }
+                                else
+                                {
+                                    key.IsActiveToggleState = !key.IsActiveToggleState;
+                                }
+                                RenderKeyVisual(key, sendToHardware: true);
+                            });
+                        });
+                    }
+                    break;
+                case DeckActionType.HomeAssistantTurnOn:
+                    if (!string.IsNullOrWhiteSpace(key.ActionParameter) && _homeAssistantService != null)
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            await _homeAssistantService.TurnOnAsync(key.ActionParameter);
+                            Dispatcher.UIThread.Post(() =>
+                            {
+                                key.IsActiveToggleState = true;
+                                RenderKeyVisual(key, sendToHardware: true);
+                            });
+                        });
+                    }
+                    break;
+                case DeckActionType.HomeAssistantTurnOff:
+                    if (!string.IsNullOrWhiteSpace(key.ActionParameter) && _homeAssistantService != null)
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            await _homeAssistantService.TurnOffAsync(key.ActionParameter);
+                            Dispatcher.UIThread.Post(() =>
+                            {
+                                key.IsActiveToggleState = false;
+                                RenderKeyVisual(key, sendToHardware: true);
+                            });
+                        });
+                    }
+                    break;
+                case DeckActionType.HomeAssistantCallService:
+                    if (!string.IsNullOrWhiteSpace(key.ActionParameter) && _homeAssistantService != null)
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            var parts = key.ActionParameter.Split('.', 2);
+                            if (parts.Length == 2)
+                            {
+                                await _homeAssistantService.CallServiceAsync(parts[0], parts[1]);
+                            }
+                        });
+                    }
+                    break;
+
+                case DeckActionType.StreamDeckPluginAction:
+                    if (!string.IsNullOrEmpty(key.StreamDeckPluginUuid) && _streamDeckPluginHost != null)
+                    {
+                        _ = _streamDeckPluginHost.SendKeyDownAsync(key.Index, key.StreamDeckPluginUuid, key.StreamDeckActionUuid, key.StreamDeckSettingsJson);
+                        _ = Task.Delay(50).ContinueWith(_ => _streamDeckPluginHost.SendKeyUpAsync(key.Index, key.StreamDeckPluginUuid, key.StreamDeckActionUuid, key.StreamDeckSettingsJson));
+                    }
+                    break;
             }
         }
         catch (Exception ex)
@@ -2370,11 +2751,65 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
                         _audioService.SetProcessVolume(slider.TargetProcessName, vol);
                     }
                     break;
+                case AudioTargetType.HomeAssistantLight:
+                    if (!string.IsNullOrWhiteSpace(slider.TargetProcessName) && _homeAssistantService != null)
+                    {
+                        byte brightness = (byte)Math.Clamp((int)Math.Round((percent / 100.0) * 255.0), 0, 255);
+                        _ = _homeAssistantService.SetLightBrightnessAsync(slider.TargetProcessName, brightness);
+                    }
+                    break;
             }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[CanvasViewModel] Błąd regulacji głośności: {ex.Message}");
+        }
+    }
+
+    private void ExecuteRollerAction(RollerActionType action, int direction)
+    {
+        switch (action)
+        {
+            case RollerActionType.MasterVolume:
+                int steps = Math.Abs(direction);
+                for (int s = 0; s < steps; s++)
+                {
+                    if (direction > 0) _systemControl.VolumeUp();
+                    else _systemControl.VolumeDown();
+                }
+                break;
+            case RollerActionType.ScrollVertical:
+                _systemControl.ScrollVertical(direction * 3);
+                break;
+            case RollerActionType.ScrollHorizontal:
+                _systemControl.ScrollHorizontal(direction * 3);
+                break;
+            case RollerActionType.MediaTrack:
+                if (direction > 0) _systemControl.NextTrack();
+                else _systemControl.PreviousTrack();
+                break;
+            case RollerActionType.RazerDpiCycle:
+                _razerService.CycleDpi(direction);
+                break;
+            case RollerActionType.RazerProfileCycle:
+                _razerService.CycleProfile(direction);
+                break;
+            case RollerActionType.RazerPollingRateCycle:
+                _razerService.CyclePollingRate(direction);
+                break;
+            case RollerActionType.WootingProfileCycle:
+                if (direction > 0) _wootingService.CycleProfileNext();
+                else _wootingService.CycleProfile(-1);
+                break;
+            case RollerActionType.HomeAssistantLightBrightness:
+                if (_homeAssistantService != null)
+                {
+                    _ = _homeAssistantService.AdjustLightBrightnessAsync(null, direction * 15);
+                }
+                break;
+            case RollerActionType.None:
+            default:
+                break;
         }
     }
 
@@ -2385,39 +2820,64 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
             var roller = Rollers[rollerIndex];
             roller.Steps += direction;
             roller.LastDirection = direction > 0 ? "Góra ▲" : "Dół ▼";
+            ExecuteRollerAction(roller.AssignedAction, direction);
+        }
+    }
 
-            switch (roller.AssignedAction)
+    private void OnKnobRotated(int knobIndex, int delta)
+    {
+        if (knobIndex >= 0 && knobIndex < Knobs.Count)
+        {
+            var knob = Knobs[knobIndex];
+            knob.Steps += delta;
+            knob.LastDirection = delta > 0 ? "CW ▶" : "CCW ◀";
+            knob.IsActivityActive = true;
+            ExecuteRollerAction(knob.RotateAction, delta);
+        }
+    }
+
+    private void OnKnobPressed(int knobIndex, bool isPressed)
+    {
+        if (knobIndex >= 0 && knobIndex < Knobs.Count)
+        {
+            var knob = Knobs[knobIndex];
+            knob.IsPressed = isPressed;
+            if (isPressed && knob.PressAction != DeckActionType.None)
             {
-                case RollerActionType.MasterVolume:
-                    if (direction > 0) _systemControl.VolumeUp();
-                    else _systemControl.VolumeDown();
-                    break;
-                case RollerActionType.ScrollVertical:
-                    _systemControl.ScrollVertical(direction * 3);
-                    break;
-                case RollerActionType.ScrollHorizontal:
-                    _systemControl.ScrollHorizontal(direction * 3);
-                    break;
-                case RollerActionType.MediaTrack:
-                    if (direction > 0) _systemControl.NextTrack();
-                    else _systemControl.PreviousTrack();
-                    break;
-                case RollerActionType.RazerDpiCycle:
-                    _razerService.CycleDpi(direction);
-                    break;
-                case RollerActionType.RazerProfileCycle:
-                    _razerService.CycleProfile(direction);
-                    break;
-                case RollerActionType.RazerPollingRateCycle:
-                    _razerService.CyclePollingRate(direction);
-                    break;
-                case RollerActionType.WootingProfileCycle:
-                    if (direction > 0) _wootingService.CycleProfileNext();
-                    else _wootingService.CycleProfile(-1);
-                    break;
-                case RollerActionType.None:
-                default:
-                    break;
+                ExecuteKeyAction(new KeyItemViewModel
+                {
+                    Index = -1,
+                    AssignedAction = knob.PressAction,
+                    ActionParameter = knob.PressActionParameter
+                });
+            }
+        }
+    }
+
+    private void OnDialRotated(int delta)
+    {
+        if (Dial != null)
+        {
+            Dial.Steps += delta;
+            Dial.LastDirection = delta > 0 ? "CW ▶" : "CCW ◀";
+            Dial.IsActivityActive = true;
+            ExecuteRollerAction(Dial.RotateAction, delta);
+        }
+    }
+
+    private void OnDialPressed(bool isPressed)
+    {
+        if (Dial != null)
+        {
+            Dial.IsPressed = isPressed;
+            if (isPressed && Dial.PressAction != DeckActionType.None)
+            {
+                ExecuteKeyAction(new KeyItemViewModel
+                {
+                    Index = -1,
+                    AssignedAction = Dial.PressAction,
+                    ActionParameter = Dial.PressActionParameter
+                });
             }
         }
     }
@@ -2517,36 +2977,61 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
                 effectiveSubtitle = "";
             }
 
-            byte[] jpeg = ButtonImageRenderer.RenderCustomKeyJpeg(
-                key.AssignedAction,
-                key.Number,
-                effectiveTitle,
-                effectiveSubtitle,
-                key.BackgroundColorHex,
-                key.TextColorHex,
-                key.ImagePath,
-                key.FontFamily,
-                key.FontSize,
-                key.IsPressed,
-                key.ActiveImagePath,
-                key.IsActiveToggleState,
-                key.SubtitleColorHex,
-                key.IsBold,
-                key.IsItalic,
-                key.IsStrikeThrough,
-                key.ActiveCustomTitle,
-                key.ActiveCustomSubtitle,
-                key.ActiveBackgroundColorHex,
-                key.ActiveTextColorHex,
-                key.ActiveSubtitleColorHex,
-                key.ImageFitMode,
-                key.ImageScale,
-                key.ImageOffsetX,
-                key.ImageOffsetY,
-                key.ActiveImageFitMode,
-                key.ActiveImageScale,
-                key.ActiveImageOffsetX,
-                key.ActiveImageOffsetY);
+            byte[] jpeg;
+            if (key.AssignedAction == DeckActionType.StreamDeckPluginAction)
+            {
+                jpeg = ButtonImageRenderer.RenderStreamDeckKeyJpeg(
+                    pluginImageJpeg: key.PluginDynamicImageBytes,
+                    title: effectiveTitle,
+                    fallbackImagePath: key.ImagePath,
+                    isPressed: key.IsPressed,
+                    fontFamily: key.FontFamily,
+                    fontSize: key.FontSize,
+                    isBold: key.IsBold,
+                    isItalic: key.IsItalic,
+                    textColorHex: key.TextColorHex,
+                    isAlert: key.IsStreamDeckAlert,
+                    isOk: key.IsStreamDeckOk);
+            }
+            else if (IsPanoramicWallpaperActive && !string.IsNullOrWhiteSpace(PanoramicWallpaperPath) &&
+                System.IO.File.Exists(PanoramicWallpaperPath) && !key.HasAction && !key.HasCustomImage)
+            {
+                byte[] panoJpeg = ButtonImageRenderer.RenderPanoramicImage(PanoramicWallpaperPath, PanoramicWallpaperFitMode);
+                jpeg = ButtonImageRenderer.SlicePanoramicKeyJpeg(panoJpeg, key.Index);
+            }
+            else
+            {
+                jpeg = ButtonImageRenderer.RenderCustomKeyJpeg(
+                    key.AssignedAction,
+                    key.Number,
+                    effectiveTitle,
+                    effectiveSubtitle,
+                    key.BackgroundColorHex,
+                    key.TextColorHex,
+                    key.ImagePath,
+                    key.FontFamily,
+                    key.FontSize,
+                    key.IsPressed,
+                    key.ActiveImagePath,
+                    key.IsActiveToggleState,
+                    key.SubtitleColorHex,
+                    key.IsBold,
+                    key.IsItalic,
+                    key.IsStrikeThrough,
+                    key.ActiveCustomTitle,
+                    key.ActiveCustomSubtitle,
+                    key.ActiveBackgroundColorHex,
+                    key.ActiveTextColorHex,
+                    key.ActiveSubtitleColorHex,
+                    key.ImageFitMode,
+                    key.ImageScale,
+                    key.ImageOffsetX,
+                    key.ImageOffsetY,
+                    key.ActiveImageFitMode,
+                    key.ActiveImageScale,
+                    key.ActiveImageOffsetX,
+                    key.ActiveImageOffsetY);
+            }
 
             if (!_isUiSuspended)
             {
@@ -2600,6 +3085,25 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
         NotifySelectionChanged();
     }
 
+    [RelayCommand]
+    public void SelectKnob(KnobItemViewModel knob)
+    {
+        ClearSelection();
+        knob.IsSelected = true;
+        SelectedElement = knob;
+        NotifySelectionChanged();
+    }
+
+    [RelayCommand]
+    public void SelectDial()
+    {
+        if (Dial == null) return;
+        ClearSelection();
+        Dial.IsSelected = true;
+        SelectedElement = Dial;
+        NotifySelectionChanged();
+    }
+
     private void ClearSelection()
     {
         foreach (var k in Keys)
@@ -2609,6 +3113,8 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
         }
         foreach (var s in Sliders) s.IsSelected = false;
         foreach (var r in Rollers) r.IsSelected = false;
+        foreach (var kn in Knobs) kn.IsSelected = false;
+        if (Dial != null) Dial.IsSelected = false;
         BaseStation.IsSelected = false;
     }
 
@@ -2617,10 +3123,14 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsKeySelected));
         OnPropertyChanged(nameof(IsSliderSelected));
         OnPropertyChanged(nameof(IsRollerSelected));
+        OnPropertyChanged(nameof(IsKnobSelected));
+        OnPropertyChanged(nameof(IsDialSelected));
         OnPropertyChanged(nameof(IsBaseSelected));
         OnPropertyChanged(nameof(SelectedKey));
         OnPropertyChanged(nameof(SelectedSlider));
         OnPropertyChanged(nameof(SelectedRoller));
+        OnPropertyChanged(nameof(SelectedKnob));
+        OnPropertyChanged(nameof(SelectedDial));
         OnPropertyChanged(nameof(SelectedBase));
     }
 
@@ -2671,7 +3181,10 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
                     ActiveImageFitMode = key.ActiveImageFitMode,
                     ActiveImageScale = key.ActiveImageScale,
                     ActiveImageOffsetX = key.ActiveImageOffsetX,
-                    ActiveImageOffsetY = key.ActiveImageOffsetY
+                    ActiveImageOffsetY = key.ActiveImageOffsetY,
+                    StreamDeckPluginUuid = key.StreamDeckPluginUuid,
+                    StreamDeckActionUuid = key.StreamDeckActionUuid,
+                    StreamDeckSettingsJson = key.StreamDeckSettingsJson
                 });
             }
 
@@ -2688,10 +3201,16 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
                 if (CurrentPageIndex >= 0 && CurrentPageIndex < profile.Pages.Count)
                 {
                     profile.Pages[CurrentPageIndex].Keys = currentKeyAssignments;
+                    profile.Pages[CurrentPageIndex].WallpaperMode = WallpaperMode;
+                    profile.Pages[CurrentPageIndex].PanoramicWallpaperPath = PanoramicWallpaperPath;
+                    profile.Pages[CurrentPageIndex].PanoramicWallpaperFitMode = PanoramicWallpaperFitMode;
                 }
                 if (CurrentPageIndex == 0)
                 {
                     profile.Keys = new List<KeyAssignmentModel>(currentKeyAssignments);
+                    profile.WallpaperMode = WallpaperMode;
+                    profile.PanoramicWallpaperPath = PanoramicWallpaperPath;
+                    profile.PanoramicWallpaperFitMode = PanoramicWallpaperFitMode;
                 }
             }
 
@@ -2723,10 +3242,47 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
                 });
             }
 
+            // Zapisz pokrętła 3 Knobs
+            profile.Knobs ??= new List<KnobAssignmentModel>();
+            profile.Knobs.Clear();
+            foreach (var knob in Knobs)
+            {
+                profile.Knobs.Add(new KnobAssignmentModel
+                {
+                    Index = knob.Index,
+                    RotateAction = knob.RotateAction,
+                    PressAction = knob.PressAction,
+                    PressActionParameter = knob.PressActionParameter,
+                    LedMode = knob.LedMode,
+                    ColorHex = knob.ColorHex,
+                    Brightness = knob.Brightness,
+                    Speed = knob.Speed
+                });
+            }
+
+            // Zapisz Dial IPS
+            if (Dial != null)
+            {
+                profile.Dial = new DialAssignmentModel
+                {
+                    RotateAction = Dial.RotateAction,
+                    PressAction = Dial.PressAction,
+                    PressActionParameter = Dial.PressActionParameter,
+                    Brightness = Dial.Brightness,
+                    ColorHex = Dial.ColorHex,
+                    ImagePath = Dial.ImagePath,
+                    DisplayWidget = Dial.DisplayWidget
+                };
+            }
+
             // Zapisz stację dokującą i podświetlenie
             profile.LedColorHex = BaseStation.ColorHex;
             profile.BaseBrightness = BaseStation.Brightness;
             profile.KeypadBrightness = KeypadBrightness;
+
+            // Zapisz rotację i orientację paneli
+            profile.RotationMode = RotationMode;
+            profile.ManualRotationAngle = ManualRotationAngle;
 
             _profileService.SaveProfile(profile);
         }
@@ -2734,6 +3290,159 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
         {
             System.Diagnostics.Debug.WriteLine($"Failed to auto-save profile: {ex.Message}");
         }
+    }
+
+    public void SyncPanoramicWallpaperStateToKeys()
+    {
+        bool isActive = IsPanoramicWallpaperActive;
+        string? path = PanoramicWallpaperPath;
+        string fitMode = PanoramicWallpaperFitMode;
+        foreach (var k in Keys)
+        {
+            k.IsPanoramicWallpaperActive = isActive;
+            k.PanoramicWallpaperPath = path;
+            k.PanoramicWallpaperFitMode = fitMode;
+        }
+    }
+
+    public void ApplyPanoramicWallpaper(string path, string fitMode = "Cover")
+    {
+        if (string.IsNullOrWhiteSpace(path) || !System.IO.File.Exists(path)) return;
+
+        try
+        {
+            WallpaperMode = DeckWallpaperMode.PanoramicDeck;
+            PanoramicWallpaperPath = path;
+            PanoramicWallpaperFitMode = fitMode;
+
+            var profile = _profileService.GetActiveProfile();
+            if (profile != null)
+            {
+                profile.WallpaperMode = DeckWallpaperMode.PanoramicDeck;
+                profile.PanoramicWallpaperPath = path;
+                profile.PanoramicWallpaperFitMode = fitMode;
+
+                EnsurePagesInitialized(profile);
+                if (CurrentPageIndex >= 0 && CurrentPageIndex < profile.Pages.Count)
+                {
+                    var page = profile.Pages[CurrentPageIndex];
+                    page.WallpaperMode = DeckWallpaperMode.PanoramicDeck;
+                    page.PanoramicWallpaperPath = path;
+                    page.PanoramicWallpaperFitMode = fitMode;
+                }
+                _profileService.SaveProfile(profile);
+            }
+
+            SyncPanoramicWallpaperStateToKeys();
+
+            byte[] panoJpeg = ButtonImageRenderer.RenderPanoramicImage(path, fitMode);
+            _deviceService.SetPanoramicWallpaper(panoJpeg);
+
+            for (int i = 0; i < Keys.Count && i < 15; i++)
+            {
+                byte[] keySlice = ButtonImageRenderer.SlicePanoramicKeyJpeg(panoJpeg, i);
+                Keys[i].SetRenderedJpeg(keySlice);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Błąd nakładania tapety panoramicznej: {ex.Message}");
+        }
+    }
+
+    public void ClearPanoramicWallpaper()
+    {
+        WallpaperMode = DeckWallpaperMode.PerKey;
+        PanoramicWallpaperPath = null;
+
+        var profile = _profileService.GetActiveProfile();
+        if (profile != null)
+        {
+            profile.WallpaperMode = DeckWallpaperMode.PerKey;
+            profile.PanoramicWallpaperPath = null;
+
+            if (CurrentPageIndex >= 0 && CurrentPageIndex < profile.Pages.Count)
+            {
+                var page = profile.Pages[CurrentPageIndex];
+                page.WallpaperMode = DeckWallpaperMode.PerKey;
+                page.PanoramicWallpaperPath = null;
+            }
+            _profileService.SaveProfile(profile);
+        }
+
+        SyncPanoramicWallpaperStateToKeys();
+
+        for (int i = 0; i < Keys.Count; i++)
+        {
+            RenderKeyVisual(Keys[i], sendToHardware: true);
+        }
+    }
+
+    [RelayCommand]
+    public void CycleRotation()
+    {
+        RotationMode = RotationMode switch
+        {
+            DeckRotationMode.Auto => DeckRotationMode.Manual90,
+            DeckRotationMode.Manual90 => DeckRotationMode.Manual180,
+            DeckRotationMode.Manual180 => DeckRotationMode.Manual270,
+            DeckRotationMode.Manual270 => DeckRotationMode.Manual0,
+            _ => DeckRotationMode.Auto
+        };
+
+        ManualRotationAngle = RotationMode switch
+        {
+            DeckRotationMode.Manual90 => 90,
+            DeckRotationMode.Manual180 => 180,
+            DeckRotationMode.Manual270 => 270,
+            _ => 0
+        };
+
+        _deviceService.RotationMode = RotationMode;
+        _deviceService.ManualRotationAngle = ManualRotationAngle;
+        UpdateRotationDisplayState(_deviceService.EffectiveRotationAngle);
+        ScheduleAutoSave();
+    }
+
+    private void OnBaseOrientationChanged(DeckOrientation orientation)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (RotationMode == DeckRotationMode.Auto)
+            {
+                UpdateRotationDisplayState(_deviceService.EffectiveRotationAngle);
+            }
+        });
+    }
+
+    private void OnEffectiveRotationChanged(DeckRotationAngle angle)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            UpdateRotationDisplayState(angle);
+        });
+    }
+
+    private void UpdateRotationDisplayState(DeckRotationAngle angle)
+    {
+        IsPortraitLayout = (angle == DeckRotationAngle.Deg90 || angle == DeckRotationAngle.Deg270);
+        KeypadColumns = IsPortraitLayout ? 3 : 5;
+        KeypadRows = IsPortraitLayout ? 5 : 3;
+
+        var loc = LocalizationService.Instance;
+        string angleText = angle switch
+        {
+            DeckRotationAngle.Deg90 => loc.GetString("Orientation_90", "90° (Pionowa)"),
+            DeckRotationAngle.Deg180 => loc.GetString("Orientation_180", "180° (Odwrócona)"),
+            DeckRotationAngle.Deg270 => loc.GetString("Orientation_270", "270° (Pionowa)"),
+            _ => loc.GetString("Orientation_0", "0° (Pozioma)")
+        };
+
+        OrientationStatusText = (RotationMode == DeckRotationMode.Auto)
+            ? $"{angleText} {loc.GetString("Orientation_Auto", "[Auto]")}"
+            : angleText;
+
+        RefreshAllKeyVisuals();
     }
 
     private void OnStandbyStateChanged(bool isStandby)
@@ -2789,6 +3498,31 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
             {
                 var (r, g, b) = ColorStudioHelper.CalibrateForHardwareLed(baseCol.R, baseCol.G, baseCol.B, BaseStation.Brightness);
                 _deviceService.SetBaseLedColor(r, g, b);
+            }
+
+            foreach (var knob in Knobs)
+            {
+                if (global::Avalonia.Media.Color.TryParse(knob.ColorHex, out var col))
+                {
+                    var (r, g, b) = ColorStudioHelper.CalibrateForHardwareLed(col.R, col.G, col.B, knob.Brightness);
+                    _deviceService.SetKnobLedColor(knob.Index, r, g, b);
+                }
+                _deviceService.SetKnobLedMode(knob.Index, knob.LedMode);
+                _deviceService.SetKnobLedBrightness(knob.Index, knob.Brightness);
+            }
+
+            if (Dial != null)
+            {
+                _deviceService.SetDialBrightness(Dial.Brightness);
+                if (!string.IsNullOrEmpty(Dial.ImagePath) && System.IO.File.Exists(Dial.ImagePath))
+                {
+                    byte[] dialJpeg = ButtonImageRenderer.RenderDialImage(Dial.ImagePath, "Cover");
+                    _ = _deviceService.SetDialImageAsync(dialJpeg);
+                }
+                else if (global::Avalonia.Media.Color.TryParse(Dial.ColorHex, out var dialCol))
+                {
+                    _deviceService.SetDialColor(dialCol.R, dialCol.G, dialCol.B);
+                }
             }
         }
         catch (Exception ex)
@@ -2850,6 +3584,14 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
         _animatedKeyRenderer.StopAllAnimations();
         Interlocked.Increment(ref _pageRenderVersion);
 
+        foreach (var key in Keys)
+        {
+            if (key.AssignedAction == DeckActionType.StreamDeckPluginAction && !string.IsNullOrEmpty(key.StreamDeckPluginUuid))
+            {
+                _ = _streamDeckPluginHost?.SendWillDisappearAsync(key.Index, key.StreamDeckPluginUuid, key.StreamDeckActionUuid);
+            }
+        }
+
         try
         {
             for (int i = 0; i < Keys.Count; i++)
@@ -2895,6 +3637,14 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
                     targetKey.IsItalic = k.IsItalic;
                     targetKey.IsStrikeThrough = k.IsStrikeThrough;
                     targetKey.ObsSceneName = k.ObsSceneName ?? "";
+                    targetKey.StreamDeckPluginUuid = k.StreamDeckPluginUuid ?? "";
+                    targetKey.StreamDeckActionUuid = k.StreamDeckActionUuid ?? "";
+                    targetKey.StreamDeckSettingsJson = k.StreamDeckSettingsJson ?? "";
+
+                    if (targetKey.AssignedAction == DeckActionType.StreamDeckPluginAction && !string.IsNullOrEmpty(targetKey.StreamDeckPluginUuid))
+                    {
+                        _ = SendStreamDeckWillAppearAsync(targetKey);
+                    }
                     if (targetKey.AssignedAction == DeckActionType.JetKvmPowerStatus ||
                         targetKey.AssignedAction == DeckActionType.JetKvmPowerShort)
                     {
@@ -2949,13 +3699,74 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
                                           string.Equals(targetKey.ActionParameter, _voicemodService.CurrentVoiceName, StringComparison.OrdinalIgnoreCase));
                         targetKey.IsActiveToggleState = isCurrent;
                     }
+                    else if (targetKey.AssignedAction is DeckActionType.HomeAssistantToggle or
+                                                         DeckActionType.HomeAssistantTurnOn or
+                                                         DeckActionType.HomeAssistantTurnOff)
+                    {
+                        var entity = _homeAssistantService?.GetEntity(targetKey.ActionParameter);
+                        if (entity != null)
+                        {
+                            targetKey.IsActiveToggleState = entity.IsOn;
+                        }
+                    }
                 }
                 else
                 {
                     targetKey.ClearAction();
                 }
-                RenderKeyVisual(targetKey, sendToHardware: true);
             }
+
+            var page = (CurrentPageIndex >= 0 && profile.Pages != null && CurrentPageIndex < profile.Pages.Count)
+                ? profile.Pages[CurrentPageIndex]
+                : null;
+            var effectiveWallpaperMode = !IsInsideFolder
+                ? (page?.WallpaperMode ?? profile.WallpaperMode)
+                : DeckWallpaperMode.PerKey;
+            var effectiveWallpaperPath = !IsInsideFolder
+                ? (page?.PanoramicWallpaperPath ?? profile.PanoramicWallpaperPath)
+                : null;
+            var effectiveFitMode = !IsInsideFolder
+                ? (page?.PanoramicWallpaperFitMode ?? profile.PanoramicWallpaperFitMode ?? "Cover")
+                : "Cover";
+
+            WallpaperMode = effectiveWallpaperMode;
+            PanoramicWallpaperPath = effectiveWallpaperPath;
+            PanoramicWallpaperFitMode = effectiveFitMode;
+            SyncPanoramicWallpaperStateToKeys();
+
+            bool isPanoramic = effectiveWallpaperMode == DeckWallpaperMode.PanoramicDeck &&
+                               !string.IsNullOrWhiteSpace(effectiveWallpaperPath) &&
+                               System.IO.File.Exists(effectiveWallpaperPath);
+
+            if (isPanoramic)
+            {
+                try
+                {
+                    byte[] panoJpeg = ButtonImageRenderer.RenderPanoramicImage(effectiveWallpaperPath!, effectiveFitMode);
+                    _deviceService.SetPanoramicWallpaper(panoJpeg);
+                    for (int i = 0; i < Keys.Count && i < 15; i++)
+                    {
+                        byte[] slice = ButtonImageRenderer.SlicePanoramicKeyJpeg(panoJpeg, i);
+                        Keys[i].SetRenderedJpeg(slice);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Błąd ładowania tapety panoramicznej: {ex.Message}");
+                    for (int i = 0; i < Keys.Count; i++)
+                    {
+                        RenderKeyVisual(Keys[i], sendToHardware: true);
+                    }
+                }
+            }
+            else
+            {
+                for (int i = 0; i < Keys.Count; i++)
+                {
+                    RenderKeyVisual(Keys[i], sendToHardware: true);
+                }
+            }
+
             OnPropertyChanged(nameof(SelectedKey));
         }
         finally
@@ -3010,6 +3821,35 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
                 }
             }
 
+            if (profile.Knobs != null && profile.Knobs.Count > 0)
+            {
+                foreach (var k in profile.Knobs)
+                {
+                    if (k.Index >= 0 && k.Index < Knobs.Count)
+                    {
+                        var targetKnob = Knobs[k.Index];
+                        targetKnob.RotateAction = k.RotateAction;
+                        targetKnob.PressAction = k.PressAction;
+                        targetKnob.PressActionParameter = k.PressActionParameter;
+                        targetKnob.LedMode = k.LedMode;
+                        if (!string.IsNullOrEmpty(k.ColorHex)) targetKnob.ColorHex = k.ColorHex;
+                        targetKnob.Brightness = (byte)Math.Clamp(k.Brightness, 0, 100);
+                        targetKnob.Speed = (byte)Math.Clamp(k.Speed, 0, 100);
+                    }
+                }
+            }
+
+            if (profile.Dial != null && Dial != null)
+            {
+                Dial.RotateAction = profile.Dial.RotateAction;
+                Dial.PressAction = profile.Dial.PressAction;
+                Dial.PressActionParameter = profile.Dial.PressActionParameter;
+                if (!string.IsNullOrEmpty(profile.Dial.ColorHex)) Dial.ColorHex = profile.Dial.ColorHex;
+                Dial.Brightness = (byte)Math.Clamp((int)profile.Dial.Brightness, 0, 100);
+                Dial.ImagePath = profile.Dial.ImagePath;
+                Dial.DisplayWidget = profile.Dial.DisplayWidget;
+            }
+
             if (!string.IsNullOrEmpty(profile.LedColorHex))
             {
                 BaseStation.ColorHex = profile.LedColorHex;
@@ -3022,6 +3862,12 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
             {
                 KeypadBrightness = (byte)Math.Clamp(profile.KeypadBrightness, 0, 100);
             }
+
+            RotationMode = profile.RotationMode;
+            ManualRotationAngle = profile.ManualRotationAngle;
+            _deviceService.RotationMode = profile.RotationMode;
+            _deviceService.ManualRotationAngle = profile.ManualRotationAngle;
+            UpdateRotationDisplayState(_deviceService.EffectiveRotationAngle);
 
             _hasLoadedProfile = true;
             PushAllHardwareState();
@@ -3041,7 +3887,13 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
         _deviceService.KeyStateChanged -= OnKeyStateChanged;
         _deviceService.SliderValueChanged -= OnSliderValueChanged;
         _deviceService.RollerRotated -= OnRollerRotated;
+        _deviceService.KnobRotated -= OnKnobRotated;
+        _deviceService.KnobPressed -= OnKnobPressed;
+        _deviceService.DialRotated -= OnDialRotated;
+        _deviceService.DialPressed -= OnDialPressed;
         _deviceService.StandbyStateChanged -= OnStandbyStateChanged;
+        _deviceService.BaseOrientationChanged -= OnBaseOrientationChanged;
+        _deviceService.EffectiveRotationChanged -= OnEffectiveRotationChanged;
         _keyRenderer.KeyRendered -= OnKeyRenderedByService;
         _animatedKeyRenderer.FrameRenderedWithJpeg -= OnAnimatedFrameRendered;
         _deviceService.DevicesUpdated -= UpdateConnectionStates;
@@ -3063,10 +3915,45 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
         _voicemodService.ConnectionStateChanged -= OnVoicemodConnectionChanged;
         _voicemodService.VoicesLoaded -= OnVoicemodVoicesLoaded;
         _voicemodService.SoundsLoaded -= OnVoicemodSoundsLoaded;
-
         _keyInteractionEngine.KeyTriggered -= OnKeyTriggered;
         _keyInteractionEngine.Dispose();
 
+        if (_homeAssistantService != null)
+        {
+            _homeAssistantService.EntityStateChanged -= OnHomeAssistantEntityStateChanged;
+        }
+
         _animatedKeyRenderer.StopAllAnimations();
+    }
+
+    public async Task SendStreamDeckWillAppearAsync(KeyItemViewModel key)
+    {
+        if (_streamDeckPluginHost == null || string.IsNullOrEmpty(key.StreamDeckPluginUuid)) return;
+        await _streamDeckPluginHost.StartPluginAsync(key.StreamDeckPluginUuid);
+        await _streamDeckPluginHost.SendWillAppearAsync(key.Index, key.StreamDeckPluginUuid, key.StreamDeckActionUuid, key.StreamDeckSettingsJson);
+    }
+
+    public async Task SendStreamDeckWillDisappearAsync(int keyIndex, string pluginUuid, string actionUuid)
+    {
+        if (_streamDeckPluginHost == null || string.IsNullOrEmpty(pluginUuid)) return;
+        await _streamDeckPluginHost.SendWillDisappearAsync(keyIndex, pluginUuid, actionUuid);
+    }
+
+    private void OnHomeAssistantEntityStateChanged(object? sender, HomeAssistantEntityModel entity)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            foreach (var key in Keys)
+            {
+                if ((key.AssignedAction is DeckActionType.HomeAssistantToggle or
+                                           DeckActionType.HomeAssistantTurnOn or
+                                           DeckActionType.HomeAssistantTurnOff) &&
+                    string.Equals(key.ActionParameter, entity.EntityId, StringComparison.OrdinalIgnoreCase))
+                {
+                    key.IsActiveToggleState = entity.IsOn;
+                    RenderKeyVisual(key, sendToHardware: true);
+                }
+            }
+        });
     }
 }

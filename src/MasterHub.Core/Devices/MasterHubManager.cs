@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Microsoft.Win32;
 using MasterHub.Core.Models;
 using MasterHub.Core.Native;
+using MasterHub.Core.Profiles;
 using MasterHub.Core.Rendering;
 
 namespace MasterHub.Core.Devices;
@@ -19,18 +20,62 @@ public class MasterHubManager : IMasterHubManager
     private MasterHubDeviceHandle? _hKeypad;
     private MasterHubDeviceHandle? _hSlider;
     private MasterHubDeviceHandle? _hRoller;
+    private MasterHubDeviceHandle? _hKnob;
+    private MasterHubDeviceHandle? _hDial;
 
     public bool IsKeypadConnected => _hKeypad != null && _hKeypad.IsValid;
     public bool IsSliderConnected => _hSlider != null && _hSlider.IsValid;
     public bool IsRollerConnected => _hRoller != null && _hRoller.IsValid;
     public bool IsBaseConnected => _hBase != null && _hBase.IsValid;
+    public bool IsKnobConnected => _hKnob != null && _hKnob.IsValid;
+    public bool IsDialConnected => _hDial != null && _hDial.IsValid;
 
     private bool _isStandby = false;
     public bool IsStandby => _isStandby;
 
     private readonly bool[] _keyStates = new bool[15];
+    private readonly bool[] _rawPhysicalKeyStates = new bool[15];
     private readonly byte[] _sliderValues = new byte[5];
     private readonly byte[] _lastSliderValues = new byte[5];
+    private readonly bool[] _knobPressedStates = new bool[3];
+    private bool _dialPressed = false;
+
+    // Przyspieszenie dynamiczne obrotu (Velocity Acceleration)
+    private readonly long[] _lastKnobTicks = new long[3];
+    private readonly long[] _lastRollerTicks = new long[2];
+    private long _lastDialTicks = 0;
+
+    private static int CalculateAccelFactor(ref long lastTicks)
+    {
+        long now = Stopwatch.GetTimestamp();
+        long last = lastTicks;
+        lastTicks = now;
+        if (last == 0) return 1;
+
+        long elapsedMs = (now - last) * 1000 / Stopwatch.Frequency;
+        if (elapsedMs < 50) return 3;
+        if (elapsedMs < 110) return 2;
+        return 1;
+    }
+
+    private static byte FilterFaderValue(byte raw, byte last)
+    {
+        byte v = raw switch
+        {
+            <= 2 => 0,
+            >= 98 => 100,
+            _ => raw
+        };
+
+        if (last == v) return last;
+        if (Math.Abs((int)last - (int)v) < 2 && v != 0 && v != 100) return last;
+        return v;
+    }
+
+    private DeckOrientation _hardwareBaseOrientation = DeckOrientation.Horizontal;
+    private DeckRotationAngle _effectiveRotationAngle = DeckRotationAngle.Deg0;
+    private DeckRotationMode _rotationMode = DeckRotationMode.Auto;
+    private int _manualRotationAngle = 0;
 
     private Thread? _pollThread;
     private readonly CancellationTokenSource _cts = new();
@@ -41,6 +86,12 @@ public class MasterHubManager : IMasterHubManager
     public event Action<int, bool>? KeyStateChanged; // (keyIndex 0..14, isPressed)
     public event Action<int, byte, int>? SliderValueChanged; // (sliderIndex 0..4, raw 0..255, percent 0..100)
     public event Action<int, int>? RollerRotated; // (rollerIndex 0=Left, 1=Right; direction +1=Up, -1=Down)
+    public event Action<int, int>? KnobRotated; // (knobIndex 0..2, delta +1=CW, -1=CCW)
+    public event Action<int, bool>? KnobPressed; // (knobIndex 0..2, isPressed)
+    public event Action<int>? DialRotated; // (delta +1=CW, -1=CCW)
+    public event Action<bool>? DialPressed; // (isPressed)
+    public event Action<DeckOrientation>? BaseOrientationChanged;
+    public event Action<DeckRotationAngle>? EffectiveRotationChanged;
     public event Action<string>? LogMessage;
     public event Action<List<DeviceInfo>>? DevicesDiscovered;
     public event Action<bool>? StandbyStateChanged;
@@ -50,6 +101,75 @@ public class MasterHubManager : IMasterHubManager
     public IReadOnlyList<byte> CurrentSliderValues => _sliderValues;
     public Func<int, bool, byte[]>? CustomKeyImageProvider { get; set; }
 
+    public DeckOrientation HardwareBaseOrientation => _hardwareBaseOrientation;
+    public DeckRotationAngle EffectiveRotationAngle => _effectiveRotationAngle;
+
+    public DeckRotationMode RotationMode
+    {
+        get => _rotationMode;
+        set
+        {
+            if (_rotationMode != value)
+            {
+                _rotationMode = value;
+                RecalculateEffectiveRotation();
+            }
+        }
+    }
+
+    public int ManualRotationAngle
+    {
+        get => _manualRotationAngle;
+        set
+        {
+            if (_manualRotationAngle != value)
+            {
+                _manualRotationAngle = value;
+                RecalculateEffectiveRotation();
+            }
+        }
+    }
+
+    public void SetHardwareOrientation(DeckOrientation newOrientation)
+    {
+        if (_hardwareBaseOrientation != newOrientation)
+        {
+            _hardwareBaseOrientation = newOrientation;
+            Log($"[Czujnik Orientacji] Stacja Dokująca zmieniła pozycję: {newOrientation}");
+            BaseOrientationChanged?.Invoke(newOrientation);
+
+            if (_rotationMode == DeckRotationMode.Auto)
+            {
+                RecalculateEffectiveRotation();
+            }
+        }
+    }
+
+    private void RecalculateEffectiveRotation()
+    {
+        DeckRotationAngle newAngle = _rotationMode switch
+        {
+            DeckRotationMode.Manual0 => DeckRotationAngle.Deg0,
+            DeckRotationMode.Manual90 => DeckRotationAngle.Deg90,
+            DeckRotationMode.Manual180 => DeckRotationAngle.Deg180,
+            DeckRotationMode.Manual270 => DeckRotationAngle.Deg270,
+            DeckRotationMode.Auto => (_hardwareBaseOrientation == DeckOrientation.Vertical ? DeckRotationAngle.Deg90 : DeckRotationAngle.Deg0),
+            _ => DeckRotationAngle.Deg0
+        };
+
+        if (_effectiveRotationAngle != newAngle)
+        {
+            _effectiveRotationAngle = newAngle;
+            Log($"[Rotacja Decka] Zastosowano efektywny kąt obrotu: {(int)newAngle}°");
+            EffectiveRotationChanged?.Invoke(newAngle);
+
+            if (_hKeypad != null && _hKeypad.IsValid)
+            {
+                InitializeKeypadDisplay();
+            }
+        }
+    }
+
     public void Start()
     {
         Log("Inicjalizacja środowiska MasterHub (czysty sterownik Open Source USB HID)...");
@@ -57,6 +177,7 @@ public class MasterHubManager : IMasterHubManager
         try
         {
             SystemEvents.PowerModeChanged += OnPowerModeChanged;
+            SystemEvents.SessionSwitch += OnSessionSwitch;
         }
         catch { }
 
@@ -92,6 +213,20 @@ public class MasterHubManager : IMasterHubManager
                 Log("Wznawianie połączeń MasterHub po wybudzeniu systemu...");
                 DiscoverAndConnect();
             });
+        }
+    }
+
+    private void OnSessionSwitch(object sender, SessionSwitchEventArgs e)
+    {
+        if (e.Reason == SessionSwitchReason.SessionLock)
+        {
+            Log("Wykryto zablokowanie sesji Windows -> przełączanie ekranów MasterHub w tryb Standby");
+            EnterStandby();
+        }
+        else if (e.Reason == SessionSwitchReason.SessionUnlock)
+        {
+            Log("Wykryto odblokowanie sesji Windows -> wybudzanie ekranów MasterHub ze stanu Standby");
+            WakeUp();
         }
     }
 
@@ -142,6 +277,12 @@ public class MasterHubManager : IMasterHubManager
                     break;
                 case MasterHubModuleType.RollerDial:
                     ConnectRoller(dev);
+                    break;
+                case MasterHubModuleType.Knob3:
+                    ConnectKnob(dev);
+                    break;
+                case MasterHubModuleType.DialDisplay:
+                    ConnectDial(dev);
                     break;
                 default:
                     Log($"Wykryto moduł: {dev.Name} [SN: {dev.SerialNumber}]");
@@ -225,6 +366,14 @@ public class MasterHubManager : IMasterHubManager
             dev.IsConnected = true;
             AddOrUpdateConnectedDevice(dev);
             Log($"Połączono ze Stacją Bazową! (HID: {_hBase.DevicePath})");
+
+            // Odczytaj początkową orientację akcelerometru stacji bazowej
+            int rOrient = _hBase.GetBaseOrientation(out var initOrient);
+            if (rOrient == 0)
+            {
+                SetHardwareOrientation(initOrient);
+                Log($"Początkowa orientacja stacji dokującej: {initOrient}");
+            }
         }
         else
         {
@@ -283,9 +432,10 @@ public class MasterHubManager : IMasterHubManager
 
             // Pobierz początkowe wartości
             int rGet = _hSlider.GetSliderValues(_sliderValues);
-            Array.Copy(_sliderValues, _lastSliderValues, 5);
             for (int i = 0; i < 5; i++)
             {
+                _sliderValues[i] = FilterFaderValue(_sliderValues[i], 0);
+                _lastSliderValues[i] = _sliderValues[i];
                 int pct = Math.Clamp((int)_sliderValues[i], 0, 100);
                 SliderValueChanged?.Invoke(i, _sliderValues[i], pct);
             }
@@ -320,6 +470,52 @@ public class MasterHubManager : IMasterHubManager
         }
     }
 
+    private void ConnectKnob(DeviceInfo dev)
+    {
+        Log($"Łączenie z modułem 3 Pokręteł ({dev.SerialNumber})...");
+        _hKnob = MasterHubUsbTransport.ConnectDevice(dev.VendorId, dev.ProductId, dev.SerialNumber);
+        if (_hKnob != null && _hKnob.IsValid)
+        {
+            dev.IsConnected = true;
+            AddOrUpdateConnectedDevice(dev);
+            Log($"Połączono pomyślnie z modułem 3 Pokręteł! (HID: {_hKnob.DevicePath})");
+
+            _hKnob.SetKnobLedMode(0xFF, 1, false);
+            _hKnob.SetKnobLedBrightness(0xFF, _currentBrightness);
+        }
+        else
+        {
+            dev.IsConnected = false;
+            AddOrUpdateConnectedDevice(dev);
+            Log("Nie udało się połączyć z modułem 3 Pokręteł.");
+        }
+    }
+
+    private void ConnectDial(DeviceInfo dev)
+    {
+        Log($"Łączenie z modułem Pokrętła z Ekranem IPS ({dev.SerialNumber})...");
+        _hDial = MasterHubUsbTransport.ConnectDevice(dev.VendorId, dev.ProductId, dev.SerialNumber);
+        if (_hDial != null && _hDial.IsValid)
+        {
+            dev.IsConnected = true;
+            AddOrUpdateConnectedDevice(dev);
+            Log($"Połączono pomyślnie z modułem Dial IPS! (HID: {_hDial.DevicePath})");
+
+            // KRYTYCZNE: Natychmiastowe włączenie Software Mode, aby zapobiec zawieszeniu MCU!
+            int rSw = _hDial.SetDialSwMode(true);
+            Log($"Tryb Software Mode dla Dial włączony (wynik: {rSw}).");
+
+            int rBl = _hDial.AdjustDialBacklight(_currentBrightness);
+            Log($"Podświetlenie ekranu Dial IPS ustawione na: {_currentBrightness}% (wynik: {rBl}).");
+        }
+        else
+        {
+            dev.IsConnected = false;
+            AddOrUpdateConnectedDevice(dev);
+            Log("Nie udało się połączyć z modułem Dial IPS.");
+        }
+    }
+
     private byte _currentBrightness = 100;
     public byte CurrentBrightness => _currentBrightness;
 
@@ -334,11 +530,8 @@ public class MasterHubManager : IMasterHubManager
         {
             try
             {
-                _hKeypad.AdjustBacklight(0);
-                for (byte i = 0; i < 15; i++)
-                {
-                    _hKeypad.DisplayColorOnButton(i, 0, 0, 0);
-                }
+                _hKeypad.FillScreen(0, 0, 0);
+                _hKeypad.AdjustBacklight(1); // 1 = bezpieczna minimalna jasność (0 zawiesza MCU na USB)
             }
             catch (Exception ex)
             {
@@ -397,6 +590,27 @@ public class MasterHubManager : IMasterHubManager
             }
             catch { }
         }
+
+        // 5. Moduł 3 pokręteł (Knobs)
+        if (_hKnob != null && _hKnob.IsValid)
+        {
+            try
+            {
+                _hKnob.SetKnobLedBrightness(0xFF, 0);
+            }
+            catch { }
+        }
+
+        // 6. Moduł Dial IPS
+        if (_hDial != null && _hDial.IsValid)
+        {
+            try
+            {
+                _hDial.FillDialColor(0, 0, 0);
+                _hDial.AdjustDialBacklight(1); // 1 = bezpieczna minimalna jasność (0 zawiesza MCU na USB)
+            }
+            catch { }
+        }
     }
 
     public void WakeUp()
@@ -404,7 +618,7 @@ public class MasterHubManager : IMasterHubManager
         _isStandby = false;
         Log("Wybudzanie modułów MasterHub ze stanu Standby...");
 
-        if (_hKeypad == null && _hSlider == null && _hBase == null && _hRoller == null)
+        if (_hKeypad == null && _hSlider == null && _hBase == null && _hRoller == null && _hKnob == null && _hDial == null)
         {
             DiscoverAndConnect();
             return;
@@ -455,6 +669,26 @@ public class MasterHubManager : IMasterHubManager
             } catch { }
         }
 
+        // 5. Moduł 3 pokręteł
+        if (_hKnob != null && _hKnob.IsValid)
+        {
+            try
+            {
+                _hKnob.SetKnobLedMode(0xFF, 1, false);
+                _hKnob.SetKnobLedBrightness(0xFF, _currentBrightness);
+            } catch { }
+        }
+
+        // 6. Moduł Dial IPS
+        if (_hDial != null && _hDial.IsValid)
+        {
+            try
+            {
+                _hDial.SetDialSwMode(true);
+                _hDial.AdjustDialBacklight(_currentBrightness);
+            } catch { }
+        }
+
         StandbyStateChanged?.Invoke(false);
     }
 
@@ -479,6 +713,16 @@ public class MasterHubManager : IMasterHubManager
         if (_hRoller != null && _hRoller.IsValid)
         {
             try { _hRoller.AdjustLedBrightness(2, 0xFF, brightness); } catch { }
+        }
+
+        if (_hKnob != null && _hKnob.IsValid)
+        {
+            try { _hKnob.SetKnobLedBrightness(0xFF, brightness); } catch { }
+        }
+
+        if (_hDial != null && _hDial.IsValid)
+        {
+            try { _hDial.AdjustDialBacklight(brightness); } catch { }
         }
 
         Log($"Jasność podświetlenia i diod LED ustawiona na: {brightness}%");
@@ -623,6 +867,129 @@ public class MasterHubManager : IMasterHubManager
         }
     }
 
+    public void SetKnobLedColor(int knobIndex, byte r, byte g, byte b)
+    {
+        if (_hKnob != null && _hKnob.IsValid)
+        {
+            try
+            {
+                byte ledIdx = (knobIndex >= 0 && knobIndex < 3) ? (byte)knobIndex : (byte)0xFF;
+                _hKnob.SetKnobLedMode(ledIdx, 1, false);
+                int ret = _hKnob.SetKnobLedColor(ledIdx, r, g, b, false);
+                string label = (knobIndex >= 0 && knobIndex < 3) ? $"POKRĘTŁA #{knobIndex + 1}" : "WSZYSTKICH POKRĘTEŁ";
+                Log($"[LED {label}] Ustawiono sprzętowy kolor RGB({r}, {g}, {b}) (kod: {ret})");
+            }
+            catch (Exception ex)
+            {
+                Log($"[BŁĄD LED POKRĘTŁA] {ex.Message}");
+            }
+        }
+    }
+
+    public void SetKnobLedBrightness(int knobIndex, byte brightness)
+    {
+        if (_hKnob != null && _hKnob.IsValid)
+        {
+            try
+            {
+                byte ledIdx = (knobIndex >= 0 && knobIndex < 3) ? (byte)knobIndex : (byte)0xFF;
+                int ret = _hKnob.SetKnobLedBrightness(ledIdx, brightness);
+                string label = (knobIndex >= 0 && knobIndex < 3) ? $"POKRĘTŁA #{knobIndex + 1}" : "WSZYSTKICH POKRĘTEŁ";
+                Log($"[JASNOŚĆ {label}] Ustawiono natężenie LED: {brightness}% (kod: {ret})");
+            }
+            catch (Exception ex)
+            {
+                Log($"[BŁĄD JASNOŚCI POKRĘTŁA] {ex.Message}");
+            }
+        }
+    }
+
+    public void SetKnobLedMode(int knobIndex, KnobLedMode mode)
+    {
+        if (_hKnob != null && _hKnob.IsValid)
+        {
+            try
+            {
+                byte ledIdx = (knobIndex >= 0 && knobIndex < 3) ? (byte)knobIndex : (byte)0xFF;
+                int ret = _hKnob.SetKnobLedMode(ledIdx, (byte)mode, false);
+                string label = (knobIndex >= 0 && knobIndex < 3) ? $"POKRĘTŁA #{knobIndex + 1}" : "WSZYSTKICH POKRĘTEŁ";
+                Log($"[TRYB LED {label}] Ustawiono tryb: {mode} (kod: {ret})");
+            }
+            catch (Exception ex)
+            {
+                Log($"[BŁĄD TRYBU LED POKRĘTŁA] {ex.Message}");
+            }
+        }
+    }
+
+    public void SetDialBrightness(byte brightness)
+    {
+        if (_hDial != null && _hDial.IsValid)
+        {
+            try
+            {
+                int ret = _hDial.AdjustDialBacklight(brightness);
+                Log($"[JASNOŚĆ DIAL IPS] Ustawiono podświetlenie ekranu: {brightness}% (kod: {ret})");
+            }
+            catch (Exception ex)
+            {
+                Log($"[BŁĄD JASNOŚCI DIAL IPS] {ex.Message}");
+            }
+        }
+    }
+
+    public void SetDialColor(byte r, byte g, byte b)
+    {
+        if (_hDial != null && _hDial.IsValid)
+        {
+            try
+            {
+                int ret = _hDial.FillDialColor(r, g, b);
+                Log($"[KOLOR DIAL IPS] Ustawiono jednolity kolor RGB({r}, {g}, {b}) (kod: {ret})");
+            }
+            catch (Exception ex)
+            {
+                Log($"[BŁĄD KOLORU DIAL IPS] {ex.Message}");
+            }
+        }
+    }
+
+    private readonly System.Threading.Lock _dialLock = new();
+
+    public void SetDialImage(byte[] jpeg)
+    {
+        if (_disposed || _isStandby || _hDial == null || !_hDial.IsValid || jpeg == null || jpeg.Length == 0) return;
+
+        lock (_dialLock)
+        {
+            try
+            {
+                byte[] finalJpeg = ButtonImageRenderer.RenderDialImage(jpeg, "Cover");
+                _hDial.DisplayPictureOnDial(finalJpeg, finalJpeg.Length);
+            }
+            catch (Exception ex)
+            {
+                Log($"Błąd przesyłania obrazu 240x240 na ekran Dial IPS: {ex.Message}");
+            }
+        }
+    }
+
+    public Task<bool> SetDialImageAsync(byte[] imageBytes)
+    {
+        return Task.Run(() =>
+        {
+            try
+            {
+                SetDialImage(imageBytes);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        });
+    }
+
     public void SetKeypadBrightness(byte brightness)
     {
         if (_hKeypad != null && _hKeypad.IsValid)
@@ -667,7 +1034,12 @@ public class MasterHubManager : IMasterHubManager
                 byte[] jpeg = CustomKeyImageProvider != null
                     ? CustomKeyImageProvider(keyIndex, isPressed)
                     : (isPressed ? ButtonImageRenderer.GetButtonJpeg(keyIndex + 1, "KLIK", true) : ButtonImageRenderer.GetBlankJpeg());
-                _hKeypad.DisplayPictureOnButton((byte)keyIndex, jpeg, jpeg.Length);
+
+                int angle = (int)_effectiveRotationAngle;
+                int physicalKey = KeyOrientationHelper.LogicalToPhysicalIndex(keyIndex, angle);
+                byte[] finalJpeg = (angle != 0) ? ButtonImageRenderer.RotateJpeg(jpeg, angle) : jpeg;
+
+                _hKeypad.DisplayPictureOnButton((byte)physicalKey, finalJpeg, finalJpeg.Length);
             }
             catch (Exception ex)
             {
@@ -684,13 +1056,53 @@ public class MasterHubManager : IMasterHubManager
         {
             try
             {
-                _hKeypad.DisplayPictureOnButton((byte)keyIndex, jpeg, jpeg.Length);
+                int angle = (int)_effectiveRotationAngle;
+                int physicalKey = KeyOrientationHelper.LogicalToPhysicalIndex(keyIndex, angle);
+                byte[] finalJpeg = (angle != 0) ? ButtonImageRenderer.RotateJpeg(jpeg, angle) : jpeg;
+
+                _hKeypad.DisplayPictureOnButton((byte)physicalKey, finalJpeg, finalJpeg.Length);
             }
             catch (Exception ex)
             {
                 Log($"Błąd wysyłania grafiki na przycisk #{keyIndex + 1}: {ex.Message}");
             }
         }
+    }
+
+    public void SetPanoramicWallpaper(byte[] jpeg)
+    {
+        if (_disposed || _isStandby || _hKeypad == null || !_hKeypad.IsValid || jpeg == null || jpeg.Length == 0) return;
+
+        lock (_keypadLock)
+        {
+            try
+            {
+                int angle = (int)_effectiveRotationAngle;
+                byte[] finalJpeg = (angle == 180) ? ButtonImageRenderer.RotatePanoramicJpeg(jpeg, 180) : jpeg;
+
+                _hKeypad.DisplayPanoramicPicture(finalJpeg, finalJpeg.Length);
+            }
+            catch (Exception ex)
+            {
+                Log($"Błąd wysyłania pełnopanelowego obrazu 480x272: {ex.Message}");
+            }
+        }
+    }
+
+    public Task<bool> SetPanoramicWallpaperAsync(byte[] imageBytes)
+    {
+        return Task.Run(() =>
+        {
+            try
+            {
+                SetPanoramicWallpaper(imageBytes);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        });
     }
 
     private readonly System.Threading.Lock _syncLock = new();
@@ -726,6 +1138,15 @@ public class MasterHubManager : IMasterHubManager
                             _hRoller?.Dispose();
                             _hRoller = null;
                             break;
+                        case MasterHubModuleType.Knob3:
+                            _hKnob?.Dispose();
+                            _hKnob = null;
+                            break;
+                        case MasterHubModuleType.DialDisplay:
+                            try { _hDial?.SetDialSwMode(false); } catch { }
+                            _hDial?.Dispose();
+                            _hDial = null;
+                            break;
                         case MasterHubModuleType.BaseStation:
                             _hBase?.Dispose();
                             _hBase = null;
@@ -750,6 +1171,8 @@ public class MasterHubManager : IMasterHubManager
                         MasterHubModuleType.KeyDeck15 => _hKeypad == null || !_hKeypad.IsValid,
                         MasterHubModuleType.Fader5 => _hSlider == null || !_hSlider.IsValid,
                         MasterHubModuleType.RollerDial => _hRoller == null || !_hRoller.IsValid,
+                        MasterHubModuleType.Knob3 => _hKnob == null || !_hKnob.IsValid,
+                        MasterHubModuleType.DialDisplay => _hDial == null || !_hDial.IsValid,
                         _ => false
                     };
 
@@ -767,6 +1190,12 @@ public class MasterHubManager : IMasterHubManager
                                 break;
                             case MasterHubModuleType.RollerDial:
                                 ConnectRoller(dev);
+                                break;
+                            case MasterHubModuleType.Knob3:
+                                ConnectKnob(dev);
+                                break;
+                            case MasterHubModuleType.DialDisplay:
+                                ConnectDial(dev);
                                 break;
                         }
                     }
@@ -789,6 +1218,9 @@ public class MasterHubManager : IMasterHubManager
         byte[] ioKey = new byte[256];
         byte[] ioSlider = new byte[256];
         byte[] ioRoller = new byte[256];
+        byte[] ioBase = new byte[256];
+        byte[] ioKnob = new byte[256];
+        byte[] ioDial = new byte[256];
         byte[] sliderPollBuf = new byte[5];
         int loopCount = 0;
 
@@ -813,19 +1245,28 @@ public class MasterHubManager : IMasterHubManager
 
                             if (keyOffset >= 0)
                             {
+                                int angle = (int)_effectiveRotationAngle;
                                 for (int i = 0; i < 15; i++)
                                 {
                                     bool isDown = ioKey[keyOffset + i] == 1;
-                                    if (isDown != _keyStates[i])
+                                    if (isDown != _rawPhysicalKeyStates[i])
                                     {
-                                        _keyStates[i] = isDown;
-                                        KeyStateChanged?.Invoke(i, isDown);
-                                        Log($"Klawisz #{i + 1} -> {(isDown ? "WCIŚNIĘTY" : "ZWOLNIONY")}");
-                                        if (CustomKeyImageProvider != null)
+                                        _rawPhysicalKeyStates[i] = isDown;
+                                        int logicalKey = KeyOrientationHelper.PhysicalToLogicalIndex(i, angle);
+                                        if (logicalKey >= 0 && logicalKey < 15)
                                         {
-                                            int keyIdx = i;
-                                            bool down = isDown;
-                                            Task.Run(() => UpdateKeyDisplay(keyIdx, down));
+                                            if (isDown != _keyStates[logicalKey])
+                                            {
+                                                _keyStates[logicalKey] = isDown;
+                                                KeyStateChanged?.Invoke(logicalKey, isDown);
+                                                Log($"Klawisz #{logicalKey + 1} (fizyczny #{i + 1}) -> {(isDown ? "WCIŚNIĘTY" : "ZWOLNIONY")}");
+                                                if (CustomKeyImageProvider != null)
+                                                {
+                                                    int keyIdx = logicalKey;
+                                                    bool down = isDown;
+                                                    Task.Run(() => UpdateKeyDisplay(keyIdx, down));
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -849,33 +1290,53 @@ public class MasterHubManager : IMasterHubManager
                     }
                 }
 
-                // 2. Płynne sprawdzanie suwaków (Direct Feature Report 0x33, czas wykonania ~0.2ms)
+                // 2. Obsługa suwaków: natychmiastowe zdarzenia interrupt (120 Hz) + okresowy fallback Feature 0x33
                 if (_hSlider != null && _hSlider.IsValid && !_isStandby)
                 {
-                    int rGet = _hSlider.GetSliderValues(sliderPollBuf);
-                    if (rGet == 0)
+                    bool hadInput = false;
+                    while (true)
                     {
-                        for (int s = 0; s < 5; s++)
+                        int retSlider = _hSlider.ReadInputReport(ioSlider, 0);
+                        if (retSlider == 0)
                         {
-                            byte val = sliderPollBuf[s];
-                            if (val != _lastSliderValues[s])
-                            {
-                                _lastSliderValues[s] = val;
-                                _sliderValues[s] = val;
-                                int pct = Math.Clamp((int)val, 0, 100);
-                                SliderValueChanged?.Invoke(s, val, pct);
-                            }
+                            hadInput = true;
+                            ParseSliderReport(ioSlider);
+                        }
+                        else if (retSlider == 7) // 7 = fizycznie odłączony
+                        {
+                            Log("[Hot-Plug] Moduł 5 suwaków został fizycznie odłączony.");
+                            _hSlider?.Dispose();
+                            _hSlider = null;
+                            var d = ConnectedDevices.FirstOrDefault(x => x.ModuleType == MasterHubModuleType.Fader5);
+                            if (d != null) d.IsConnected = false;
+                            DevicesDiscovered?.Invoke(new List<DeviceInfo>(ConnectedDevices));
+                            Task.Run(SyncConnectedDevices);
+                            break;
+                        }
+                        else
+                        {
+                            break;
                         }
                     }
-                    else if (rGet == 7)
+
+                    // Fallback polling co 10 obiegów (~100ms), jeśli moduł nie przysłał raportu na przerwaniu
+                    if (!hadInput && _hSlider != null && loopCount % 10 == 0)
                     {
-                        Log("[Hot-Plug] Moduł 5 suwaków został fizycznie odłączony.");
-                        _hSlider?.Dispose();
-                        _hSlider = null;
-                        var d = ConnectedDevices.FirstOrDefault(x => x.ModuleType == MasterHubModuleType.Fader5);
-                        if (d != null) d.IsConnected = false;
-                        DevicesDiscovered?.Invoke(new List<DeviceInfo>(ConnectedDevices));
-                        Task.Run(SyncConnectedDevices);
+                        int rGet = _hSlider.GetSliderValues(sliderPollBuf);
+                        if (rGet == 0)
+                        {
+                            for (int s = 0; s < 5; s++)
+                            {
+                                byte val = FilterFaderValue(sliderPollBuf[s], _lastSliderValues[s]);
+                                if (val != _lastSliderValues[s])
+                                {
+                                    _lastSliderValues[s] = val;
+                                    _sliderValues[s] = val;
+                                    int pct = Math.Clamp((int)val, 0, 100);
+                                    SliderValueChanged?.Invoke(s, val, pct);
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -896,23 +1357,26 @@ public class MasterHubManager : IMasterHubManager
 
                             if (rOffset >= 0 && ioRoller.Length >= rOffset + 2)
                             {
+                                // rOffset to Prawa rolka (Right), a rOffset + 1 to Lewa rolka (Left)
                                 byte right = ioRoller[rOffset];
                                 byte left = ioRoller[rOffset + 1];
 
-                                if (right != 255)
-                                {
-                                    // 1 to w dół (-1), 0 (lub inna wartość) to w górę (+1)
-                                    int dir = right == 1 ? -1 : +1;
-                                    RollerRotated?.Invoke(1, dir);
-                                    Log($"Prawa rolka -> {(dir > 0 ? "W GÓRĘ (▲)" : "W DÓŁ (▼)")}");
-                                }
-
                                 if (left != 255)
                                 {
-                                    // 1 to w dół (-1), 0 (lub inna wartość) to w górę (+1)
-                                    int dir = left == 1 ? -1 : +1;
-                                    RollerRotated?.Invoke(0, dir);
-                                    Log($"Lewa rolka -> {(dir > 0 ? "W GÓRĘ (▲)" : "W DÓŁ (▼)")}");
+                                    int dir = left == 0 ? +1 : -1;
+                                    int factor = CalculateAccelFactor(ref _lastRollerTicks[0]);
+                                    int delta = dir * factor;
+                                    RollerRotated?.Invoke(0, delta);
+                                    Log($"Lewa rolka (Roller #1) -> {(dir > 0 ? "W GÓRĘ (▲)" : "W DÓŁ (▼)")} [x{factor}]");
+                                }
+
+                                if (right != 255)
+                                {
+                                    int dir = right == 0 ? +1 : -1;
+                                    int factor = CalculateAccelFactor(ref _lastRollerTicks[1]);
+                                    int delta = dir * factor;
+                                    RollerRotated?.Invoke(1, delta);
+                                    Log($"Prawa rolka (Roller #2) -> {(dir > 0 ? "W GÓRĘ (▲)" : "W DÓŁ (▼)")} [x{factor}]");
                                 }
                             }
                         }
@@ -933,6 +1397,127 @@ public class MasterHubManager : IMasterHubManager
                         }
                     }
                 }
+
+                // 4. Sprawdzanie Stacji Bazowej (akcelerometr / orientacja sprzętowa)
+                var hBase = _hBase;
+                if (hBase != null && hBase.IsValid && !_isStandby)
+                {
+                    while (true)
+                    {
+                        int retBase = hBase.ReadInputReport(ioBase, 0);
+                        if (retBase == 0)
+                        {
+                            int val = -1;
+                            for (int b = 0; b < Math.Min(ioBase.Length - 3, 8); b++)
+                            {
+                                if (ioBase[b] == 0x2B)
+                                {
+                                    // Format raportu 0x2B: [0x2B, length, event_id, event_data, ...]
+                                    // event_id 0x00 to Heartbeat (ignorujemy)
+                                    // event_id 0x01 to Zmiana orientacji: 0x01 = Pozioma (Horizontal, płasko na biurku), 0x00 = Pionowa (Vertical, postawiona pionowo)
+                                    byte eventId = ioBase[b + 2];
+                                    if (eventId == 0x01 && b + 3 < ioBase.Length)
+                                    {
+                                        byte orientByte = ioBase[b + 3];
+                                        if (orientByte == 0x00 || orientByte == 0x01)
+                                        {
+                                            val = orientByte;
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+
+                            if (val >= 0)
+                            {
+                                var detectedOrient = (val == 1) ? DeckOrientation.Horizontal : DeckOrientation.Vertical;
+                                SetHardwareOrientation(detectedOrient);
+                            }
+                        }
+                        else if (retBase == 7) // 7 = fizycznie odłączony
+                        {
+                            Log("[Hot-Plug] Stacja Bazowa została fizycznie odłączona.");
+                            _hBase?.Dispose();
+                            _hBase = null;
+                            var d = ConnectedDevices.FirstOrDefault(x => x.ModuleType == MasterHubModuleType.BaseStation);
+                            if (d != null) d.IsConnected = false;
+                            DevicesDiscovered?.Invoke(new List<DeviceInfo>(ConnectedDevices));
+                            Task.Run(SyncConnectedDevices);
+                            break;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+
+                    // Okresowa weryfikacja przez Feature Report 0x35 co ~120 cykli (~1.8 s)
+                    if (loopCount % 120 == 0)
+                    {
+                        int rQuery = hBase.GetBaseOrientation(out var polledOrient);
+                        if (rQuery == 0)
+                        {
+                            SetHardwareOrientation(polledOrient);
+                        }
+                    }
+                }
+
+                // 5. Sprawdzanie modułu 3 Pokręteł (Tag 0x2A)
+                if (_hKnob != null && _hKnob.IsValid && !_isStandby)
+                {
+                    while (true)
+                    {
+                        int retKnob = _hKnob.ReadInputReport(ioKnob, 0);
+                        if (retKnob == 0)
+                        {
+                            ParseKnobReport(ioKnob);
+                        }
+                        else if (retKnob == 7) // 7 = fizycznie odłączony
+                        {
+                            Log("[Hot-Plug] Moduł 3 pokręteł został fizycznie odłączony.");
+                            _hKnob?.Dispose();
+                            _hKnob = null;
+                            var d = ConnectedDevices.FirstOrDefault(x => x.ModuleType == MasterHubModuleType.Knob3);
+                            if (d != null) d.IsConnected = false;
+                            DevicesDiscovered?.Invoke(new List<DeviceInfo>(ConnectedDevices));
+                            Task.Run(SyncConnectedDevices);
+                            break;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                }
+
+                // 6. Sprawdzanie modułu Dial IPS (Tag 0x44)
+                if (_hDial != null && _hDial.IsValid && !_isStandby)
+                {
+                    while (true)
+                    {
+                        int retDial = _hDial.ReadInputReport(ioDial, 0);
+                        if (retDial == 0)
+                        {
+                            ParseDialReport(ioDial);
+                        }
+                        else if (retDial == 7) // 7 = fizycznie odłączony
+                        {
+                            Log("[Hot-Plug] Moduł Dial IPS został fizycznie odłączony.");
+                            try { _hDial?.SetDialSwMode(false); } catch { }
+                            _hDial?.Dispose();
+                            _hDial = null;
+                            var d = ConnectedDevices.FirstOrDefault(x => x.ModuleType == MasterHubModuleType.DialDisplay);
+                            if (d != null) d.IsConnected = false;
+                            DevicesDiscovered?.Invoke(new List<DeviceInfo>(ConnectedDevices));
+                            Task.Run(SyncConnectedDevices);
+                            break;
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -941,6 +1526,144 @@ public class MasterHubManager : IMasterHubManager
 
             loopCount++;
             Thread.Sleep(10);
+        }
+    }
+
+    public void ParseSliderReport(byte[] report)
+    {
+        if (report == null || report.Length < 11) return;
+
+        int tagIdx = -1;
+        for (int i = 0; i < Math.Min(report.Length - 10, 16); i++)
+        {
+            if (report[i] == 0x2A && i > 0 && (report[i - 1] == 0x01 || (i > 1 && report[i - 2] == 0x01)))
+            {
+                tagIdx = i;
+                break;
+            }
+        }
+        if (tagIdx < 0) return;
+        if (report.Length < tagIdx + 10) return;
+
+        byte eventId = report[tagIdx + 3]; // 0x02 (Ruch suwakiem)
+        byte count = report[tagIdx + 4];   // 0x05 (5 suwaków)
+        if (eventId == 0x02 && count == 0x05)
+        {
+            for (int s = 0; s < 5; s++)
+            {
+                byte raw = report[tagIdx + 5 + s];
+                byte val = FilterFaderValue(raw, _lastSliderValues[s]);
+                if (val != _lastSliderValues[s])
+                {
+                    _lastSliderValues[s] = val;
+                    _sliderValues[s] = val;
+                    int pct = Math.Clamp((int)val, 0, 100);
+                    SliderValueChanged?.Invoke(s, val, pct);
+                }
+            }
+        }
+    }
+
+    public void ParseKnobReport(byte[] report)
+    {
+        if (report == null || report.Length < 7) return;
+
+        int tagIdx = -1;
+        for (int i = 0; i < Math.Min(report.Length - 7, 16); i++)
+        {
+            if (report[i] == 0x2A && i > 0 && (report[i - 1] == 0x01 || (i > 1 && report[i - 2] == 0x01)))
+            {
+                tagIdx = i;
+                break;
+            }
+        }
+        if (tagIdx < 0) return;
+
+        if (report.Length < tagIdx + 8) return;
+
+        byte eventId = report[tagIdx + 3];
+        byte k0 = report[tagIdx + 5];
+        byte k1 = report[tagIdx + 6];
+        byte k2 = report[tagIdx + 7];
+
+        if (eventId == 0x00) // Rotation
+        {
+            // 0x01 = CW (+1), 0x00 = CCW (-1), 0xFF = no change
+            byte[] vals = [k0, k1, k2];
+            for (int k = 0; k < 3; k++)
+            {
+                if (vals[k] == 0x01)
+                {
+                    int factor = CalculateAccelFactor(ref _lastKnobTicks[k]);
+                    int delta = +1 * factor;
+                    KnobRotated?.Invoke(k, delta);
+                    Log($"Pokrętło #{k + 1} -> OBRÓT W PRAWO (CW ▲) [x{factor}]");
+                }
+                else if (vals[k] == 0x00)
+                {
+                    int factor = CalculateAccelFactor(ref _lastKnobTicks[k]);
+                    int delta = -1 * factor;
+                    KnobRotated?.Invoke(k, delta);
+                    Log($"Pokrętło #{k + 1} -> OBRÓT W LEWO (CCW ▼) [x{factor}]");
+                }
+            }
+        }
+        else if (eventId == 0x03) // Click
+        {
+            // 0x01 = pressed, 0x00 = released
+            byte[] states = [k0, k1, k2];
+            for (int k = 0; k < 3; k++)
+            {
+                bool isDown = states[k] == 0x01;
+                if (isDown != _knobPressedStates[k])
+                {
+                    _knobPressedStates[k] = isDown;
+                    KnobPressed?.Invoke(k, isDown);
+                    Log($"Pokrętło #{k + 1} -> {(isDown ? "WCIŚNIĘTE" : "ZWOLNIONE")}");
+                }
+            }
+        }
+    }
+
+    public void ParseDialReport(byte[] report)
+    {
+        if (report == null || report.Length < 6) return;
+
+        int tagIdx = -1;
+        for (int i = 0; i < Math.Min(report.Length - 5, 16); i++)
+        {
+            if (report[i] == 0x44 && i > 0 && (report[i - 1] == 0x01 || (i > 1 && report[i - 2] == 0x01)))
+            {
+                tagIdx = i;
+                break;
+            }
+        }
+        if (tagIdx < 0) return;
+
+        if (report.Length < tagIdx + 6) return;
+
+        byte eventId = report[tagIdx + 3];
+        byte data = report[tagIdx + 5];
+
+        if (eventId == 0x03) // Rotation
+        {
+            // dir: 0 = CW (+1), 1 = CCW (-1)
+            int dir = (data == 0) ? +1 : -1;
+            int factor = CalculateAccelFactor(ref _lastDialTicks);
+            int delta = dir * factor;
+            DialRotated?.Invoke(delta);
+            Log($"Dial IPS -> {(dir > 0 ? "OBRÓT W PRAWO (CW ▲)" : "OBRÓT W LEWO (CCW ▼)")} [x{factor}]");
+        }
+        else if (eventId == 0x04) // Click
+        {
+            // state: 1 = pressed, 0 = released
+            bool isDown = data == 1;
+            if (isDown != _dialPressed)
+            {
+                _dialPressed = isDown;
+                DialPressed?.Invoke(isDown);
+                Log($"Dial IPS -> Przycisk {(isDown ? "WCIŚNIĘTY" : "ZWOLNIONY")}");
+            }
         }
     }
 
@@ -966,8 +1689,12 @@ public class MasterHubManager : IMasterHubManager
 
     private void DisconnectAll()
     {
-        _hKeypad?.Dispose();
-        _hKeypad = null;
+        if (_hKeypad != null)
+        {
+            try { _hKeypad.SetSwMode(false); } catch { }
+            _hKeypad.Dispose();
+            _hKeypad = null;
+        }
 
         _hSlider?.Dispose();
         _hSlider = null;
@@ -977,6 +1704,16 @@ public class MasterHubManager : IMasterHubManager
 
         _hBase?.Dispose();
         _hBase = null;
+
+        _hKnob?.Dispose();
+        _hKnob = null;
+
+        if (_hDial != null)
+        {
+            try { _hDial.SetDialSwMode(false); } catch { }
+            _hDial.Dispose();
+            _hDial = null;
+        }
     }
 
     public void Dispose()
@@ -987,6 +1724,7 @@ public class MasterHubManager : IMasterHubManager
         try
         {
             SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+            SystemEvents.SessionSwitch -= OnSessionSwitch;
         }
         catch { }
 

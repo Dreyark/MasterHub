@@ -13,8 +13,8 @@
                 <TextBlock Grid.Column="1" Text="COOLER MASTER" Classes="dim" FontSize="9.5" />
             </Grid>
 
-            <!-- Siatka 4 mini-kart modułów z wektorowymi ikonami SVG i dynamicznym stanem połączenia -->
-            <UniformGrid Columns="4">
+            <!-- Siatka mini-kart modułów z wektorowymi ikonami SVG i dynamicznym stanem połączenia -->
+            <UniformGrid Columns="{Binding VisibleColumns}">
                 <!-- Klawiatura LCD -->
                 <Border Classes="statusBadgeCard" Margin="2" Padding="6,8" Opacity="{Binding KeypadOpacity}">
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
@@ -45,6 +45,30 @@
                         <TextBlock Text="{loc:Loc DeviceHeader_Rollers}" FontSize="9" FontWeight="Medium"
                                    Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" />
                         <Ellipse Width="5" Height="5" Fill="{Binding RollerStatusColor}" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Pokrętła (3 Knobs) -->
+                <Border Classes="statusBadgeCard" Margin="2" Padding="6,8" Opacity="{Binding KnobOpacity}"
+                        IsVisible="{Binding IsKnobConnected}">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
+                        <PathIcon Data="{StaticResource IconDials}" Width="16" Height="16"
+                                  Foreground="{StaticResource AccentSecondaryBrush}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc DeviceHeader_Knobs}" FontSize="9" FontWeight="Medium"
+                                   Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" />
+                        <Ellipse Width="5" Height="5" Fill="{Binding KnobStatusColor}" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Dial IPS -->
+                <Border Classes="statusBadgeCard" Margin="2" Padding="6,8" Opacity="{Binding DialOpacity}"
+                        IsVisible="{Binding IsDialConnected}">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
+                        <PathIcon Data="{StaticResource IconRotate}" Width="16" Height="16"
+                                  Foreground="{StaticResource AccentPrimaryBrush}" HorizontalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc DeviceHeader_Dial}" FontSize="9" FontWeight="Medium"
+                                   Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" />
+                        <Ellipse Width="5" Height="5" Fill="{Binding DialStatusColor}" HorizontalAlignment="Center" />
                     </StackPanel>
                 </Border>
 

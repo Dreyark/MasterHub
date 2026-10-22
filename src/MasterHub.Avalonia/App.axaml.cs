@@ -7,8 +7,10 @@ using MasterHub.Core.Actions;
 using MasterHub.Core.Audio;
 using MasterHub.Core.Devices;
 using MasterHub.Core.Integrations.Discord;
+using MasterHub.Core.Integrations.HomeAssistant;
 using MasterHub.Core.Integrations.Obs;
 using MasterHub.Core.Integrations.Streamlabs;
+using MasterHub.Core.Integrations.StreamDeck;
 using MasterHub.Core.Integrations.Teams;
 using MasterHub.Core.Integrations.Kick;
 using MasterHub.Core.Integrations.JetKvm;
@@ -50,40 +52,37 @@ public partial class App : Application
 
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = Services.GetRequiredService<MainWindow>();
+            var mainWindow = Services.GetRequiredService<MainWindow>();
+            desktop.MainWindow = mainWindow;
             desktop.ShutdownRequested += (s, e) => ShutdownHardware();
             desktop.Exit += (s, e) => ShutdownHardware();
+
+            var appSettings = Services.GetRequiredService<IProfileService>().GetAppSettings();
+            if (!string.IsNullOrWhiteSpace(appSettings.LanguageCode))
+                LocalizationService.Instance.SetLanguage(appSettings.LanguageCode);
+
+            bool isAutostart = desktop.Args?.Any(a => a.Equals("--autostart", StringComparison.OrdinalIgnoreCase) || a.Equals("--minimized", StringComparison.OrdinalIgnoreCase)) == true;
+            if (isAutostart && appSettings.StartMinimizedToTray)
+                mainWindow.Opened += (s, e) => Services.GetRequiredService<ITrayService>().MinimizeToTray();
         }
 
         AppDomain.CurrentDomain.ProcessExit += (s, e) => ShutdownHardware();
 
         base.OnFrameworkInitializationCompleted();
+        _ = Services.GetRequiredService<IStreamDeckPluginHost>().StartAsync();
+
+        var haSettings = Services.GetRequiredService<IProfileService>().GetHomeAssistantSettings();
+        if (haSettings.AutoConnect && !string.IsNullOrWhiteSpace(haSettings.AccessToken))
+        {
+            _ = Services.GetRequiredService<IHomeAssistantService>().ConnectAsync();
+        }
     }
 
     private static void ShutdownHardware()
     {
-        try
-        {
-            var canvas = Services?.GetService<CanvasViewModel>();
-            canvas?.SaveCurrentStateToActiveProfile();
-        }
-        catch { }
-
-        try
-        {
-            var deviceService = Services?.GetService<IMasterHubDeviceService>();
-            deviceService?.Dispose();
-        }
-        catch { }
-
-        try
-        {
-            if (Services is IDisposable disposable)
-            {
-                disposable.Dispose();
-            }
-        }
-        catch { }
+        try { Services?.GetService<CanvasViewModel>()?.SaveCurrentStateToActiveProfile(); } catch { }
+        try { Services?.GetService<IMasterHubDeviceService>()?.Dispose(); } catch { }
+        try { (Services as IDisposable)?.Dispose(); } catch { }
     }
 
     private static void ConfigureServices(IServiceCollection services)
@@ -92,12 +91,12 @@ public partial class App : Application
         services.AddSingleton<IMasterHubManager, MasterHubManager>();
         services.AddSingleton<IAudioService, WindowsAudioService>();
         services.AddSingleton<ISystemControlService, WindowsSystemControlService>();
+        services.AddSingleton<IStartupService, WindowsStartupService>();
         services.AddSingleton<ISecretProtectionService, SecretProtectionService>();
         services.AddSingleton<IProfileService>(sp => new ProfileService(null, sp.GetRequiredService<ISecretProtectionService>()));
         services.AddSingleton<ISmartProfileService, SmartProfileService>();
         services.AddSingleton<ISystemMonitorService, SystemMonitorService>();
         services.AddSingleton<INowPlayingService, NowPlayingService>();
-
         // Core integrations
         services.AddSingleton<IObsService, ObsService>();
         services.AddSingleton<IDiscordService>(_ => new DiscordService());
@@ -108,16 +107,20 @@ public partial class App : Application
         services.AddSingleton<ISpotifyService, SpotifyService>();
         services.AddSingleton<IVlcService, VlcService>();
         services.AddSingleton<IVoicemodService, VoicemodService>();
+        services.AddSingleton<IHomeAssistantService, HomeAssistantService>();
         services.AddSingleton<IYouTubeService>(_ => new YouTubeService());
         services.AddSingleton<IStreamlabsService>(_ => new StreamlabsService());
         services.AddSingleton<IRazerService, RazerService>();
         services.AddSingleton<IWootingService, WootingService>();
+        services.AddSingleton<IStreamDeckPluginHost, StreamDeckPluginHost>();
+        services.AddSingleton<IPluginCatalogService, PluginCatalogService>();
 
         // Core actions & rendering & localization
         services.AddSingleton<ILocalizationService>(_ => LocalizationService.Instance);
         services.AddSingleton<IKeyInteractionEngine, KeyInteractionEngine>();
         services.AddSingleton<IKeyRenderer>(sp => new KeyRenderer(sp.GetRequiredService<IMasterHubManager>()));
         services.AddSingleton<IAnimatedKeyRenderer>(sp => new AnimatedKeyRenderer(sp.GetRequiredService<IKeyRenderer>()));
+        services.AddSingleton<IAppIconExtractorService, AppIconExtractorService>();
 
         // Avalonia Presentation Services
         services.AddSingleton<IMasterHubDeviceService, MasterHubDeviceService>();

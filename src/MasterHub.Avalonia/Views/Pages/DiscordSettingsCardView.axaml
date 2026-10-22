@@ -55,7 +55,7 @@
                 <Border Classes="statusBadgeCard" Padding="14,10" IsVisible="{Binding IsDiscordAuthenticated}">
                     <StackPanel VerticalAlignment="Center" Spacing="3">
                         <TextBlock Text="{loc:Loc Discord_RpcActive}" FontWeight="Bold" FontSize="12" Foreground="#10B981" />
-                        <TextBlock Text="{Binding DiscordUsername, StringFormat='Zalogowano jako: {0}. Wyciszanie działa w 100% bezpośrednio przez API.'}"
+                        <TextBlock Text="{Binding DiscordLoggedInInfoDisplay}"
                                    Classes="dim" FontSize="10" />
                     </StackPanel>
                 </Border>

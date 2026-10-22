@@ -221,7 +221,16 @@ public enum DeckActionType
     SystemClipboardHistory = 237,     // 📋 Historia schowka Windows (Win+V)
 
     // --- ETAP 8.2: AKCJE WARUNKOWE (CONDITIONAL ACTIONS) ---
-    ConditionalAction = 238           // 🔀 Akcja warunkowa (IF / THEN / ELSE)
+    ConditionalAction = 238,          // 🔀 Akcja warunkowa (IF / THEN / ELSE)
+
+    // --- INTEGRACJA WTYCZEK ELGATO STREAM DECK (.streamDeckPlugin) ---
+    StreamDeckPluginAction = 240,     // 🧩 Oficjalna wtyczka Elgato Stream Deck
+
+    // --- INTEGRACJA SMART HOME: HOME ASSISTANT (CMD-07) ---
+    HomeAssistantToggle = 250,        // 🏠 Home Assistant: Przełącz stan encji (Toggle light/switch)
+    HomeAssistantTurnOn = 251,        // 💡 Home Assistant: Włącz encję (Turn On)
+    HomeAssistantTurnOff = 252,       // 🔌 Home Assistant: Wyłącz encję (Turn Off)
+    HomeAssistantCallService = 253    // ⚙️ Home Assistant: Wywołaj usługę (Call Service domain.service)
 }
 
 public enum RollerActionType
@@ -235,5 +244,6 @@ public enum RollerActionType
     RazerProfileCycle = 6,  // 🐍 Rolka: Przełączanie profili myszki Razer (▲ Następny / ▼ Poprzedni)
     RazerPollingRateCycle = 7, // ⚡ Rolka: Zmiana częstotliwości Hz myszki (▲ Wyższa / ▼ Niższa)
     WootingProfileCycle = 8,   // ⌨️ Rolka: Przełączanie profili klawiatury Wooting (▲ Następny / ▼ Poprzedni)
+    HomeAssistantLightBrightness = 10, // 💡 Rolka: Regulacja jasności oświetlenia Home Assistant (0..255)
     WindowsSensitivity = 99    // Zachowane dla kompatybilności wstecznej
 }

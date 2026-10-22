@@ -18,6 +18,16 @@ public static class ButtonImageRenderer
     public const int ButtonWidth = 72;
     public const int ButtonHeight = 72;
 
+    public const int PanelWidth = 480;
+    public const int PanelHeight = 272;
+    public const int KeyPitchX = 102;
+    public const int KeyPitchY = 100;
+    public const int KeyWindowWidth = 79;
+    public const int KeyWindowHeight = 75;
+
+    public const int DialWidth = 240;
+    public const int DialHeight = 240;
+
     private sealed class BoundedCache
     {
         private readonly int _maxSize;
@@ -91,6 +101,316 @@ public static class ButtonImageRenderer
     }
 
     /// <summary>
+    /// Obraca bufor JPEG 72x72 o zadany kąt (90°, 180°, 270°) wokół środka kafelka.
+    /// Jeśli kąt wynosi 0°, zwraca oryginalny bufor bez re-enkodowania.
+    /// </summary>
+    public static byte[] RotateJpeg(byte[] jpegBytes, int angleDegrees)
+    {
+        int normAngle = KeyOrientationHelper.NormalizeAngle(angleDegrees);
+        if (normAngle == 0 || jpegBytes == null || jpegBytes.Length == 0)
+        {
+            return jpegBytes ?? Array.Empty<byte>();
+        }
+
+        try
+        {
+            using var originalBmp = SKBitmap.Decode(jpegBytes);
+            if (originalBmp == null) return jpegBytes;
+
+            using var rotatedBmp = new SKBitmap(ButtonWidth, ButtonHeight);
+            using (var canvas = new SKCanvas(rotatedBmp))
+            {
+                canvas.Clear(SKColors.Black);
+                canvas.Save();
+                canvas.Translate(ButtonWidth / 2f, ButtonHeight / 2f);
+                canvas.RotateDegrees(normAngle);
+                canvas.Translate(-ButtonWidth / 2f, -ButtonHeight / 2f);
+                canvas.DrawBitmap(originalBmp, 0, 0, SKSamplingOptions.Default, null);
+                canvas.Restore();
+            }
+
+            using var image = SKImage.FromBitmap(rotatedBmp);
+            using var data = image.Encode(SKEncodedImageFormat.Jpeg, 100);
+            return data.ToArray();
+        }
+        catch
+        {
+            return jpegBytes;
+        }
+    }
+
+    /// <summary>
+    /// Obraca pełnopanelowy bufor JPEG 480x272 o 180° w przypadku odwróconego montażu decka.
+    /// </summary>
+    public static byte[] RotatePanoramicJpeg(byte[] jpegBytes, int angleDegrees)
+    {
+        int normAngle = KeyOrientationHelper.NormalizeAngle(angleDegrees);
+        if (normAngle != 180 || jpegBytes == null || jpegBytes.Length == 0)
+        {
+            return jpegBytes ?? Array.Empty<byte>();
+        }
+
+        try
+        {
+            using var originalBmp = SKBitmap.Decode(jpegBytes);
+            if (originalBmp == null) return jpegBytes;
+
+            using var rotatedBmp = new SKBitmap(PanelWidth, PanelHeight);
+            using (var canvas = new SKCanvas(rotatedBmp))
+            {
+                canvas.Clear(SKColors.Black);
+                canvas.Save();
+                canvas.Translate(PanelWidth / 2f, PanelHeight / 2f);
+                canvas.RotateDegrees(180);
+                canvas.Translate(-PanelWidth / 2f, -PanelHeight / 2f);
+                canvas.DrawBitmap(originalBmp, 0, 0, SKSamplingOptions.Default, null);
+                canvas.Restore();
+            }
+
+            using var image = SKImage.FromBitmap(rotatedBmp);
+            using var data = image.Encode(SKEncodedImageFormat.Jpeg, 95);
+            return data.ToArray();
+        }
+        catch
+        {
+            return jpegBytes;
+        }
+    }
+
+    /// <summary>
+    /// Renderuje pełnopanelowy obraz 480x272 JPEG ze wskazanego pliku graficznego z dopasowaniem (Cover/Contain/Stretch).
+    /// </summary>
+    public static byte[] RenderPanoramicImage(string imagePath, string fitMode = "Cover")
+    {
+        if (string.IsNullOrWhiteSpace(imagePath) || !File.Exists(imagePath))
+        {
+            return GetBlankPanoramicJpeg();
+        }
+
+        try
+        {
+            using var source = SKBitmap.Decode(imagePath);
+            if (source == null) return GetBlankPanoramicJpeg();
+            return RenderPanoramicBitmap(source, fitMode);
+        }
+        catch
+        {
+            return GetBlankPanoramicJpeg();
+        }
+    }
+
+    /// <summary>
+    /// Renderuje pełnopanelowy obraz 480x272 JPEG z surowych bajtów graficznych.
+    /// </summary>
+    public static byte[] RenderPanoramicImage(byte[] imageBytes, string fitMode = "Cover")
+    {
+        if (imageBytes == null || imageBytes.Length == 0)
+        {
+            return GetBlankPanoramicJpeg();
+        }
+
+        try
+        {
+            using var source = SKBitmap.Decode(imageBytes);
+            if (source == null) return GetBlankPanoramicJpeg();
+            return RenderPanoramicBitmap(source, fitMode);
+        }
+        catch
+        {
+            return GetBlankPanoramicJpeg();
+        }
+    }
+
+    private static byte[] RenderPanoramicBitmap(SKBitmap source, string fitMode)
+    {
+        using var surface = SKSurface.Create(new SKImageInfo(PanelWidth, PanelHeight, SKColorType.Rgba8888, SKAlphaType.Premul));
+        var canvas = surface.Canvas;
+        canvas.Clear(SKColors.Black);
+
+        using var paint = new SKPaint
+        {
+            IsAntialias = true
+        };
+
+        SKRect destRect;
+        switch (fitMode.ToLowerInvariant())
+        {
+            case "stretch":
+                destRect = new SKRect(0, 0, PanelWidth, PanelHeight);
+                break;
+
+            case "contain":
+                float scaleContain = Math.Min((float)PanelWidth / source.Width, (float)PanelHeight / source.Height);
+                float wContain = source.Width * scaleContain;
+                float hContain = source.Height * scaleContain;
+                float xContain = (PanelWidth - wContain) / 2f;
+                float yContain = (PanelHeight - hContain) / 2f;
+                destRect = new SKRect(xContain, yContain, xContain + wContain, yContain + hContain);
+                break;
+
+            case "cover":
+            default:
+                float scaleCover = Math.Max((float)PanelWidth / source.Width, (float)PanelHeight / source.Height);
+                float wCover = source.Width * scaleCover;
+                float hCover = source.Height * scaleCover;
+                float xCover = (PanelWidth - wCover) / 2f;
+                float yCover = (PanelHeight - hCover) / 2f;
+                destRect = new SKRect(xCover, yCover, xCover + wCover, yCover + hCover);
+                break;
+        }
+
+        canvas.DrawBitmap(source, destRect, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear), paint);
+
+        using var snapshot = surface.Snapshot();
+        using var data = snapshot.Encode(SKEncodedImageFormat.Jpeg, 92);
+        return data.ToArray();
+    }
+
+    /// <summary>
+    /// Wycina fragment 72x72 z pełnopanelowego obrazu 480x272 dla zadanego klawisza (0..14).
+    /// Układ siatki: krok 102 px w poziomie, krok 100 px w pionie.
+    /// </summary>
+    public static byte[] SlicePanoramicKeyJpeg(byte[] panoramicJpeg480x272, int keyIndex)
+    {
+        if (panoramicJpeg480x272 == null || panoramicJpeg480x272.Length == 0)
+        {
+            return GetBlankJpeg();
+        }
+
+        try
+        {
+            using var source = SKBitmap.Decode(panoramicJpeg480x272);
+            if (source == null) return GetBlankJpeg();
+
+            int col = Math.Clamp(keyIndex % 5, 0, 4);
+            int row = Math.Clamp(keyIndex / 5, 0, 2);
+
+            int x = Math.Clamp(col * KeyPitchX, 0, Math.Max(0, source.Width - ButtonWidth));
+            int y = Math.Clamp(row * KeyPitchY, 0, Math.Max(0, source.Height - ButtonHeight));
+
+            using var sliceBmp = new SKBitmap(ButtonWidth, ButtonHeight);
+            using (var sliceCanvas = new SKCanvas(sliceBmp))
+            {
+                sliceCanvas.Clear(SKColors.Black);
+                var srcRect = new SKRectI(x, y, x + ButtonWidth, y + ButtonHeight);
+                var destRect = new SKRect(0, 0, ButtonWidth, ButtonHeight);
+                sliceCanvas.DrawBitmap(source, srcRect, destRect, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear), null);
+            }
+
+            using var sliceImg = SKImage.FromBitmap(sliceBmp);
+            using var sliceData = sliceImg.Encode(SKEncodedImageFormat.Jpeg, 95);
+            return sliceData.ToArray();
+        }
+        catch
+        {
+            return GetBlankJpeg();
+        }
+    }
+
+    public static byte[] GetBlankPanoramicJpeg()
+    {
+        using var surface = SKSurface.Create(new SKImageInfo(PanelWidth, PanelHeight, SKColorType.Rgba8888, SKAlphaType.Premul));
+        var canvas = surface.Canvas;
+        canvas.Clear(SKColors.Black);
+        using var snapshot = surface.Snapshot();
+        using var data = snapshot.Encode(SKEncodedImageFormat.Jpeg, 90);
+        return data.ToArray();
+    }
+
+    /// <summary>
+    /// Renderuje obraz 240x240 JPEG ze wskazanego pliku z dopasowaniem do okrągłego ekranu IPS modułu Dial (M131E).
+    /// </summary>
+    public static byte[] RenderDialImage(string imagePath, string fitMode = "Cover")
+    {
+        if (string.IsNullOrWhiteSpace(imagePath) || !File.Exists(imagePath))
+        {
+            return GetBlankDialJpeg();
+        }
+
+        try
+        {
+            using var source = SKBitmap.Decode(imagePath);
+            if (source == null) return GetBlankDialJpeg();
+            return RenderDialBitmap(source, fitMode);
+        }
+        catch
+        {
+            return GetBlankDialJpeg();
+        }
+    }
+
+    /// <summary>
+    /// Renderuje obraz 240x240 JPEG z surowych bajtów graficznych dla okrągłego ekranu IPS modułu Dial (M131E).
+    /// </summary>
+    public static byte[] RenderDialImage(byte[] imageBytes, string fitMode = "Cover")
+    {
+        if (imageBytes == null || imageBytes.Length == 0)
+        {
+            return GetBlankDialJpeg();
+        }
+
+        try
+        {
+            using var source = SKBitmap.Decode(imageBytes);
+            if (source == null) return GetBlankDialJpeg();
+            return RenderDialBitmap(source, fitMode);
+        }
+        catch
+        {
+            return GetBlankDialJpeg();
+        }
+    }
+
+    public static byte[] GetBlankDialJpeg(SKColor? color = null)
+    {
+        using var surface = SKSurface.Create(new SKImageInfo(DialWidth, DialHeight, SKColorType.Rgba8888, SKAlphaType.Premul));
+        surface.Canvas.Clear(color ?? SKColors.Black);
+        using var img = surface.Snapshot();
+        using var data = img.Encode(SKEncodedImageFormat.Jpeg, 95);
+        return data.ToArray();
+    }
+
+    private static byte[] RenderDialBitmap(SKBitmap source, string fitMode)
+    {
+        using var surface = SKSurface.Create(new SKImageInfo(DialWidth, DialHeight, SKColorType.Rgba8888, SKAlphaType.Premul));
+        var canvas = surface.Canvas;
+        canvas.Clear(SKColors.Black);
+
+        using var paint = new SKPaint { IsAntialias = true };
+
+        SKRect destRect;
+        switch (fitMode.ToLowerInvariant())
+        {
+            case "stretch":
+                destRect = new SKRect(0, 0, DialWidth, DialHeight);
+                break;
+            case "contain":
+                float scaleContain = Math.Min((float)DialWidth / source.Width, (float)DialHeight / source.Height);
+                float wContain = source.Width * scaleContain;
+                float hContain = source.Height * scaleContain;
+                float xContain = (DialWidth - wContain) / 2f;
+                float yContain = (DialHeight - hContain) / 2f;
+                destRect = new SKRect(xContain, yContain, xContain + wContain, yContain + hContain);
+                break;
+            case "cover":
+            default:
+                float scaleCover = Math.Max((float)DialWidth / source.Width, (float)DialHeight / source.Height);
+                float wCover = source.Width * scaleCover;
+                float hCover = source.Height * scaleCover;
+                float xCover = (DialWidth - wCover) / 2f;
+                float yCover = (DialHeight - hCover) / 2f;
+                destRect = new SKRect(xCover, yCover, xCover + wCover, yCover + hCover);
+                break;
+        }
+
+        canvas.DrawBitmap(source, destRect, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear), paint);
+
+        using var image = surface.Snapshot();
+        using var data = image.Encode(SKEncodedImageFormat.Jpeg, 95);
+        return data.ToArray();
+    }
+
+    /// <summary>
     /// Retrieves a cached JPEG for a specific DeckActionType.
     /// </summary>
     public static byte[] GetActionJpeg(DeckActionType action, int buttonNumber, bool isPressed = false)
@@ -137,6 +457,203 @@ public static class ButtonImageRenderer
             CreateCustomKeyJpeg(action, buttonNumber, customTitle, customSubtitle, bgColorHex, textColorHex, imagePath, fontFamily, fontSize, isPressed, activeImagePath, isActiveState, subtitleColorHex, isBold, isItalic, isStrikeThrough, activeCustomTitle, activeCustomSubtitle, activeBgColorHex, activeTextColorHex, activeSubtitleColorHex, imageFitMode, imageScale, imageOffsetX, imageOffsetY, activeImageFitMode, activeImageScale, activeImageOffsetX, activeImageOffsetY));
     }
 
+    /// <summary>
+    /// Renderuje wyjściowy JPEG 72x72 dla wtyczki Stream Deck, składając dynamiczną grafikę z WebSocketu,
+    /// dynamiczny lub statyczny tytuł (z obsługą wielu linii), wskaźniki błędów/sukcesu oraz stan wciśnięcia.
+    /// </summary>
+    public static byte[] RenderStreamDeckKeyJpeg(
+        byte[]? pluginImageJpeg,
+        string? title,
+        string? fallbackImagePath,
+        bool isPressed = false,
+        string? fontFamily = "Segoe UI",
+        int fontSize = 0,
+        bool isBold = true,
+        bool isItalic = false,
+        string? textColorHex = null,
+        bool isAlert = false,
+        bool isOk = false)
+    {
+        // Optymalizacja: czysty obraz wtyczki bez tekstu i nakładek
+        if (!isPressed && !isAlert && !isOk && string.IsNullOrWhiteSpace(title) && pluginImageJpeg != null && pluginImageJpeg.Length > 0)
+        {
+            return pluginImageJpeg;
+        }
+
+        using var surface = SKSurface.Create(new SKImageInfo(ButtonWidth, ButtonHeight, SKColorType.Rgba8888, SKAlphaType.Premul));
+        var canvas = surface.Canvas;
+
+        canvas.Clear(SKColors.Black);
+        var buttonRect = new SKRoundRect(new SKRect(2, 2, ButtonWidth - 2, ButtonHeight - 2), 7, 7);
+        canvas.Save();
+        canvas.ClipRoundRect(buttonRect, SKClipOperation.Intersect, true);
+
+        bool drawnBase = false;
+        if (pluginImageJpeg != null && pluginImageJpeg.Length > 0)
+        {
+            try
+            {
+                using var bmp = SKBitmap.Decode(pluginImageJpeg);
+                if (bmp != null)
+                {
+                    var destRect = new SKRect(0, 0, ButtonWidth, ButtonHeight);
+                    using var p = new SKPaint { IsAntialias = true, IsDither = true };
+                    canvas.DrawBitmap(bmp, destRect, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear), p);
+                    drawnBase = true;
+                }
+            }
+            catch { }
+        }
+
+        if (!drawnBase && !string.IsNullOrWhiteSpace(fallbackImagePath) && File.Exists(fallbackImagePath))
+        {
+            try
+            {
+                SKBitmap? bmp = null;
+                if (fallbackImagePath.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+                {
+                    bmp = SvgRasterizer.RasterizeSvg(fallbackImagePath, ButtonWidth * 2, ButtonHeight * 2);
+                }
+                else
+                {
+                    bmp = SKBitmap.Decode(fallbackImagePath);
+                }
+
+                if (bmp != null)
+                {
+                    using (bmp)
+                    {
+                        var destRect = new SKRect(2, 2, ButtonWidth - 2, ButtonHeight - 2);
+                        using var p = new SKPaint { IsAntialias = true, IsDither = true };
+                        canvas.DrawBitmap(bmp, destRect, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear), p);
+                        drawnBase = true;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        if (!drawnBase)
+        {
+            using var bgPaint = new SKPaint { Color = new SKColor(0x18, 0x18, 0x1B), Style = SKPaintStyle.Fill, IsAntialias = true };
+            canvas.DrawRoundRect(buttonRect, bgPaint);
+        }
+
+        if (isPressed)
+        {
+            using var tintPaint = new SKPaint { Color = new SKColor(0x00, 0xFF, 0xCC, 0x40), Style = SKPaintStyle.Fill };
+            canvas.DrawRoundRect(buttonRect, tintPaint);
+        }
+
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            var rawLines = title.Replace("\r\n", "\n").Split('\n');
+            var lines = rawLines.Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+            if (lines.Count > 0)
+            {
+                string chosenFont = !string.IsNullOrWhiteSpace(fontFamily) ? fontFamily : "Segoe UI";
+                var weight = isBold ? SKFontStyleWeight.Bold : SKFontStyleWeight.Normal;
+                var slant = isItalic ? SKFontStyleSlant.Italic : SKFontStyleSlant.Upright;
+                var style = new SKFontStyle(weight, SKFontStyleWidth.Normal, slant);
+                SKTypeface typeface;
+                try
+                {
+                    typeface = SKTypeface.FromFamilyName(chosenFont, style) ?? SKTypeface.FromFamilyName("Segoe UI", style) ?? SKTypeface.Default;
+                }
+                catch
+                {
+                    typeface = SKTypeface.Default;
+                }
+
+                float effectiveSize = fontSize > 0 ? Math.Clamp(fontSize, 6, 20) : lines.Count switch
+                {
+                    1 => lines[0].Length <= 4 ? 16f : (lines[0].Length <= 8 ? 12f : 10f),
+                    2 => 10f,
+                    3 => 8.5f,
+                    4 => 7.5f,
+                    _ => 6.5f
+                };
+
+                while (effectiveSize > 6.0f)
+                {
+                    using var testFont = new SKFont(typeface, effectiveSize);
+                    float maxW = 0;
+                    foreach (var l in lines)
+                    {
+                        float w = testFont.MeasureText(l);
+                        if (w > maxW) maxW = w;
+                    }
+                    if (maxW <= ButtonWidth - 8) break;
+                    effectiveSize -= 0.5f;
+                }
+
+                using var font = new SKFont(typeface, effectiveSize);
+                float lineSpacing = effectiveSize * 1.25f;
+                float totalBlockHeight = lines.Count * lineSpacing;
+                float startY = (ButtonHeight - totalBlockHeight) / 2f + effectiveSize * 0.88f;
+
+                SKColor fgCol = SKColors.White;
+                if (!string.IsNullOrWhiteSpace(textColorHex) && SKColor.TryParse(textColorHex, out var parsedCol))
+                {
+                    fgCol = parsedCol;
+                }
+
+                if (lines.Count >= 3)
+                {
+                    using var textBgPaint = new SKPaint { Color = new SKColor(0, 0, 0, 160), Style = SKPaintStyle.Fill, IsAntialias = true };
+                    var bgBox = new SKRoundRect(new SKRect(3, Math.Max(2, startY - effectiveSize), ButtonWidth - 3, Math.Min(ButtonHeight - 2, startY + (lines.Count - 1) * lineSpacing + 4)), 4, 4);
+                    canvas.DrawRoundRect(bgBox, textBgPaint);
+                }
+
+                using var strokePaint = new SKPaint
+                {
+                    Color = new SKColor(0, 0, 0, 220),
+                    Style = SKPaintStyle.Stroke,
+                    StrokeWidth = 2.5f,
+                    IsAntialias = true
+                };
+                using var fillPaint = new SKPaint
+                {
+                    Color = fgCol,
+                    Style = SKPaintStyle.Fill,
+                    IsAntialias = true
+                };
+
+                for (int i = 0; i < lines.Count; i++)
+                {
+                    float lineY = startY + (i * lineSpacing);
+                    if (lineY > 0 && lineY < ButtonHeight + effectiveSize)
+                    {
+                        canvas.DrawText(lines[i], ButtonWidth / 2f, lineY, SKTextAlign.Center, font, strokePaint);
+                        canvas.DrawText(lines[i], ButtonWidth / 2f, lineY, SKTextAlign.Center, font, fillPaint);
+                    }
+                }
+            }
+        }
+
+        if (isAlert)
+        {
+            using var alertBgPaint = new SKPaint { Color = new SKColor(0, 0, 0, 190), Style = SKPaintStyle.Fill, IsAntialias = true };
+            canvas.DrawRoundRect(new SKRect(ButtonWidth - 24, 2, ButtonWidth - 2, 24), 4, 4, alertBgPaint);
+            using var alertFont = new SKFont(SKTypeface.FromFamilyName("Segoe UI Emoji") ?? SKTypeface.Default, 13f);
+            using var alertPaint = new SKPaint { Color = SKColors.Yellow, IsAntialias = true };
+            canvas.DrawText("⚠️", ButtonWidth - 13, 18, SKTextAlign.Center, alertFont, alertPaint);
+        }
+        else if (isOk)
+        {
+            using var okBgPaint = new SKPaint { Color = new SKColor(0, 0, 0, 190), Style = SKPaintStyle.Fill, IsAntialias = true };
+            canvas.DrawRoundRect(new SKRect(ButtonWidth - 24, 2, ButtonWidth - 2, 24), 4, 4, okBgPaint);
+            using var okFont = new SKFont(SKTypeface.FromFamilyName("Segoe UI Emoji") ?? SKTypeface.Default, 13f);
+            using var okPaint = new SKPaint { Color = SKColors.LimeGreen, IsAntialias = true };
+            canvas.DrawText("✅", ButtonWidth - 13, 18, SKTextAlign.Center, okFont, okPaint);
+        }
+
+        canvas.Restore();
+        using var snapshot = surface.Snapshot();
+        using var encoded = snapshot.Encode(SKEncodedImageFormat.Jpeg, 90);
+        return encoded.ToArray();
+    }
+
     public static (string icon, string subtitle) GetActionDetails(DeckActionType action, int buttonNumber) =>
         GetActionDetails(action, buttonNumber, false);
 
@@ -179,6 +696,10 @@ public static class ButtonImageRenderer
                 DeckActionType.VoicemodMuteVoice => ("🔇", "WYCISZ"),
                 DeckActionType.VoicemodHearMyVoiceToggle => ("🎧", "ODSŁUCH WŁ"),
                 DeckActionType.VoicemodBackgroundToggle => ("🎧", "TŁO WŁ"),
+                DeckActionType.HomeAssistantToggle => ("💡", "ON"),
+                DeckActionType.HomeAssistantTurnOn => ("💡", "ON"),
+                DeckActionType.HomeAssistantTurnOff => ("🔌", "OFF"),
+                DeckActionType.HomeAssistantCallService => ("⚙️", "HA SVC"),
                 _ => GetActionDetailsDefault(action, buttonNumber)
             };
         }
@@ -346,6 +867,10 @@ public static class ButtonImageRenderer
         DeckActionType.RazerApiNextProfile => ("🐍▶", "RZ PROF+"),
         DeckActionType.RazerApiPrevProfile => ("◀🐍", "RZ PROF-"),
         DeckActionType.RazerApiSelectProfile => ("🐍", "RZ PROF"),
+        DeckActionType.HomeAssistantToggle => ("⚪", "OFF"),
+        DeckActionType.HomeAssistantTurnOn => ("💡", "WŁĄCZ"),
+        DeckActionType.HomeAssistantTurnOff => ("🔌", "WYŁĄCZ"),
+        DeckActionType.HomeAssistantCallService => ("⚙️", "HA SVC"),
         _ => ("", "")
     };
 
@@ -599,7 +1124,7 @@ public static class ButtonImageRenderer
         canvas.ClipRoundRect(buttonRect, SKClipOperation.Intersect, true);
 
         // 2. Tło (kolor) – rysowane ZAWSZE jako baza (również pod przezroczystymi grafikami PNG)
-        SKColor bg = isPressed ? new SKColor(0x3B, 0x1A, 0x6E) : (isActiveState ? new SKColor(0x1F, 0x16, 0x33) : new SKColor(0x0E, 0x10, 0x18));
+        SKColor bg = isPressed ? new SKColor(0x3B, 0x1A, 0x6E) : (isActiveState ? new SKColor(0x1F, 0x16, 0x33) : new SKColor(0x00, 0x00, 0x00));
         string? effectiveBgHex = (isActiveState && !string.IsNullOrWhiteSpace(activeBgColorHex)) ? activeBgColorHex : bgColorHex;
         if (!string.IsNullOrWhiteSpace(effectiveBgHex) && SKColor.TryParse(effectiveBgHex, out var parsedBg))
         {
@@ -617,6 +1142,15 @@ public static class ButtonImageRenderer
         string? effectiveImage = (isStateActive && !string.IsNullOrWhiteSpace(activeImagePath) && File.Exists(activeImagePath))
             ? activeImagePath
             : imagePath;
+
+        if (string.IsNullOrWhiteSpace(effectiveImage) && (action == DeckActionType.OpenApplication || action == DeckActionType.OpenFile))
+        {
+            if (!string.IsNullOrWhiteSpace(customSubtitle) && File.Exists(customSubtitle) &&
+                (customSubtitle.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || customSubtitle.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase)))
+            {
+                effectiveImage = customSubtitle;
+            }
+        }
 
         string effectiveFit = (isStateActive && !string.IsNullOrWhiteSpace(activeImagePath) && File.Exists(activeImagePath))
             ? (activeImageFitMode ?? "Cover")
@@ -643,6 +1177,14 @@ public static class ButtonImageRenderer
                 if (MediaValidationService.IsAnimatedOrVideo(effectiveImage))
                 {
                     bmpToDraw = MediaFrameExtractor.GetFirstFrameBitmap(effectiveImage, effectiveFit, effectiveScale, effectiveOffX, effectiveOffY);
+                }
+                else if (effectiveImage.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+                {
+                    bmpToDraw = SvgRasterizer.RasterizeSvg(effectiveImage, ButtonWidth * 2, ButtonHeight * 2);
+                }
+                else if (effectiveImage.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) || effectiveImage.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
+                {
+                    bmpToDraw = WindowsAppIconExtractor.ExtractHighResAppIcon(effectiveImage, 128);
                 }
                 else
                 {
@@ -687,6 +1229,12 @@ public static class ButtonImageRenderer
         // Dedykowany kolor tytułu
         string? effectiveTextColorHex = (isActiveState && !string.IsNullOrWhiteSpace(activeTextColorHex)) ? activeTextColorHex : textColorHex;
         SKColor titleCol = isPressed ? new SKColor(0x00, 0xFF, 0xCC) : (isActiveState ? new SKColor(0x00, 0xFF, 0xCC) : new SKColor(0xFF, 0xFF, 0xFF));
+        if (action == DeckActionType.HomeAssistantToggle || action == DeckActionType.HomeAssistantTurnOn)
+        {
+            titleCol = isPressed
+                ? new SKColor(0xFF, 0xEA, 0x00)
+                : (isActiveState ? new SKColor(0xFF, 0xD7, 0x00) : new SKColor(0x71, 0x71, 0x7A));
+        }
         if (!string.IsNullOrWhiteSpace(effectiveTextColorHex) && SKColor.TryParse(effectiveTextColorHex, out var parsedTitle))
         {
             titleCol = isPressed ? new SKColor(0x00, 0xFF, 0xCC) : parsedTitle;

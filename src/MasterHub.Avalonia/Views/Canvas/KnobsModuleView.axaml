@@ -1,0 +1,63 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Canvas"
+             xmlns:elem="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Canvas.KnobsModuleView"
+             x:DataType="vm:CanvasViewModel">
+
+    <Border Classes="moduleContainer" HorizontalAlignment="Center">
+        <StackPanel Spacing="12">
+            <!-- Nagłówek modułu 3 Pokręteł -->
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="{loc:Loc Canvas_Knobs_Title}" Classes="h3" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Grid.Column="1" Text="{loc:Loc Canvas_Knobs_Subtitle}" Classes="dim" VerticalAlignment="Center" />
+            </Grid>
+
+            <!-- 3 Pokrętła obrotowe z pierścieniami LED RGB -->
+            <ItemsControl ItemsSource="{Binding Knobs}" HorizontalAlignment="Center">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="elem:KnobItemViewModel">
+                        <Border Width="115" Height="140" Classes="glassCard"
+                                Classes.selected="{Binding IsSelected}"
+                                Padding="10" PointerPressed="OnKnobPointerPressed">
+                            <Grid RowDefinitions="Auto,*,Auto" HorizontalAlignment="Center">
+                                <!-- Nazwa pokrętła -->
+                                <TextBlock Grid.Row="0" Text="{Binding Name}" Classes="caption"
+                                           HorizontalAlignment="Center" />
+
+                                <!-- Pokrętło fizyczne z pierścieniem LED RGB -->
+                                <Border Grid.Row="1" Width="58" Height="58" CornerRadius="29"
+                                        Background="{StaticResource CardActiveBgBrush}"
+                                        BorderBrush="{Binding ColorBrush}"
+                                        BorderThickness="3" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="2">
+                                        <PathIcon Data="{StaticResource IconDials}" Width="15" Height="15"
+                                                  Foreground="{Binding ColorBrush}" HorizontalAlignment="Center" />
+                                        <TextBlock Text="{Binding LastDirection}" FontSize="9"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   HorizontalAlignment="Center" />
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Licznik kroków i stan naciśnięcia -->
+                                <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
+                                    <TextBlock Text="{loc:Loc Canvas_Step}" Classes="dim" FontSize="10" />
+                                    <TextBlock Text="{Binding StepsDisplay}" FontSize="11" FontWeight="Bold"
+                                               Foreground="{StaticResource TextPrimaryBrush}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </Border>
+</UserControl>

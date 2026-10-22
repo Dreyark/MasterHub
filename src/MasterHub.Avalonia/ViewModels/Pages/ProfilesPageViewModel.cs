@@ -135,7 +135,7 @@ public partial class ProfilesPageViewModel : ObservableObject
                 ActivateProfile(importedItem);
             }
             StatusIsError = false;
-            StatusMessage = LocalizationService.Instance.GetString("Profiles_ImportSuccess", "Pomyślnie zaimportowano profil z pliku JSON.");
+            StatusMessage = LocalizationService.Instance.GetString("Profiles_ImportSuccess", "Pomyślnie zaimportowano profil.");
         }
         catch (Exception ex)
         {

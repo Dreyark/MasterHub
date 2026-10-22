@@ -22,11 +22,19 @@ public partial class ProfilesPageView : UserControl
 
         var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = LocalizationService.Instance.GetString("Profiles_ImportDialogTitle", "Wybierz plik profilu JSON"),
+            Title = LocalizationService.Instance.GetString("Profiles_ImportDialogTitle", "Wybierz plik profilu"),
             AllowMultiple = false,
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("MasterHub Profile (*.json)")
+                new FilePickerFileType("Wszystkie profile (*.json, *.mhz)")
+                {
+                    Patterns = new[] { "*.json", "*.mhz" }
+                },
+                new FilePickerFileType("Pakiety Cooler Master (*.mhz)")
+                {
+                    Patterns = new[] { "*.mhz" }
+                },
+                new FilePickerFileType("Profile MasterHub (*.json)")
                 {
                     Patterns = new[] { "*.json" }
                 }

@@ -1,0 +1,80 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Pages.PluginCatalogTabView"
+             x:DataType="vm:PluginCatalogViewModel">
+
+    <Grid RowDefinitions="Auto,Auto,*" Margin="0,16,0,0">
+        <!-- Pasek wyszukiwania i filtrowania -->
+        <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,12">
+            <TextBox Grid.Column="0" Text="{Binding SearchText, Mode=TwoWay}"
+                     PlaceholderText="{loc:Loc Store_CatalogSearchPlaceholder}"
+                     VerticalAlignment="Center" Margin="0,0,12,0" />
+
+            <ComboBox Grid.Column="1" ItemsSource="{Binding Categories}"
+                      SelectedItem="{Binding SelectedCategory, Mode=TwoWay}"
+                      Width="160" VerticalAlignment="Center" Margin="0,0,12,0" />
+
+            <Button Grid.Column="2" Command="{Binding LoadCatalogCommand}" CommandParameter="{x:True}"
+                    Content="🔄 Odśwież" VerticalAlignment="Center" />
+        </Grid>
+
+        <!-- Pasek stanu i postępu -->
+        <StackPanel Grid.Row="1" Spacing="4" Margin="0,0,0,12">
+            <TextBlock Text="{Binding StatusMessage}" Classes="dim" FontSize="11" />
+            <ProgressBar Height="2" IsIndeterminate="True" IsVisible="{Binding IsLoading}" />
+        </StackPanel>
+
+        <!-- Lista kart wtyczek -->
+        <ScrollViewer Grid.Row="2">
+            <ItemsControl ItemsSource="{Binding FilteredPlugins}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PluginCatalogItemViewModel">
+                        <Border Classes="glassCard" Margin="0,0,0,10" Padding="14">
+                            <Grid ColumnDefinitions="Auto,*,Auto">
+                                <!-- Ikona wtyczki -->
+                                <Border Grid.Column="0" Width="44" Height="44" CornerRadius="8" Background="#1C2030" Margin="0,0,14,0" ClipToBounds="True">
+                                    <Panel>
+                                        <Image Source="{Binding IconBitmap}" Width="36" Height="36"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                                               IsVisible="{Binding IconBitmap, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                        <TextBlock Text="🔌" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                   IsVisible="{Binding IconBitmap, Converter={x:Static ObjectConverters.IsNull}}" />
+                                    </Panel>
+                                </Border>
+
+                                <!-- Informacje o wtyczce -->
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
+                                        <Border Background="#252A40" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Category}" FontSize="9" Foreground="{StaticResource AccentPrimaryBrush}" FontWeight="SemiBold" />
+                                        </Border>
+                                        <TextBlock Text="{Binding StarsDisplay}" FontSize="10" Foreground="#F6AD55" VerticalAlignment="Center" />
+                                        <TextBlock Text="🎛️ Dials" FontSize="10" Foreground="#68D391" VerticalAlignment="Center" IsVisible="{Binding HasDial}" />
+                                    </StackPanel>
+                                    <TextBlock Text="{Binding Description}" Classes="dim" FontSize="11" TextWrapping="Wrap" MaxLines="2" />
+                                    <TextBlock Text="{Binding Author, StringFormat='Autor: {0}'}" Classes="dim" FontSize="10" />
+                                </StackPanel>
+
+                                <!-- Przycisk instalacji -->
+                                <Button Grid.Column="2" VerticalAlignment="Center" Margin="14,0,0,0"
+                                        Command="{Binding $parent[UserControl].((vm:PluginCatalogViewModel)DataContext).InstallPluginCommand}"
+                                        CommandParameter="{Binding}"
+                                        IsEnabled="{Binding !IsInstalled}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="{Binding IsInstalled, Converter={x:Static ObjectConverters.IsNotNull}}" IsVisible="False" />
+                                        <TextBlock Text="📥" IsVisible="{Binding !IsInstalled}" />
+                                        <TextBlock Text="✔️" IsVisible="{Binding IsInstalled}" />
+                                        <TextBlock Text="{Binding ButtonText}" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

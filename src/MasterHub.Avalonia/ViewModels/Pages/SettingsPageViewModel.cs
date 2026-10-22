@@ -8,6 +8,7 @@ using CommunityToolkit.Mvvm.Input;
 using MasterHub.Avalonia.Services;
 using MasterHub.Avalonia.ViewModels.Canvas;
 using MasterHub.Core.Integrations.Discord;
+using MasterHub.Core.Integrations.HomeAssistant;
 using MasterHub.Core.Integrations.Kick;
 using MasterHub.Core.Integrations.JetKvm;
 using MasterHub.Core.Integrations.Obs;
@@ -31,6 +32,7 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
     private readonly IKickService _kickService;
     private readonly IProfileService _profileService;
     private readonly ISystemControlService _systemControl;
+    private readonly IStartupService _startupService;
 
     public CanvasViewModel Canvas => _canvas;
 
@@ -38,6 +40,12 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private MasterHub.Core.Localization.LanguageOption? _selectedLanguage;
+
+    [ObservableProperty]
+    private bool _startWithWindows;
+
+    [ObservableProperty]
+    private bool _startMinimizedToTray = true;
 
     [ObservableProperty]
     private string _discordClientId = "207646673902501888";
@@ -63,6 +71,9 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
     public bool IsDiscordConnected => _discordService.IsConnected;
     public bool IsDiscordAuthenticated => _discordService.IsAuthenticated;
     public string DiscordUsername => _discordService.CurrentUsername ?? "";
+    public string DiscordLoggedInInfoDisplay => string.Format(
+        LocalizationService.Instance.GetString("Discord_LoggedInAs", "Zalogowano jako: {0}. Wyciszanie działa w 100% bezpośrednio przez API."),
+        DiscordUsername);
 
     // --- OBS STUDIO ---
     [ObservableProperty]
@@ -680,6 +691,70 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         }
     }
 
+    // --- HOME ASSISTANT SMART HOME ---
+    private readonly IHomeAssistantService _homeAssistantService;
+
+    [ObservableProperty]
+    private string _homeAssistantServerUrl = "http://homeassistant.local:8123";
+
+    [ObservableProperty]
+    private string _homeAssistantAccessToken = "";
+
+    [ObservableProperty]
+    private bool _homeAssistantAutoConnect = true;
+
+    [ObservableProperty]
+    private string _homeAssistantStatusMessage = "";
+
+    public static event Action? ScrollToHomeAssistantRequested;
+    public static void RequestScrollToHomeAssistant() => ScrollToHomeAssistantRequested?.Invoke();
+
+    public bool IsHomeAssistantConnected => _homeAssistantService.IsConnected;
+    public int HomeAssistantEntityCount => _homeAssistantService.Entities.Count;
+
+    public string HomeAssistantConnectionStatusText
+    {
+        get
+        {
+            var loc = LocalizationService.Instance;
+            if (!_homeAssistantService.IsConnected)
+                return loc.GetString("HA_Status_Disconnected", "ROZŁĄCZONO (Home Assistant offline)");
+            return string.Format(loc.GetString("HA_Status_ConnectedWithCount", "POŁĄCZONO (Encje: {0})"), _homeAssistantService.Entities.Count);
+        }
+    }
+
+    public string HomeAssistantConnectionStatusColor => _homeAssistantService.IsConnected ? "#10B981" : "#EF4444";
+
+    public string HomeAssistantStatusMessageColor
+    {
+        get
+        {
+            if (HomeAssistantStatusMessage.Contains("Błąd", StringComparison.OrdinalIgnoreCase) ||
+                HomeAssistantStatusMessage.Contains("nie udało", StringComparison.OrdinalIgnoreCase) ||
+                HomeAssistantStatusMessage.Contains("Niepoprawne", StringComparison.OrdinalIgnoreCase) ||
+                HomeAssistantStatusMessage.Contains("Nie można", StringComparison.OrdinalIgnoreCase) ||
+                HomeAssistantStatusMessage.Contains("error", StringComparison.OrdinalIgnoreCase) ||
+                HomeAssistantStatusMessage.Contains("failed", StringComparison.OrdinalIgnoreCase))
+            {
+                return "#EF4444";
+            }
+            if (HomeAssistantStatusMessage.Contains("Pomyślnie", StringComparison.OrdinalIgnoreCase) ||
+                HomeAssistantStatusMessage.Contains("Połączono", StringComparison.OrdinalIgnoreCase) ||
+                HomeAssistantStatusMessage.Contains("sukces", StringComparison.OrdinalIgnoreCase) ||
+                HomeAssistantStatusMessage.Contains("zapisane", StringComparison.OrdinalIgnoreCase))
+            {
+                return "#10B981";
+            }
+            if (HomeAssistantStatusMessage.Contains("Łączenie", StringComparison.OrdinalIgnoreCase) ||
+                HomeAssistantStatusMessage.Contains("Connecting", StringComparison.OrdinalIgnoreCase) ||
+                HomeAssistantStatusMessage.Contains("Pobieranie", StringComparison.OrdinalIgnoreCase))
+            {
+                return "#38BDF8";
+            }
+            return "#94A3B8";
+        }
+    }
+
     public SettingsPageViewModel(
         IMasterHubDeviceService deviceService,
         CanvasViewModel canvas,
@@ -691,8 +766,10 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         ISpotifyService spotifyService,
         IVlcService vlcService,
         IVoicemodService voicemodService,
+        IHomeAssistantService homeAssistantService,
         IProfileService profileService,
-        ISystemControlService systemControl)
+        ISystemControlService systemControl,
+        IStartupService startupService)
     {
         _deviceService = deviceService ?? throw new ArgumentNullException(nameof(deviceService));
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
@@ -704,10 +781,16 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         _spotifyService = spotifyService ?? throw new ArgumentNullException(nameof(spotifyService));
         _vlcService = vlcService ?? throw new ArgumentNullException(nameof(vlcService));
         _voicemodService = voicemodService ?? throw new ArgumentNullException(nameof(voicemodService));
+        _homeAssistantService = homeAssistantService ?? throw new ArgumentNullException(nameof(homeAssistantService));
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _systemControl = systemControl ?? throw new ArgumentNullException(nameof(systemControl));
+        _startupService = startupService ?? throw new ArgumentNullException(nameof(startupService));
 
-        string currentCode = LocalizationService.Instance.CurrentLanguageCode ?? "pl";
+        var appSettings = _profileService.GetAppSettings();
+        _startWithWindows = _startupService.IsRunAtStartupEnabled();
+        _startMinimizedToTray = appSettings.StartMinimizedToTray;
+
+        string currentCode = LocalizationService.Instance.CurrentLanguageCode ?? appSettings.LanguageCode ?? "pl";
         _selectedLanguage = AvailableLanguages.FirstOrDefault(l => l.Code == currentCode) ?? AvailableLanguages[0];
 
         var dc = _profileService.GetDiscordSettings();
@@ -764,6 +847,11 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         _voicemodAutoConnect = vm.AutoConnect;
         _voicemodFallbackToDesktopHotkeys = vm.FallbackToDesktopHotkeys;
 
+        var ha = _profileService.GetHomeAssistantSettings();
+        _homeAssistantServerUrl = ha.ServerUrl;
+        _homeAssistantAccessToken = ha.AccessToken;
+        _homeAssistantAutoConnect = ha.AutoConnect;
+
         _discordService.ConnectionStateChanged += OnDiscordStateChanged;
         _discordService.VoiceStateChanged += OnDiscordVoiceChanged;
         _obsService.ConnectionStateChanged += OnObsStateChanged;
@@ -780,6 +868,8 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         _voicemodService.VoicesLoaded += OnVoicemodVoicesLoaded;
         _voicemodService.SoundsLoaded += OnVoicemodSoundsLoaded;
         _voicemodService.SoundPlayed += OnVoicemodSoundPlayed;
+        _homeAssistantService.ConnectionStateChanged += OnHomeAssistantConnectionChanged;
+        _homeAssistantService.EntitiesUpdated += OnHomeAssistantEntitiesUpdated;
         LocalizationService.Instance.LanguageChanged += OnLanguageChanged;
     }
 
@@ -904,6 +994,7 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsDiscordConnected));
         OnPropertyChanged(nameof(IsDiscordAuthenticated));
         OnPropertyChanged(nameof(DiscordUsername));
+        OnPropertyChanged(nameof(DiscordLoggedInInfoDisplay));
         OnPropertyChanged(nameof(DiscordConnectionStatusText));
         OnPropertyChanged(nameof(DiscordConnectionStatusColor));
         OnPropertyChanged(nameof(ShowRpcAuthenticatedState));
@@ -942,11 +1033,37 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         SaveDiscordSettings();
     }
 
+    partial void OnStartWithWindowsChanged(bool value)
+    {
+        _startupService.SetRunAtStartup(value, StartMinimizedToTray);
+        SaveAppSettings();
+    }
+
+    partial void OnStartMinimizedToTrayChanged(bool value)
+    {
+        if (StartWithWindows)
+        {
+            _startupService.SetRunAtStartup(true, value);
+        }
+        SaveAppSettings();
+    }
+
+    private void SaveAppSettings()
+    {
+        _profileService.SaveAppSettings(new AppSettingsModel
+        {
+            StartWithWindows = StartWithWindows,
+            StartMinimizedToTray = StartMinimizedToTray,
+            LanguageCode = SelectedLanguage?.Code ?? LocalizationService.Instance.CurrentLanguageCode ?? "pl"
+        });
+    }
+
     partial void OnSelectedLanguageChanged(MasterHub.Core.Localization.LanguageOption? value)
     {
         if (value != null)
         {
             LocalizationService.Instance.SetLanguage(value.Code);
+            SaveAppSettings();
         }
     }
 
@@ -968,7 +1085,7 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
             DeafenHotkey = DiscordDeafenHotkey,
             UseRpc = DiscordUseRpc
         });
-        DiscordStatusMessage = "Ustawienia Discorda zostały zapisane.";
+        DiscordStatusMessage = LocalizationService.Instance.GetString("Discord_SavedMsg", "Ustawienia Discorda zostały zapisane.");
     }
 
     [RelayCommand]
@@ -977,11 +1094,11 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         SaveDiscordSettings();
         if (string.IsNullOrWhiteSpace(DiscordClientId) || string.IsNullOrWhiteSpace(DiscordClientSecret))
         {
-            DiscordStatusMessage = "Podaj Client ID oraz Client Secret z Discord Developer Portal.";
+            DiscordStatusMessage = LocalizationService.Instance.GetString("Discord_ProvideCredentials", "Podaj Client ID oraz Client Secret z Discord Developer Portal.");
             return;
         }
 
-        DiscordStatusMessage = "Oczekiwanie na autoryzację w aplikacji Discord...";
+        DiscordStatusMessage = LocalizationService.Instance.GetString("Discord_WaitingAuth", "Oczekiwanie na autoryzację w aplikacji Discord...");
         var (ok, token, error) = await _discordService.AuthorizeAndAuthenticateAsync(DiscordClientId, DiscordClientSecret);
         if (ok && !string.IsNullOrEmpty(token))
         {
@@ -989,12 +1106,12 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
             DiscordUseRpc = true;
             SaveDiscordSettings();
             RefreshDiscordProperties();
-            DiscordStatusMessage = "Pomyślnie zautoryzowano natywne Discord RPC! Działa bez skrótów.";
+            DiscordStatusMessage = LocalizationService.Instance.GetString("Discord_AuthSuccess", "Pomyślnie zautoryzowano natywne Discord RPC! Działa bez skrótów.");
         }
         else
         {
             RefreshDiscordProperties();
-            DiscordStatusMessage = $"Błąd autoryzacji: {error ?? "Odrzucono w aplikacji Discord"}";
+            DiscordStatusMessage = string.Format(LocalizationService.Instance.GetString("Discord_AuthError", "Błąd autoryzacji: {0}"), error ?? LocalizationService.Instance.GetString("Discord_AuthDenied", "Odrzucono w aplikacji Discord"));
         }
     }
 
@@ -1002,10 +1119,12 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
     public async Task ConnectDiscordAsync()
     {
         SaveDiscordSettings();
-        DiscordStatusMessage = "Łączenie z Discordem...";
+        DiscordStatusMessage = LocalizationService.Instance.GetString("Discord_Connecting", "Łączenie z Discordem...");
         bool ok = await _discordService.ConnectAsync(DiscordClientId, DiscordAccessToken);
         RefreshDiscordProperties();
-        DiscordStatusMessage = ok ? "Pomyślnie nawiązano połączenie z Discordem!" : "Nie udało się połączyć z potokiem Discord IPC.";
+        DiscordStatusMessage = ok
+            ? LocalizationService.Instance.GetString("Discord_ConnectSuccess", "Pomyślnie nawiązano połączenie z Discordem!")
+            : LocalizationService.Instance.GetString("Discord_ConnectFailed", "Nie udało się połączyć z potokiem Discord IPC.");
     }
 
     [RelayCommand]
@@ -1015,7 +1134,7 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         SaveDiscordSettings();
         await _discordService.DisconnectAsync();
         RefreshDiscordProperties();
-        DiscordStatusMessage = "Rozłączono sesję z Discordem.";
+        DiscordStatusMessage = LocalizationService.Instance.GetString("Discord_Disconnected", "Rozłączono sesję z Discordem.");
     }
 
     [RelayCommand]
@@ -1025,12 +1144,12 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         if (DiscordUseRpc && _discordService.IsConnected && _discordService.IsAuthenticated)
         {
             _ = _discordService.ToggleMuteAsync();
-            DiscordStatusMessage = "Przełączono wyciszenie mikrofonu przez Discord RPC!";
+            DiscordStatusMessage = LocalizationService.Instance.GetString("Discord_MuteToggledRpc", "Przełączono wyciszenie mikrofonu przez Discord RPC!");
         }
         else
         {
             _systemControl.SendHotkey(DiscordMuteHotkey);
-            DiscordStatusMessage = $"Wysłano skrót klawiszowy wyciszenia: {DiscordMuteHotkey}";
+            DiscordStatusMessage = string.Format(LocalizationService.Instance.GetString("Discord_MuteHotkeySent", "Wysłano skrót klawiszowy wyciszenia: {0}"), DiscordMuteHotkey);
         }
     }
 
@@ -1041,12 +1160,12 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         if (DiscordUseRpc && _discordService.IsConnected && _discordService.IsAuthenticated)
         {
             _ = _discordService.ToggleDeafenAsync();
-            DiscordStatusMessage = "Przełączono wyciszenie odsłuchu przez Discord RPC!";
+            DiscordStatusMessage = LocalizationService.Instance.GetString("Discord_DeafenToggledRpc", "Przełączono wyciszenie odsłuchu przez Discord RPC!");
         }
         else
         {
             _systemControl.SendHotkey(DiscordDeafenHotkey);
-            DiscordStatusMessage = $"Wysłano skrót klawiszowy odsłuchu: {DiscordDeafenHotkey}";
+            DiscordStatusMessage = string.Format(LocalizationService.Instance.GetString("Discord_DeafenHotkeySent", "Wysłano skrót klawiszowy odsłuchu: {0}"), DiscordDeafenHotkey);
         }
     }
 
@@ -1721,6 +1840,74 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
             : LocalizationService.Instance.GetString("Voicemod_CmdFailed", "Nie udało się wykonać akcji w Voicemod.");
     }
 
+    private void OnHomeAssistantConnectionChanged(object? sender, bool connected)
+    {
+        Dispatcher.UIThread.Post(RefreshHomeAssistantProperties);
+    }
+
+    private void OnHomeAssistantEntitiesUpdated(object? sender, IReadOnlyList<HomeAssistantEntityModel> entities)
+    {
+        Dispatcher.UIThread.Post(RefreshHomeAssistantProperties);
+    }
+
+    [RelayCommand]
+    public async Task ConnectHomeAssistantAsync()
+    {
+        SaveHomeAssistantSettings();
+        HomeAssistantStatusMessage = LocalizationService.Instance.GetString("HA_Connecting", "Łączenie z Home Assistant...");
+        OnPropertyChanged(nameof(HomeAssistantStatusMessageColor));
+        bool ok = await _homeAssistantService.ConnectAsync();
+        HomeAssistantStatusMessage = ok
+            ? LocalizationService.Instance.GetString("HA_ConnectSuccess", "Połączono pomyślnie z Home Assistant!")
+            : LocalizationService.Instance.GetString("HA_ConnectFailed", "Nie udało się połączyć z Home Assistant. Sprawdź URL i token.");
+        OnPropertyChanged(nameof(HomeAssistantStatusMessageColor));
+        RefreshHomeAssistantProperties();
+    }
+
+    [RelayCommand]
+    public async Task DisconnectHomeAssistantAsync()
+    {
+        await _homeAssistantService.DisconnectAsync();
+        HomeAssistantStatusMessage = LocalizationService.Instance.GetString("HA_DisconnectedMsg", "Rozłączono z Home Assistant.");
+        OnPropertyChanged(nameof(HomeAssistantStatusMessageColor));
+        RefreshHomeAssistantProperties();
+    }
+
+    [RelayCommand]
+    public async Task TestHomeAssistantConnectionAsync()
+    {
+        HomeAssistantStatusMessage = LocalizationService.Instance.GetString("HA_Testing", "Testowanie połączenia...");
+        OnPropertyChanged(nameof(HomeAssistantStatusMessageColor));
+        bool ok = await _homeAssistantService.ConnectAsync();
+        HomeAssistantStatusMessage = ok
+            ? string.Format(LocalizationService.Instance.GetString("HA_TestOk", "Połączenie OK! Załadowano {0} encji."), _homeAssistantService.Entities.Count)
+            : LocalizationService.Instance.GetString("HA_TestFail", "Błąd połączenia. Upewnij się, że Home Assistant działa.");
+        OnPropertyChanged(nameof(HomeAssistantStatusMessageColor));
+        RefreshHomeAssistantProperties();
+    }
+
+    [RelayCommand]
+    public void SaveHomeAssistantSettings()
+    {
+        var model = new HomeAssistantSettingsModel
+        {
+            ServerUrl = HomeAssistantServerUrl,
+            AccessToken = HomeAssistantAccessToken,
+            AutoConnect = HomeAssistantAutoConnect
+        };
+        _profileService.SaveHomeAssistantSettings(model);
+        HomeAssistantStatusMessage = LocalizationService.Instance.GetString("HA_SettingsSaved", "Ustawienia Home Assistant zostały zapisane.");
+        OnPropertyChanged(nameof(HomeAssistantStatusMessageColor));
+    }
+
+    public void RefreshHomeAssistantProperties()
+    {
+        OnPropertyChanged(nameof(IsHomeAssistantConnected));
+        OnPropertyChanged(nameof(HomeAssistantConnectionStatusText));
+        OnPropertyChanged(nameof(HomeAssistantConnectionStatusColor));
+        OnPropertyChanged(nameof(HomeAssistantEntityCount));
+    }
+
     private void OnLanguageChanged(string _)
     {
         Dispatcher.UIThread.Post(() =>
@@ -1733,6 +1920,7 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
             RefreshSpotifyProperties();
             RefreshVlcProperties();
             RefreshVoicemodProperties();
+            RefreshHomeAssistantProperties();
         });
     }
 
@@ -1754,6 +1942,8 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         _voicemodService.VoicesLoaded -= OnVoicemodVoicesLoaded;
         _voicemodService.SoundsLoaded -= OnVoicemodSoundsLoaded;
         _voicemodService.SoundPlayed -= OnVoicemodSoundPlayed;
+        _homeAssistantService.ConnectionStateChanged -= OnHomeAssistantConnectionChanged;
+        _homeAssistantService.EntitiesUpdated -= OnHomeAssistantEntitiesUpdated;
         LocalizationService.Instance.LanguageChanged -= OnLanguageChanged;
     }
 }

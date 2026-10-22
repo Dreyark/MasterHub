@@ -47,30 +47,74 @@ public partial class InspectorViewModel : ObservableObject
         {
             if (item.TargetManipulator == ManipulatorType.Key && Canvas.SelectedKey != null)
             {
+                var prevPluginUuid = Canvas.SelectedKey.StreamDeckPluginUuid;
+                var prevActionUuid = Canvas.SelectedKey.StreamDeckActionUuid;
+                bool wasPluginAction = Canvas.SelectedKey.AssignedAction == DeckActionType.StreamDeckPluginAction;
+
                 if (item.KeyAction == DeckActionType.None)
                 {
+                    if (wasPluginAction && !string.IsNullOrEmpty(prevPluginUuid))
+                    {
+                        _ = Canvas.SendStreamDeckWillDisappearAsync(Canvas.SelectedKey.Index, prevPluginUuid, prevActionUuid);
+                    }
                     Canvas.SelectedKey.ClearAction();
+                    Canvas.RenderKeyVisual(Canvas.SelectedKey, sendToHardware: true);
                 }
                 else
                 {
+                    if (wasPluginAction && !string.IsNullOrEmpty(prevPluginUuid) &&
+                        (item.KeyAction != DeckActionType.StreamDeckPluginAction || prevPluginUuid != item.StreamDeckPluginUuid || prevActionUuid != item.StreamDeckActionUuid))
+                    {
+                        _ = Canvas.SendStreamDeckWillDisappearAsync(Canvas.SelectedKey.Index, prevPluginUuid, prevActionUuid);
+                    }
+
                     Canvas.SelectedKey.AssignedAction = item.KeyAction;
+                    if (item.KeyAction == DeckActionType.StreamDeckPluginAction)
+                    {
+                        Canvas.SelectedKey.StreamDeckPluginUuid = item.StreamDeckPluginUuid ?? "";
+                        Canvas.SelectedKey.StreamDeckActionUuid = item.StreamDeckActionUuid ?? "";
+                        Canvas.SelectedKey.SetPluginDynamicImage(null);
+                        if (!string.IsNullOrEmpty(item.IconImagePath))
+                        {
+                            Canvas.SelectedKey.ImagePath = item.IconImagePath;
+                        }
+                    }
                     Canvas.SelectedKey.ActionParameter = KeyItemViewModel.GetDefaultActionParameter(item.KeyAction);
-                    Canvas.SelectedKey.CustomTitle = "";
+                    Canvas.SelectedKey.CustomTitle = item.KeyAction == DeckActionType.StreamDeckPluginAction ? (item.ShowTitle ? item.Title : "") : "";
                     Canvas.SelectedKey.CustomSubtitle = "";
+                    Canvas.SelectedKey.AutoExtractIconIfApplicable();
                     Canvas.UpdateKeyMonitoringValue(Canvas.SelectedKey);
                     Canvas.RenderKeyVisual(Canvas.SelectedKey, sendToHardware: true);
+
+                    if (item.KeyAction == DeckActionType.StreamDeckPluginAction)
+                    {
+                        _ = Canvas.SendStreamDeckWillAppearAsync(Canvas.SelectedKey);
+                    }
                 }
-                SelectedTabIndex = 1; // Po wybraniu konkretnej akcji przełącz na jej właściwości
+                SelectedTabIndex = 1;
             }
             else if (item.TargetManipulator == ManipulatorType.Slider && Canvas.SelectedSlider != null)
             {
                 Canvas.SelectedSlider.SetTarget(item.SliderTargetType, item.SliderProcessName, item.Title);
                 SelectedTabIndex = 1;
             }
-            else if (item.TargetManipulator == ManipulatorType.Roller && Canvas.SelectedRoller != null)
+            else if (item.TargetManipulator == ManipulatorType.Roller || item.TargetManipulator == ManipulatorType.Knob || item.TargetManipulator == ManipulatorType.Dial)
             {
-                Canvas.SelectedRoller.AssignedAction = item.RollerAction;
-                SelectedTabIndex = 1;
+                if (Canvas.SelectedRoller != null)
+                {
+                    Canvas.SelectedRoller.AssignedAction = item.RollerAction;
+                    SelectedTabIndex = 1;
+                }
+                else if (Canvas.SelectedKnob != null)
+                {
+                    Canvas.SelectedKnob.RotateAction = item.RollerAction;
+                    SelectedTabIndex = 1;
+                }
+                else if (Canvas.SelectedDial != null)
+                {
+                    Canvas.SelectedDial.RotateAction = item.RollerAction;
+                    SelectedTabIndex = 1;
+                }
             }
         };
     }
@@ -100,6 +144,18 @@ public partial class InspectorViewModel : ObservableObject
         {
             IsActionLibraryVisible = true;
             ActionLibrary.SetManipulator(ManipulatorType.Roller);
+            SelectedTabIndex = 0;
+        }
+        else if (Canvas.SelectedKnob != null)
+        {
+            IsActionLibraryVisible = true;
+            ActionLibrary.SetManipulator(ManipulatorType.Knob);
+            SelectedTabIndex = 0;
+        }
+        else if (Canvas.SelectedDial != null)
+        {
+            IsActionLibraryVisible = true;
+            ActionLibrary.SetManipulator(ManipulatorType.Dial);
             SelectedTabIndex = 0;
         }
         else

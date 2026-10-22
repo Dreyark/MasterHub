@@ -1,0 +1,49 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:ha="using:MasterHub.Core.Integrations.HomeAssistant"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyHomeAssistantSettingsSectionView"
+             x:DataType="vm:KeyItemViewModel">
+
+    <StackPanel Spacing="8">
+        <!-- Pasek statusu i szybkiego połączenia z Home Assistant -->
+        <Border Classes="statusBadgeCard" Padding="10,8">
+            <Grid ColumnDefinitions="*,Auto">
+                <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                    <TextBlock Text="{Binding HomeAssistantConnectionStatusDisplay}" FontSize="12" FontWeight="SemiBold" />
+                    <TextBlock Text="{loc:Loc HA_WebSocketHint, FallbackValue='REST + WebSocket Event Stream'}" Classes="dim" FontSize="10" />
+                </StackPanel>
+                <Button Grid.Column="1" Classes="pillBtn" Padding="8,4"
+                        Command="{Binding OpenHomeAssistantSettingsCommand}"
+                        Content="{loc:Loc Key_HA_OpenSettingsBtn, FallbackValue='⚙️ Ustawienia połączenia'}" />
+            </Grid>
+        </Border>
+
+        <!-- Wybór encji z listy (ComboBox) -->
+        <StackPanel Spacing="4">
+            <TextBlock Text="{loc:Loc Key_HA_SelectEntity, FallbackValue='Wybierz urządzenie / encję z listy:'}" Classes="caption" />
+            <ComboBox ItemsSource="{Binding AvailableHomeAssistantEntities}"
+                      SelectedItem="{Binding SelectedHomeAssistantEntity, Mode=TwoWay}"
+                      HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="ha:HomeAssistantEntityModel">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <TextBlock Grid.Column="0" Text="{Binding State, Mode=OneWay}"
+                                       FontWeight="Bold" FontSize="10" Foreground="#38BDF8" Margin="0,0,8,0" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding FriendlyName}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="{Binding EntityId}" Classes="dim" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </Grid>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+        </StackPanel>
+
+        <!-- Ręczny identyfikator encji lub usługi -->
+        <StackPanel Spacing="4">
+            <TextBlock Text="{Binding ActionParameterLabel}" Classes="caption" />
+            <TextBox Text="{Binding ActionParameter, Mode=TwoWay}"
+                     PlaceholderText="{Binding ActionParameterWatermark}" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>

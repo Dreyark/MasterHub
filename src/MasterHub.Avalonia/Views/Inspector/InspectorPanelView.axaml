@@ -50,7 +50,17 @@
                             <ins:RollerInspectorView DataContext="{Binding Canvas.SelectedRoller}" />
                         </Border>
 
-                        <!-- Tryb 4: Baza dokująca -->
+                        <!-- Tryb 4: 3 Pokrętła (Knobs) -->
+                        <Border IsVisible="{Binding Canvas.IsKnobSelected}">
+                            <ins:KnobInspectorView DataContext="{Binding Canvas.SelectedKnob}" />
+                        </Border>
+
+                        <!-- Tryb 5: Dial IPS -->
+                        <Border IsVisible="{Binding Canvas.IsDialSelected}">
+                            <ins:DialInspectorView DataContext="{Binding Canvas.SelectedDial}" />
+                        </Border>
+
+                        <!-- Tryb 6: Baza dokująca -->
                         <Border IsVisible="{Binding Canvas.IsBaseSelected}">
                             <ins:BaseStationInspectorView DataContext="{Binding Canvas.BaseStation}" />
                         </Border>

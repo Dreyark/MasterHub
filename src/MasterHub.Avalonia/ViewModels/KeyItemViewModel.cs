@@ -9,6 +9,8 @@ using CommunityToolkit.Mvvm.Input;
 using Microsoft.Extensions.DependencyInjection;
 using System.Linq;
 using MasterHub.Core.Actions;
+using MasterHub.Core.Integrations.HomeAssistant;
+using MasterHub.Core.Integrations.StreamDeck;
 using MasterHub.Core.Integrations.Voicemod;
 using MasterHub.Core.Localization;
 using MasterHub.Core.Models;
@@ -29,7 +31,7 @@ public partial class KeyItemViewModel : ObservableObject
     private string _title = "";
     private string _customTitle = "";
     private string _customSubtitle = "";
-    private string _backgroundColorHex = "#0E1018";
+    private string _backgroundColorHex = "#000000";
     private string _textColorHex = "#FFFFFF";
     private string _subtitleColorHex = "#A1A1AA";
     private string _imagePath = "";
@@ -60,6 +62,68 @@ public partial class KeyItemViewModel : ObservableObject
     private Bitmap? _cachedBitmap;
     private Bitmap? _cachedActiveBitmap;
     private bool _isActiveToggleState;
+    private string _streamDeckPluginUuid = "";
+    private string _streamDeckActionUuid = "";
+    private string _streamDeckSettingsJson = "";
+
+    [ObservableProperty]
+    private bool _isPanoramicWallpaperActive;
+
+    [ObservableProperty]
+    private string? _panoramicWallpaperPath;
+
+    [ObservableProperty]
+    private string _panoramicWallpaperFitMode = "Cover";
+
+    public string PanoramicFileName => string.IsNullOrEmpty(PanoramicWallpaperPath)
+        ? LocalizationService.Instance.GetString("Panoramic_NoFile", "Brak tapety")
+        : Path.GetFileName(PanoramicWallpaperPath);
+
+    public Action<string, string>? ApplyPanoramicWallpaperRequested { get; set; }
+    public Action? ClearPanoramicWallpaperRequested { get; set; }
+
+    public void RequestApplyPanoramicWallpaper(string path, string fitMode = "Cover")
+    {
+        ApplyPanoramicWallpaperRequested?.Invoke(path, fitMode);
+    }
+
+    public void RequestClearPanoramicWallpaper()
+    {
+        ClearPanoramicWallpaperRequested?.Invoke();
+    }
+
+    public bool IsPanoramicFitCover => string.Equals(PanoramicWallpaperFitMode, "Cover", StringComparison.OrdinalIgnoreCase);
+    public bool IsPanoramicFitContain => string.Equals(PanoramicWallpaperFitMode, "Contain", StringComparison.OrdinalIgnoreCase);
+    public bool IsPanoramicFitStretch => string.Equals(PanoramicWallpaperFitMode, "Stretch", StringComparison.OrdinalIgnoreCase);
+
+    [RelayCommand]
+    public void SetPanoramicFitMode(string fitMode)
+    {
+        PanoramicWallpaperFitMode = fitMode;
+        OnPropertyChanged(nameof(IsPanoramicFitCover));
+        OnPropertyChanged(nameof(IsPanoramicFitContain));
+        OnPropertyChanged(nameof(IsPanoramicFitStretch));
+        if (IsPanoramicWallpaperActive && !string.IsNullOrWhiteSpace(PanoramicWallpaperPath))
+        {
+            RequestApplyPanoramicWallpaper(PanoramicWallpaperPath, fitMode);
+        }
+    }
+
+    partial void OnPanoramicWallpaperPathChanged(string? value)
+    {
+        OnPropertyChanged(nameof(PanoramicFileName));
+    }
+
+    partial void OnPanoramicWallpaperFitModeChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsPanoramicFitCover));
+        OnPropertyChanged(nameof(IsPanoramicFitContain));
+        OnPropertyChanged(nameof(IsPanoramicFitStretch));
+        if (IsPanoramicWallpaperActive && !string.IsNullOrWhiteSpace(PanoramicWallpaperPath))
+        {
+            RequestApplyPanoramicWallpaper(PanoramicWallpaperPath, value);
+        }
+    }
 
     public int Index { get; set; }
     public int Number => Index + 1;
@@ -75,6 +139,48 @@ public partial class KeyItemViewModel : ObservableObject
             vmService.ConnectionStateChanged += OnVoicemodConnectionChanged;
             vmService.VoicesLoaded += OnVoicemodVoicesLoaded;
             vmService.SoundsLoaded += OnVoicemodSoundsLoaded;
+        }
+
+        var haService = App.Services?.GetService<IHomeAssistantService>();
+        if (haService != null)
+        {
+            haService.ConnectionStateChanged += OnHomeAssistantConnectionChanged;
+            haService.EntitiesUpdated += OnHomeAssistantEntitiesUpdated;
+            haService.EntityStateChanged += OnHomeAssistantEntityStateChanged;
+        }
+    }
+
+    private void OnHomeAssistantConnectionChanged(object? sender, bool connected)
+    {
+        global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            OnPropertyChanged(nameof(IsHomeAssistantConnected));
+            OnPropertyChanged(nameof(HomeAssistantConnectionStatusDisplay));
+        });
+    }
+
+    private void OnHomeAssistantEntitiesUpdated(object? sender, IReadOnlyList<HomeAssistantEntityModel> entities)
+    {
+        global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            OnPropertyChanged(nameof(AvailableHomeAssistantEntities));
+            OnPropertyChanged(nameof(SelectedHomeAssistantEntity));
+            OnPropertyChanged(nameof(DisplayTitle));
+            OnPropertyChanged(nameof(DisplaySubtitle));
+        });
+    }
+
+    private void OnHomeAssistantEntityStateChanged(object? sender, HomeAssistantEntityModel entity)
+    {
+        if (IsHomeAssistantAction && !string.IsNullOrWhiteSpace(ActionParameter) &&
+            string.Equals(entity.EntityId, ActionParameter, StringComparison.OrdinalIgnoreCase))
+        {
+            global::Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                OnPropertyChanged(nameof(DisplayTitle));
+                OnPropertyChanged(nameof(DisplaySubtitle));
+                ActionChangedCallback?.Invoke(this);
+            });
         }
     }
 
@@ -124,6 +230,7 @@ public partial class KeyItemViewModel : ObservableObject
         OnPropertyChanged(nameof(ActionParameterLabel));
         OnPropertyChanged(nameof(ActionParameterWatermark));
         OnPropertyChanged(nameof(SubtitleWatermark));
+        OnPropertyChanged(nameof(PanoramicFileName));
         ActionChangedCallback?.Invoke(this);
     }
 
@@ -199,6 +306,34 @@ public partial class KeyItemViewModel : ObservableObject
         _ => StateMode.ToString()
     };
 
+    public bool IsAutoExtractedImage => !string.IsNullOrWhiteSpace(_imagePath) &&
+        _imagePath.Contains("ExtractedIcons", StringComparison.OrdinalIgnoreCase);
+
+    public void AutoExtractIconIfApplicable()
+    {
+        if (string.IsNullOrWhiteSpace(_actionParameter)) return;
+
+        if (!string.IsNullOrWhiteSpace(_imagePath) && File.Exists(_imagePath) && !IsAutoExtractedImage)
+            return;
+
+        if (AssignedAction is DeckActionType.OpenApplication or
+            DeckActionType.OpenFile or
+            DeckActionType.OpenWebsite or
+            DeckActionType.None)
+        {
+            try
+            {
+                var extractor = App.Services?.GetService<IAppIconExtractorService>();
+                string? iconPath = extractor?.ExtractAndSaveIcon(_actionParameter, 72);
+                if (!string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath))
+                {
+                    ImagePath = iconPath;
+                }
+            }
+            catch { }
+        }
+    }
+
     public string ActionParameter
     {
         get => _actionParameter;
@@ -210,6 +345,7 @@ public partial class KeyItemViewModel : ObservableObject
                 {
                     _obsSceneName = value;
                 }
+                AutoExtractIconIfApplicable();
                 OnPropertyChanged(nameof(ActionDisplayName));
                 OnPropertyChanged(nameof(DisplayTitle));
                 ActionChangedCallback?.Invoke(this);
@@ -230,6 +366,44 @@ public partial class KeyItemViewModel : ObservableObject
                 }
                 OnPropertyChanged(nameof(ActionDisplayName));
                 OnPropertyChanged(nameof(DisplayTitle));
+                ActionChangedCallback?.Invoke(this);
+            }
+        }
+    }
+
+    public string StreamDeckPluginUuid
+    {
+        get => _streamDeckPluginUuid;
+        set
+        {
+            if (SetField(ref _streamDeckPluginUuid, value))
+            {
+                OnPropertyChanged(nameof(ActionDisplayName));
+                ActionChangedCallback?.Invoke(this);
+            }
+        }
+    }
+
+    public string StreamDeckActionUuid
+    {
+        get => _streamDeckActionUuid;
+        set
+        {
+            if (SetField(ref _streamDeckActionUuid, value))
+            {
+                OnPropertyChanged(nameof(ActionDisplayName));
+                ActionChangedCallback?.Invoke(this);
+            }
+        }
+    }
+
+    public string StreamDeckSettingsJson
+    {
+        get => _streamDeckSettingsJson;
+        set
+        {
+            if (SetField(ref _streamDeckSettingsJson, value))
+            {
                 ActionChangedCallback?.Invoke(this);
             }
         }
@@ -496,13 +670,13 @@ public partial class KeyItemViewModel : ObservableObject
                 }
             }
             catch { }
-            return new SolidColorBrush(Color.FromRgb(14, 16, 24));
+            return new SolidColorBrush(Color.FromRgb(0, 0, 0));
         }
     }
 
     public Color BackgroundColor
     {
-        get => Color.TryParse(_backgroundColorHex, out var c) ? c : Color.FromRgb(14, 16, 24);
+        get => Color.TryParse(_backgroundColorHex, out var c) ? c : Color.FromRgb(0, 0, 0);
         set => BackgroundColorHex = $"#{value.R:X2}{value.G:X2}{value.B:X2}";
     }
 
@@ -588,7 +762,7 @@ public partial class KeyItemViewModel : ObservableObject
         set => SubtitleColorHex = $"#{value.R:X2}{value.G:X2}{value.B:X2}";
     }
 
-    private static Bitmap? LoadMediaBitmap(string path)
+    public static Bitmap? LoadMediaBitmap(string path)
     {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             return null;
@@ -601,6 +775,15 @@ public partial class KeyItemViewModel : ObservableObject
                 if (firstFrameJpeg != null && firstFrameJpeg.Length > 0)
                 {
                     using var ms = new MemoryStream(firstFrameJpeg);
+                    return new Bitmap(ms);
+                }
+            }
+            else if (path.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+            {
+                byte[]? pngBytes = SvgRasterizer.RasterizeSvgToPngBytes(path, 144, 144);
+                if (pngBytes != null && pngBytes.Length > 0)
+                {
+                    using var ms = new MemoryStream(pngBytes);
                     return new Bitmap(ms);
                 }
             }
@@ -1235,9 +1418,22 @@ public partial class KeyItemViewModel : ObservableObject
     }
 
     private Bitmap? _renderedBitmap;
+    private byte[]? _renderedJpegBytes;
+    private byte[]? _pluginDynamicImageBytes;
+
+    public byte[]? RenderedJpegBytes => _renderedJpegBytes;
+    public byte[]? PluginDynamicImageBytes => _pluginDynamicImageBytes;
+    public bool IsStreamDeckAlert { get; set; }
+    public bool IsStreamDeckOk { get; set; }
+
+    public void SetPluginDynamicImage(byte[]? bytes)
+    {
+        _pluginDynamicImageBytes = bytes;
+    }
 
     public void SetRenderedJpeg(byte[]? jpeg)
     {
+        _renderedJpegBytes = jpeg;
         _renderedBitmap?.Dispose();
         _renderedBitmap = null;
         if (jpeg != null && jpeg.Length > 0)
@@ -1375,6 +1571,9 @@ public partial class KeyItemViewModel : ObservableObject
             {
                 if (value == DeckActionType.None)
                 {
+                    _streamDeckPluginUuid = "";
+                    _streamDeckActionUuid = "";
+                    _streamDeckSettingsJson = "";
                     ResetStyling();
                 }
                 _liveValueText = null;
@@ -1423,6 +1622,11 @@ public partial class KeyItemViewModel : ObservableObject
                 OnPropertyChanged(nameof(SelectedPage));
                 OnPropertyChanged(nameof(AvailableFolders));
                 OnPropertyChanged(nameof(SelectedFolder));
+                OnPropertyChanged(nameof(IsHomeAssistantAction));
+                OnPropertyChanged(nameof(IsHomeAssistantConnected));
+                OnPropertyChanged(nameof(HomeAssistantConnectionStatusDisplay));
+                OnPropertyChanged(nameof(AvailableHomeAssistantEntities));
+                OnPropertyChanged(nameof(SelectedHomeAssistantEntity));
                 ActionChangedCallback?.Invoke(this);
             }
         }
@@ -1451,6 +1655,10 @@ public partial class KeyItemViewModel : ObservableObject
         DeckActionType.PreviousPage => "",
         DeckActionType.VoicemodVoiceSelect => "nofx",
         DeckActionType.VoicemodPlaySound => "vineboom",
+        DeckActionType.HomeAssistantToggle => "light.living_room",
+        DeckActionType.HomeAssistantTurnOn => "light.living_room",
+        DeckActionType.HomeAssistantTurnOff => "light.living_room",
+        DeckActionType.HomeAssistantCallService => "light.toggle",
         _ => ""
     };
 
@@ -1696,12 +1904,69 @@ public partial class KeyItemViewModel : ObservableObject
         OnPropertyChanged(nameof(VoicemodBackgroundEffectsStatusDisplay));
     }
 
+    public bool IsHomeAssistantAction => AssignedAction is
+        DeckActionType.HomeAssistantToggle or
+        DeckActionType.HomeAssistantTurnOn or
+        DeckActionType.HomeAssistantTurnOff or
+        DeckActionType.HomeAssistantCallService;
+
+    public bool IsHomeAssistantConnected => App.Services?.GetService<IHomeAssistantService>()?.IsConnected ?? false;
+
+    public string HomeAssistantConnectionStatusDisplay => IsHomeAssistantConnected
+        ? LocalizationService.Instance.GetString("HA_ConnectedStatus", "🟢 Połączono z Home Assistant")
+        : LocalizationService.Instance.GetString("HA_DisconnectedStatus", "🔴 Rozłączono z Home Assistant");
+
+    public IReadOnlyList<HomeAssistantEntityModel> AvailableHomeAssistantEntities
+    {
+        get
+        {
+            var svc = App.Services?.GetService<IHomeAssistantService>();
+            var list = svc?.Entities;
+            if (list != null && list.Count > 0) return list;
+            return Array.Empty<HomeAssistantEntityModel>();
+        }
+    }
+
+    public HomeAssistantEntityModel? SelectedHomeAssistantEntity
+    {
+        get
+        {
+            string target = ActionParameter;
+            if (string.IsNullOrWhiteSpace(target)) return AvailableHomeAssistantEntities.FirstOrDefault();
+            return AvailableHomeAssistantEntities.FirstOrDefault(e =>
+                string.Equals(e.EntityId, target, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(e.FriendlyName, target, StringComparison.OrdinalIgnoreCase))
+                ?? AvailableHomeAssistantEntities.FirstOrDefault();
+        }
+        set
+        {
+            if (value != null)
+            {
+                _actionParameter = value.EntityId;
+                OnPropertyChanged(nameof(ActionParameter));
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(ActionDisplayName));
+                OnPropertyChanged(nameof(DisplayTitle));
+                OnPropertyChanged(nameof(DisplaySubtitle));
+                ActionChangedCallback?.Invoke(this);
+            }
+        }
+    }
+
+    [RelayCommand]
+    public void OpenHomeAssistantSettings()
+    {
+        var nav = App.Services?.GetService<MasterHub.Avalonia.Services.INavigationService>();
+        nav?.NavigateTo(MasterHub.Avalonia.Services.NavigationPage.Settings);
+        MasterHub.Avalonia.ViewModels.Pages.SettingsPageViewModel.RequestScrollToHomeAssistant();
+    }
+
     public bool IsGenericParameterAction =>
         RequiresActionParameter && !IsGpuAction && !IsRazerDpiAction && !IsRazerPollingAction && !IsRazerProfileAction &&
         !IsFileBrowseSupported && !IsNetworkMonitorAction && !IsDiskAction &&
         !IsGoToProfileAction && !IsGoToPageAction && !IsOpenFolderAction &&
         !IsGoBackAction && !IsGoHomeAction && !IsNextPageAction && !IsPreviousPageAction &&
-        !IsVoicemodVoiceAction && !IsVoicemodSoundAction;
+        !IsVoicemodVoiceAction && !IsVoicemodSoundAction && !IsHomeAssistantAction;
 
     public Action<KeyItemViewModel, DeckActionType, string?>? NavigationRequestedCallback { get; set; }
     public Action<string>? FolderDeletedCallback { get; set; }
@@ -2003,6 +2268,12 @@ public partial class KeyItemViewModel : ObservableObject
         _assignedAction = DeckActionType.None;
         ActionParameter = "";
         _liveValueText = null;
+        _streamDeckPluginUuid = "";
+        _streamDeckActionUuid = "";
+        _streamDeckSettingsJson = "";
+        _pluginDynamicImageBytes = null;
+        IsStreamDeckAlert = false;
+        IsStreamDeckOk = false;
         ResetStyling();
         OnPropertyChanged(nameof(AssignedAction));
         OnPropertyChanged(nameof(ActionDisplayName));
@@ -2019,6 +2290,9 @@ public partial class KeyItemViewModel : ObservableObject
         OnPropertyChanged(nameof(IsNavigationAction));
         OnPropertyChanged(nameof(IsGenericParameterAction));
         OnPropertyChanged(nameof(IsFileBrowseSupported));
+        OnPropertyChanged(nameof(StreamDeckPluginUuid));
+        OnPropertyChanged(nameof(StreamDeckActionUuid));
+        OnPropertyChanged(nameof(StreamDeckSettingsJson));
         ActionChangedCallback?.Invoke(this);
     }
 
@@ -2180,9 +2454,22 @@ public partial class KeyItemViewModel : ObservableObject
                 DeckActionType.WootingProfile1 => "WOOT #1",
                 DeckActionType.WootingProfile2 => "WOOT #2",
                 DeckActionType.WootingProfile3 => "WOOT #3",
+                DeckActionType.HomeAssistantToggle => !string.IsNullOrWhiteSpace(ActionParameter) ? GetHomeAssistantDisplayTitle(ActionParameter) : "HA TOGGLE",
+                DeckActionType.HomeAssistantTurnOn => !string.IsNullOrWhiteSpace(ActionParameter) ? GetHomeAssistantDisplayTitle(ActionParameter) : "HA ON",
+                DeckActionType.HomeAssistantTurnOff => !string.IsNullOrWhiteSpace(ActionParameter) ? GetHomeAssistantDisplayTitle(ActionParameter) : "HA OFF",
+                DeckActionType.HomeAssistantCallService => !string.IsNullOrWhiteSpace(ActionParameter) ? GetHomeAssistantDisplayTitle(ActionParameter) : "HA SERVICE",
                 _ => AssignedAction.ToString()
             };
         }
+    }
+
+    private static string GetHomeAssistantDisplayTitle(string entityId)
+    {
+        if (string.IsNullOrWhiteSpace(entityId)) return "HOME ASSISTANT";
+        var parts = entityId.Split('.');
+        string name = parts.Length > 1 ? parts[1] : entityId;
+        name = name.Replace('_', ' ');
+        return name.Length > 10 ? name.Substring(0, 10).ToUpperInvariant() : name.ToUpperInvariant();
     }
 
     private static string GetVoicemodDisplayTitle(string? param, string fallback)
@@ -2325,6 +2612,12 @@ public partial class KeyItemViewModel : ObservableObject
                 DeckActionType.WootingProfile1 => loc.GetString("Sub_AnalogProfile1", "Profil Analogowy 1"),
                 DeckActionType.WootingProfile2 => loc.GetString("Sub_AnalogProfile2", "Profil Analogowy 2"),
                 DeckActionType.WootingProfile3 => loc.GetString("Sub_AnalogProfile3", "Profil Analogowy 3"),
+                DeckActionType.HomeAssistantToggle => !string.IsNullOrWhiteSpace(ActionParameter)
+                    ? (IsActiveToggleState ? loc.GetString("Sub_HaOn", "● WŁĄCZONE") : loc.GetString("Sub_HaOff", "WYŁĄCZONE"))
+                    : loc.GetString("Action_HomeAssistantToggle", "Przełącz stan"),
+                DeckActionType.HomeAssistantTurnOn => loc.GetString("Action_HomeAssistantTurnOn", "Włącz urządzenie"),
+                DeckActionType.HomeAssistantTurnOff => loc.GetString("Action_HomeAssistantTurnOff", "Wyłącz urządzenie"),
+                DeckActionType.HomeAssistantCallService => !string.IsNullOrWhiteSpace(ActionParameter) ? ActionParameter : loc.GetString("Action_HomeAssistantCallService", "Wywołaj usługę"),
                 _ => ""
             };
         }
@@ -2445,6 +2738,11 @@ public partial class KeyItemViewModel : ObservableObject
         DeckActionType.RazerProfileNext or DeckActionType.RazerProfilePrev or DeckActionType.RazerProfile1 or DeckActionType.RazerProfile2 or DeckActionType.RazerProfile3 or DeckActionType.RazerProfile4 or DeckActionType.RazerProfile5 => "🐍",
         DeckActionType.RazerPollingRateCycle or DeckActionType.RazerPollingRateUp or DeckActionType.RazerPollingRateDown or DeckActionType.RazerPollingRate125 or DeckActionType.RazerPollingRate500 or DeckActionType.RazerPollingRate1000 or DeckActionType.RazerPollingRate2000 or DeckActionType.RazerPollingRate4000 or DeckActionType.RazerPollingRate8000 => "⚡",
         DeckActionType.WootingProfileCycle or DeckActionType.WootingProfileNext or DeckActionType.WootingProfilePrev or DeckActionType.WootingProfileDigital or DeckActionType.WootingProfile1 or DeckActionType.WootingProfile2 or DeckActionType.WootingProfile3 => "⌨️",
+        DeckActionType.HomeAssistantToggle => IsActiveToggleState ? "💡" : "⚪",
+        DeckActionType.HomeAssistantTurnOn => "💡",
+        DeckActionType.HomeAssistantTurnOff => "🔌",
+        DeckActionType.HomeAssistantCallService => "⚙️",
+        DeckActionType.StreamDeckPluginAction => "🔌",
         _ => "⚡"
     };
 
@@ -2452,6 +2750,16 @@ public partial class KeyItemViewModel : ObservableObject
     {
         get
         {
+            if (AssignedAction == DeckActionType.StreamDeckPluginAction)
+            {
+                var host = App.Services?.GetService<IStreamDeckPluginHost>();
+                var actionManifest = host?.GetActionManifest(StreamDeckPluginUuid, StreamDeckActionUuid);
+                var plugin = host?.GetPlugin(StreamDeckPluginUuid);
+                string actName = actionManifest?.Name ?? StreamDeckActionUuid;
+                string plgName = plugin?.Name ?? StreamDeckPluginUuid;
+                return string.IsNullOrEmpty(actName) ? "Stream Deck Plugin" : $"{plgName}: {actName}";
+            }
+
             string baseName = LocalizationService.Instance.GetString($"Action_{AssignedAction}", AssignedAction.ToString());
             if (!string.IsNullOrWhiteSpace(ActionParameter))
             {
@@ -2482,6 +2790,7 @@ public partial class KeyItemViewModel : ObservableObject
 
     public string ActionCategory => AssignedAction switch
     {
+        DeckActionType.StreamDeckPluginAction => "Stream Deck",
         DeckActionType.None => LocalizationService.Instance.GetString("Action_None", "Puste"),
         DeckActionType.MediaPlayPause or DeckActionType.MediaNext or DeckActionType.MediaPrevious or DeckActionType.MediaStop => LocalizationService.Instance.GetString("Cat_Media", "Multimedia"),
         DeckActionType.MasterMute or DeckActionType.MicMute or DeckActionType.VolumeUp or DeckActionType.VolumeDown => LocalizationService.Instance.GetString("Cat_Audio", "Audio"),
@@ -2522,6 +2831,7 @@ public partial class KeyItemViewModel : ObservableObject
         _ when AssignedAction.ToString().StartsWith("Spotify") => LocalizationService.Instance.GetString("Cat_Spotify", "Spotify"),
         _ when AssignedAction.ToString().StartsWith("Vlc") => LocalizationService.Instance.GetString("Cat_Vlc", "VLC"),
         _ when AssignedAction.ToString().StartsWith("Voicemod") => LocalizationService.Instance.GetString("Cat_Voicemod", "Voicemod"),
+        _ when AssignedAction.ToString().StartsWith("HomeAssistant") => LocalizationService.Instance.GetString("Cat_SmartHome", "Smart Home"),
         _ => LocalizationService.Instance.GetString("Cat_All", "Inne")
     };
 
@@ -2551,6 +2861,10 @@ public partial class KeyItemViewModel : ObservableObject
         DeckActionType.SpotifyPlayUri or
         DeckActionType.VoicemodVoiceSelect or
         DeckActionType.VoicemodPlaySound or
+        DeckActionType.HomeAssistantToggle or
+        DeckActionType.HomeAssistantTurnOn or
+        DeckActionType.HomeAssistantTurnOff or
+        DeckActionType.HomeAssistantCallService or
         DeckActionType.ConditionalAction;
 
     public bool IsObsSceneAction => AssignedAction == DeckActionType.ObsSceneSwitch;
@@ -2593,6 +2907,10 @@ public partial class KeyItemViewModel : ObservableObject
                 DeckActionType.SpotifyPlayUri => loc.GetString("ParamLabel_SpotifyPlayUri", "URI lub URL playlisty / albumu / utworu Spotify:"),
                 DeckActionType.VoicemodVoiceSelect => loc.GetString("ParamLabel_VoicemodVoice", "ID lub nazwa głosu Voicemod (np. clean, robot, cave):"),
                 DeckActionType.VoicemodPlaySound => loc.GetString("ParamLabel_VoicemodSound", "Nazwa pliku lub ID mema/dźwięku Voicemod (FileName):"),
+                DeckActionType.HomeAssistantToggle => loc.GetString("ParamLabel_HomeAssistantToggle", "Identyfikator encji (np. light.living_room, switch.fan):"),
+                DeckActionType.HomeAssistantTurnOn => loc.GetString("ParamLabel_HomeAssistantTurnOn", "Identyfikator encji do włączenia:"),
+                DeckActionType.HomeAssistantTurnOff => loc.GetString("ParamLabel_HomeAssistantTurnOff", "Identyfikator encji do wyłączenia:"),
+                DeckActionType.HomeAssistantCallService => loc.GetString("ParamLabel_HomeAssistantCallService", "Usługa (np. light.turn_on lub scene.turn_on):"),
                 DeckActionType.ConditionalAction => loc.GetString("ParamLabel_ConditionalAction", "Reguła warunkowa (format: Cel?AkcjaTrue:AkcjaFalse lub JSON):"),
                 _ => loc.GetString("ActionParam_Label", "Parametr akcji:")
             };
@@ -2631,6 +2949,10 @@ public partial class KeyItemViewModel : ObservableObject
                 DeckActionType.SpotifyPlayUri => loc.GetString("ParamWatermark_SpotifyPlayUri", "np. spotify:playlist:37i9dQZF1DXcBWIGoYBM5M lub link open.spotify.com"),
                 DeckActionType.VoicemodVoiceSelect => loc.GetString("ParamWatermark_VoicemodVoice", "np. clean, robot, magic-chords, astronaut"),
                 DeckActionType.VoicemodPlaySound => loc.GetString("ParamWatermark_VoicemodSound", "np. Airhorn, Bruh lub wybierz z listy w Ustawieniach..."),
+                DeckActionType.HomeAssistantToggle => loc.GetString("ParamWatermark_HomeAssistantToggle", "np. light.salon, switch.gniazdko"),
+                DeckActionType.HomeAssistantTurnOn => loc.GetString("ParamWatermark_HomeAssistantTurnOn", "np. light.biurko"),
+                DeckActionType.HomeAssistantTurnOff => loc.GetString("ParamWatermark_HomeAssistantTurnOff", "np. light.wszystkie"),
+                DeckActionType.HomeAssistantCallService => loc.GetString("ParamWatermark_HomeAssistantCallService", "np. light.turn_on, climate.set_temperature"),
                 DeckActionType.ConditionalAction => loc.GetString("ParamWatermark_ConditionalAction", "np. obs64?ObsStopStream:ObsStartStream"),
                 _ => loc.GetString("ParamWatermark_Default", "Wartość parametru...")
             };
@@ -2648,7 +2970,7 @@ public partial class KeyItemViewModel : ObservableObject
 
     public void ResetStyling()
     {
-        _backgroundColorHex = "#0E1018";
+        _backgroundColorHex = "#000000";
         _textColorHex = "#FFFFFF";
         _subtitleColorHex = "#A1A1AA";
         _activeBackgroundColorHex = "";
@@ -2680,6 +3002,12 @@ public partial class KeyItemViewModel : ObservableObject
         _obsSceneName = "";
         _liveValueText = null;
         _mediaValidationMessage = null;
+        _streamDeckPluginUuid = "";
+        _streamDeckActionUuid = "";
+        _streamDeckSettingsJson = "";
+        _pluginDynamicImageBytes = null;
+        IsStreamDeckAlert = false;
+        IsStreamDeckOk = false;
 
         _cachedBitmap?.Dispose();
         _cachedBitmap = null;
@@ -2700,6 +3028,9 @@ public partial class KeyItemViewModel : ObservableObject
         OnPropertyChanged(nameof(ActiveBackgroundColorHex));
         OnPropertyChanged(nameof(ActiveTextColorHex));
         OnPropertyChanged(nameof(ActiveSubtitleColorHex));
+        OnPropertyChanged(nameof(StreamDeckPluginUuid));
+        OnPropertyChanged(nameof(StreamDeckActionUuid));
+        OnPropertyChanged(nameof(StreamDeckSettingsJson));
         OnPropertyChanged(nameof(ImagePath));
         OnPropertyChanged(nameof(ActiveImagePath));
         OnPropertyChanged(nameof(HasActiveImage));
@@ -2765,7 +3096,7 @@ public partial class KeyItemViewModel : ObservableObject
         CustomSubtitle = model.CustomSubtitle ?? "";
         ActiveCustomTitle = model.ActiveCustomTitle ?? "";
         ActiveCustomSubtitle = model.ActiveCustomSubtitle ?? "";
-        BackgroundColorHex = string.IsNullOrWhiteSpace(model.BackgroundColorHex) ? "#0E1018" : model.BackgroundColorHex;
+        BackgroundColorHex = string.IsNullOrWhiteSpace(model.BackgroundColorHex) ? "#000000" : model.BackgroundColorHex;
         TextColorHex = !string.IsNullOrWhiteSpace(model.TextColorHex) ? model.TextColorHex : (!string.IsNullOrWhiteSpace(model.LabelColor) ? model.LabelColor : "#FFFFFF");
         SubtitleColorHex = !string.IsNullOrWhiteSpace(model.SubtitleColorHex) ? model.SubtitleColorHex : "#A1A1AA";
         ActiveBackgroundColorHex = model.ActiveBackgroundColorHex ?? "";

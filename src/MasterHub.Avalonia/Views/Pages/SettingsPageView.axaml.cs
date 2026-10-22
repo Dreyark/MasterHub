@@ -10,6 +10,7 @@ public partial class SettingsPageView : UserControl
     {
         InitializeComponent();
         SettingsPageViewModel.ScrollToVoicemodRequested += OnScrollToVoicemodRequested;
+        SettingsPageViewModel.ScrollToHomeAssistantRequested += OnScrollToHomeAssistantRequested;
     }
 
     private void OnScrollToVoicemodRequested()
@@ -17,6 +18,15 @@ public partial class SettingsPageView : UserControl
         Dispatcher.UIThread.Post(() =>
         {
             var card = this.FindControl<VoicemodSettingsCardView>("VoicemodCard");
+            card?.BringIntoView();
+        });
+    }
+
+    private void OnScrollToHomeAssistantRequested()
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            var card = this.FindControl<HomeAssistantSettingsCardView>("HomeAssistantCard");
             card?.BringIntoView();
         });
     }
