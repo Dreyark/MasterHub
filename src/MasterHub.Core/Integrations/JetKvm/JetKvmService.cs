@@ -34,6 +34,7 @@ public class JetKvmService : IJetKvmService
     private CancellationTokenSource? _signalingCts;
     private readonly SemaphoreSlim _rtcLock = new(1, 1);
     private readonly ConcurrentDictionary<int, TaskCompletionSource<JsonElement>> _pendingRpc = new();
+    private DateTime _nextJetKvmPollAllowedUtc = DateTime.MinValue;
 
     public bool IsConnected { get; private set; }
     public bool IsAuthenticated { get; private set; }
@@ -1033,12 +1034,25 @@ public class JetKvmService : IJetKvmService
             _pollTimer = new Timer(async _ =>
             {
                 if (_isPolling) return;
+                if (DateTime.UtcNow < _nextJetKvmPollAllowedUtc) return;
+
                 _isPolling = true;
                 try
                 {
-                    await RefreshStateAsync();
+                    var state = await RefreshStateAsync();
+                    if (!state.IsConnected)
+                    {
+                        _nextJetKvmPollAllowedUtc = DateTime.UtcNow.AddSeconds(30);
+                    }
+                    else
+                    {
+                        _nextJetKvmPollAllowedUtc = DateTime.MinValue;
+                    }
                 }
-                catch { }
+                catch
+                {
+                    _nextJetKvmPollAllowedUtc = DateTime.UtcNow.AddSeconds(30);
+                }
                 finally
                 {
                     _isPolling = false;

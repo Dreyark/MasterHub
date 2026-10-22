@@ -23,6 +23,28 @@ public class VlcService : IVlcService
     private Timer? _pollTimer;
     private bool _isPolling;
 
+    private static DateTime s_lastVlcProcessCheck = DateTime.MinValue;
+    private static bool s_cachedVlcRunning = false;
+    private DateTime _nextVlcPollAllowedUtc = DateTime.MinValue;
+
+    private static bool IsVlcProcessRunning()
+    {
+        if (DateTime.UtcNow - s_lastVlcProcessCheck < TimeSpan.FromSeconds(3))
+        {
+            return s_cachedVlcRunning;
+        }
+        s_lastVlcProcessCheck = DateTime.UtcNow;
+        try
+        {
+            s_cachedVlcRunning = Process.GetProcessesByName("vlc").Length > 0;
+        }
+        catch
+        {
+            s_cachedVlcRunning = false;
+        }
+        return s_cachedVlcRunning;
+    }
+
     public bool IsConnected { get; private set; }
     public bool IsPlaying { get; private set; }
     public bool IsFullscreen { get; private set; }
@@ -258,6 +280,15 @@ public class VlcService : IVlcService
             password = _settings.Password ?? string.Empty;
         }
 
+        bool isLocal = host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+                       host.Equals("localhost", StringComparison.OrdinalIgnoreCase);
+
+        if (isLocal && !IsVlcProcessRunning())
+        {
+            if (IsConnected) SetConnected(false);
+            return CurrentState;
+        }
+
         string requestUri = $"http://{host}:{port}/requests/status.json";
 
         try
@@ -313,14 +344,41 @@ public class VlcService : IVlcService
     private async Task PollCycleAsync()
     {
         if (_isPolling) return;
+        if (DateTime.UtcNow < _nextVlcPollAllowedUtc) return;
+
+        string host;
+        lock (_lock)
+        {
+            host = string.IsNullOrWhiteSpace(_settings.Host) ? "127.0.0.1" : _settings.Host.Trim();
+        }
+
+        bool isLocal = host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+                       host.Equals("localhost", StringComparison.OrdinalIgnoreCase);
+
+        if (isLocal && !IsVlcProcessRunning())
+        {
+            if (IsConnected) SetConnected(false);
+            _nextVlcPollAllowedUtc = DateTime.UtcNow.AddSeconds(5);
+            return;
+        }
+
         _isPolling = true;
 
         try
         {
             await RefreshPlaybackStateAsync(CancellationToken.None).ConfigureAwait(false);
+            if (!IsConnected)
+            {
+                _nextVlcPollAllowedUtc = DateTime.UtcNow.AddSeconds(15);
+            }
+            else
+            {
+                _nextVlcPollAllowedUtc = DateTime.MinValue;
+            }
         }
         catch (Exception ex)
         {
+            _nextVlcPollAllowedUtc = DateTime.UtcNow.AddSeconds(15);
             Debug.WriteLine($"[VlcService] Poll error: {ex.Message}");
         }
         finally

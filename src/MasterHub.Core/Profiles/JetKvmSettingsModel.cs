@@ -17,7 +17,7 @@ public class JetKvmSettingsModel
         set => LocalPassword = value;
     }
 
-    public bool AutoConnect { get; set; } = true;
+    public bool AutoConnect { get; set; } = false;
     public int StatusPollIntervalSeconds { get; set; } = 3;
 }
 

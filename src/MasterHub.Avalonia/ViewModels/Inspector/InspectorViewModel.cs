@@ -73,6 +73,7 @@ public partial class InspectorViewModel : ObservableObject
                     {
                         Canvas.SelectedKey.StreamDeckPluginUuid = item.StreamDeckPluginUuid ?? "";
                         Canvas.SelectedKey.StreamDeckActionUuid = item.StreamDeckActionUuid ?? "";
+                        Canvas.SelectedKey.StreamDeckSettingsJson = "{}";
                         Canvas.SelectedKey.SetPluginDynamicImage(null);
                         if (!string.IsNullOrEmpty(item.IconImagePath))
                         {

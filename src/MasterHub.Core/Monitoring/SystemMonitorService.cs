@@ -988,9 +988,29 @@ public sealed class SystemMonitorService : ISystemMonitorService
         Timeout = TimeSpan.FromMilliseconds(500)
     };
     private static DateTime s_lastLhmCheck = DateTime.MinValue;
+    private static DateTime s_lastLhmProcessCheck = DateTime.MinValue;
+    private static bool s_cachedLhmProcessRunning = false;
     private static float s_cachedLhmCpuTemp = 0f;
     private static float s_cachedLhmGpuTemp = 0f;
     private static float s_cachedLhmGpuLoad = -1f;
+
+    private static bool IsLhmProcessRunning()
+    {
+        if (DateTime.UtcNow - s_lastLhmProcessCheck < TimeSpan.FromSeconds(5))
+        {
+            return s_cachedLhmProcessRunning;
+        }
+        s_lastLhmProcessCheck = DateTime.UtcNow;
+        try
+        {
+            s_cachedLhmProcessRunning = Process.GetProcessesByName("LibreHardwareMonitor").Length > 0;
+        }
+        catch
+        {
+            s_cachedLhmProcessRunning = false;
+        }
+        return s_cachedLhmProcessRunning;
+    }
 
     private static bool TryReadLibreHardwareMonitor(out float cpuTemp, out float gpuTemp, out float gpuLoad)
     {
@@ -998,7 +1018,7 @@ public sealed class SystemMonitorService : ISystemMonitorService
         gpuTemp = 0f;
         gpuLoad = -1f;
 
-        if ((DateTime.UtcNow - s_lastLhmCheck).TotalMilliseconds < 1500)
+        if (DateTime.UtcNow < s_lastLhmCheck)
         {
             if (s_cachedLhmCpuTemp > 0 || s_cachedLhmGpuTemp > 0)
             {
@@ -1010,12 +1030,20 @@ public sealed class SystemMonitorService : ISystemMonitorService
             return false;
         }
 
-        s_lastLhmCheck = DateTime.UtcNow;
+        if (!IsLhmProcessRunning())
+        {
+            s_lastLhmCheck = DateTime.UtcNow.AddSeconds(10);
+            return false;
+        }
 
         try
         {
             using var resp = s_lhmClient.GetAsync("http://127.0.0.1:8085/data.json").GetAwaiter().GetResult();
-            if (!resp.IsSuccessStatusCode) return false;
+            if (!resp.IsSuccessStatusCode)
+            {
+                s_lastLhmCheck = DateTime.UtcNow.AddSeconds(30);
+                return false;
+            }
 
             string json = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
             using var doc = JsonDocument.Parse(json);
@@ -1090,11 +1118,13 @@ public sealed class SystemMonitorService : ISystemMonitorService
                 cpuTemp = foundCpuTemp;
                 gpuTemp = foundGpuTemp;
                 gpuLoad = foundGpuLoad;
+                s_lastLhmCheck = DateTime.UtcNow.AddMilliseconds(1500);
                 return true;
             }
         }
         catch { }
 
+        s_lastLhmCheck = DateTime.UtcNow.AddSeconds(30);
         return false;
     }
 

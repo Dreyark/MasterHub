@@ -105,6 +105,10 @@
                                                 <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="6" Margin="16,0,0,0">
                                                     <TextBlock Text="{Binding StatusDisplay}" FontSize="11" HorizontalAlignment="Right" />
                                                     <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <Button Command="{Binding $parent[UserControl].((vm:ActionStorePageViewModel)DataContext).OpenPluginSettingsCommand}"
+                                                                CommandParameter="{Binding}"
+                                                                Content="⚙️"
+                                                                ToolTip.Tip="Ustawienia wtyczki" />
                                                         <Button Command="{Binding $parent[UserControl].((vm:ActionStorePageViewModel)DataContext).TogglePluginCommand}"
                                                                 CommandParameter="{Binding}"
                                                                 Content="{Binding ToggleButtonText}" />

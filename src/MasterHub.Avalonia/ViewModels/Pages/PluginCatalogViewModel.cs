@@ -17,6 +17,7 @@ public partial class PluginCatalogViewModel : ObservableObject
     private readonly IStreamDeckPluginHost? _streamDeckHost;
     private readonly Action? _onPluginInstalledCallback;
     private readonly List<PluginCatalogItemViewModel> _allEntries = new();
+    private bool _hasLoadedOnce;
 
     public ObservableCollection<PluginCatalogItemViewModel> FilteredPlugins { get; } = new();
     public ObservableCollection<string> Categories { get; } = new();
@@ -43,7 +44,12 @@ public partial class PluginCatalogViewModel : ObservableObject
         _onPluginInstalledCallback = onPluginInstalledCallback;
 
         Categories.Add("Wszystkie");
-        _ = LoadCatalogAsync();
+    }
+
+    public async Task EnsureCatalogLoadedAsync()
+    {
+        if (_hasLoadedOnce || IsLoading) return;
+        await LoadCatalogAsync().ConfigureAwait(false);
     }
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();
@@ -53,6 +59,7 @@ public partial class PluginCatalogViewModel : ObservableObject
     public async Task LoadCatalogAsync(bool forceRefresh = false)
     {
         if (IsLoading) return;
+        _hasLoadedOnce = true;
         IsLoading = true;
         StatusMessage = "Ładowanie katalogu wtyczek online...";
 
