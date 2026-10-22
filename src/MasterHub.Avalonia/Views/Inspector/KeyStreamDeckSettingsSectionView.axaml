@@ -1,0 +1,70 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyStreamDeckSettingsSectionView"
+             x:DataType="vm:KeyItemViewModel">
+
+    <StackPanel Spacing="8">
+        <Border Classes="glassCard" Padding="12" Margin="0,4,0,0">
+            <StackPanel Spacing="8">
+                <!-- Informacje o wtyczce i akcji -->
+                <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto">
+                    <TextBlock Grid.Column="0" Grid.RowSpan="2" Text="🔌" FontSize="20"
+                               VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <TextBlock Grid.Column="1" Grid.Row="0" Text="{Binding StreamDeckPluginName}"
+                               FontWeight="Bold" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}" />
+                    <TextBlock Grid.Column="1" Grid.Row="1" Text="{Binding StreamDeckActionName}"
+                               Classes="dim" FontSize="11" />
+                </Grid>
+
+                <TextBlock Text="{Binding StreamDeckActionTooltip}"
+                           Classes="dim" FontSize="10" TextWrapping="Wrap"
+                           IsVisible="{Binding StreamDeckActionTooltip, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+
+                <!-- Przycisk Property Inspector -->
+                <Button Command="{Binding OpenPropertyInspectorCommand}"
+                        Classes="accentBtn"
+                        HorizontalAlignment="Stretch"
+                        Padding="8,8"
+                        IsEnabled="{Binding HasPropertyInspector}">
+                    <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
+                        <TextBlock Text="🌐" FontSize="13" />
+                        <TextBlock Text="Otwórz konfigurator (Property Inspector)" FontWeight="SemiBold" FontSize="12" />
+                    </StackPanel>
+                </Button>
+
+                <TextBlock Text="Wtyczka nie posiada dedykowanego kreatora HTML. Ustawienia możesz edytować bezpośrednio poniżej w formacie JSON."
+                           Classes="dim" FontSize="10" TextWrapping="Wrap" Foreground="#F6AD55"
+                           IsVisible="{Binding !HasPropertyInspector}" />
+
+                <!-- Bezpośrednia edycja JSON -->
+                <StackPanel Spacing="4" Margin="0,4,0,0">
+                    <TextBlock Text="Parametry i konfiguracja JSON:" Classes="caption" />
+                    <TextBox Text="{Binding StreamDeckSettingsJson, Mode=TwoWay}"
+                             AcceptsReturn="True"
+                             TextWrapping="Wrap"
+                             MinHeight="70"
+                             MaxHeight="160"
+                             FontFamily="Cascadia Code, Consolas, Courier New, monospace"
+                             FontSize="11"
+                             Background="#141724" />
+                    <Grid ColumnDefinitions="*,*">
+                        <Button Grid.Column="0" Content="💾 Zapisz JSON"
+                                Command="{Binding SaveStreamDeckSettingsJsonCommand}"
+                                CommandParameter="{Binding StreamDeckSettingsJson}"
+                                Classes="pillBtn"
+                                HorizontalAlignment="Stretch"
+                                Margin="0,0,3,0"
+                                Padding="6,5" />
+                        <Button Grid.Column="1" Content="↺ Resetuj"
+                                Command="{Binding ResetStreamDeckSettingsCommand}"
+                                Classes="pillBtn"
+                                HorizontalAlignment="Stretch"
+                                Margin="3,0,0,0"
+                                Padding="6,5" />
+                    </Grid>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

@@ -41,10 +41,14 @@ public sealed class StreamDeckPluginHost : IStreamDeckPluginHost
     public event Action<int>? KeyOkRequested;
     public event Action<string>? PluginInstalled;
     public event Action<string, string>? PluginLogReceived;
+    public event Action<int, string>? KeySettingsUpdated;
+    public event Action<string, string>? GlobalSettingsUpdated;
+    public event Action<string>? SwitchToProfileRequested;
 
     public StreamDeckPluginHost(int preferredPort = 28123, string? pluginsDirectory = null, string? elgatoPluginsDirectory = null)
     {
         _server = new StreamDeckWebSocketServer(preferredPort);
+        _server.PluginFolderResolver = uuid => _plugins.TryGetValue(uuid, out var p) ? p.FolderPath : null;
 
         _pluginsDirectory = pluginsDirectory ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -72,6 +76,21 @@ public sealed class StreamDeckPluginHost : IStreamDeckPluginHost
         _server.ShowOkRequested += OnShowOkRequested;
         _server.OpenUrlRequested += OnOpenUrlRequested;
         _server.LogMessageReceived += (uuid, msg) => PluginLogReceived?.Invoke(uuid, msg);
+        _server.SettingsUpdated += OnServerSettingsUpdated;
+        _server.GlobalSettingsUpdated += (uuid, json) => GlobalSettingsUpdated?.Invoke(uuid, json);
+        _server.SwitchToProfileRequested += prof => SwitchToProfileRequested?.Invoke(prof);
+    }
+
+    private void OnServerSettingsUpdated(string context, string settingsJson)
+    {
+        if (_contextToKeyMap.TryGetValue(context, out int keyIndex))
+        {
+            if (_activeKeyAssignments.TryGetValue(keyIndex, out var cur))
+            {
+                _activeKeyAssignments[keyIndex] = (cur.PluginUuid, cur.ActionUuid, settingsJson);
+            }
+            KeySettingsUpdated?.Invoke(keyIndex, settingsJson);
+        }
     }
 
     private void OnPluginRegistered(string pluginUuid, string registerEvent)
@@ -820,8 +839,8 @@ setTimeout(initPlugin, 250);
                 string tempUserData = Path.Combine(Path.GetTempPath(), "MasterHub", "edge_sd_plugins", pluginUuid);
                 try { Directory.CreateDirectory(tempUserData); } catch { }
 
-                string runnerUrl = $"file:///{runnerPath.Replace('\\', '/')}";
-                string args = $"--headless=new --remote-debugging-port=0 --disable-gpu --user-data-dir=\"{tempUserData}\" --allow-file-access-from-files --disable-web-security --no-first-run --no-default-browser-check \"{runnerUrl}\"";
+                string runnerUrl = $"http://127.0.0.1:{Port}/plugin/{pluginUuid}/_masterhub_runner.html";
+                string args = $"--headless --disable-gpu --remote-debugging-port=0 --user-data-dir=\"{tempUserData}\" --no-first-run --no-default-browser-check \"{runnerUrl}\"";
 
                 psi = new ProcessStartInfo
                 {
@@ -830,6 +849,7 @@ setTimeout(initPlugin, 250);
                     WorkingDirectory = plugin.FolderPath,
                     UseShellExecute = false,
                     CreateNoWindow = true,
+                    WindowStyle = ProcessWindowStyle.Hidden,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true
                 };
@@ -1324,7 +1344,7 @@ setTimeout(initPlugin, 250);
 
     private void OnOpenUrlRequested(string url)
     {
-        if (!string.IsNullOrEmpty(url) && (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+        if (!string.IsNullOrEmpty(url))
         {
             try
             {
@@ -1347,6 +1367,152 @@ setTimeout(initPlugin, 250);
     {
         _plugins.TryGetValue(pluginUuid, out var plugin);
         return plugin;
+    }
+
+    public string? GetPropertyInspectorPath(string pluginUuid, string? actionUuid = null)
+    {
+        if (!_plugins.TryGetValue(pluginUuid, out var plugin)) return null;
+
+        if (!string.IsNullOrEmpty(actionUuid))
+        {
+            var action = plugin.Manifest?.Actions?.FirstOrDefault(a => string.Equals(a.UUID, actionUuid, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(action?.PropertyInspectorPath))
+            {
+                string cand = Path.Combine(plugin.FolderPath, action.PropertyInspectorPath);
+                if (File.Exists(cand)) return action.PropertyInspectorPath.Replace('\\', '/');
+            }
+        }
+
+        if (!string.IsNullOrEmpty(plugin.Manifest?.PropertyInspectorPath))
+        {
+            string cand = Path.Combine(plugin.FolderPath, plugin.Manifest.PropertyInspectorPath);
+            if (File.Exists(cand)) return plugin.Manifest.PropertyInspectorPath.Replace('\\', '/');
+        }
+
+        string[] commonCandidates = { "pi/pi.html", "pi.html", "propertyInspector.html", "propertyinspector.html", "index.html" };
+        foreach (var c in commonCandidates)
+        {
+            if (File.Exists(Path.Combine(plugin.FolderPath, c))) return c;
+        }
+
+        return null;
+    }
+
+    public bool OpenPropertyInspector(int keyIndex, string pluginUuid, string actionUuid, string? currentSettingsJson = null)
+    {
+        string? piRel = GetPropertyInspectorPath(pluginUuid, actionUuid);
+        if (string.IsNullOrEmpty(piRel)) return false;
+
+        if (!_server.IsRunning)
+        {
+            _server.Start();
+        }
+
+        _ = StartPluginAsync(pluginUuid);
+
+        string context = keyIndex >= 0 ? $"key_{keyIndex}" : $"preview_{Guid.NewGuid():N}";
+        _server.AssociateContext(context, pluginUuid, actionUuid, currentSettingsJson);
+
+        if (keyIndex >= 0)
+        {
+            _contextToKeyMap[context] = keyIndex;
+            _keyToContextMap[keyIndex] = context;
+            if (_activeKeyAssignments.TryGetValue(keyIndex, out var cur))
+            {
+                _activeKeyAssignments[keyIndex] = (cur.PluginUuid, cur.ActionUuid, currentSettingsJson ?? cur.SettingsJson);
+            }
+            else
+            {
+                _activeKeyAssignments[keyIndex] = (pluginUuid, actionUuid, currentSettingsJson);
+            }
+        }
+
+        string url = $"http://127.0.0.1:{Port}/plugin/{pluginUuid}/{piRel}?context={context}&action={Uri.EscapeDataString(actionUuid)}";
+
+        return LaunchPropertyInspectorWindow(url);
+    }
+
+    public bool OpenGlobalPropertyInspector(string pluginUuid)
+    {
+        if (!_plugins.TryGetValue(pluginUuid, out var plugin)) return false;
+        string? defaultAction = plugin.Manifest?.Actions?.FirstOrDefault()?.UUID ?? pluginUuid;
+        return OpenPropertyInspector(-1, pluginUuid, defaultAction, null);
+    }
+
+    public void OpenPluginFolder(string pluginUuid)
+    {
+        if (_plugins.TryGetValue(pluginUuid, out var plugin) && Directory.Exists(plugin.FolderPath))
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo { FileName = plugin.FolderPath, UseShellExecute = true });
+            }
+            catch { }
+        }
+    }
+
+    private static bool LaunchPropertyInspectorWindow(string url)
+    {
+        try
+        {
+            string? browser = FindBrowserExecutable();
+            if (!string.IsNullOrEmpty(browser))
+            {
+                string tempProfile = Path.Combine(Path.GetTempPath(), "MasterHub", "sd_inspector_profile");
+                try { Directory.CreateDirectory(tempProfile); } catch { }
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = browser,
+                    Arguments = $"--app=\"{url}\" --window-size=520,680 --user-data-dir=\"{tempProfile}\" --no-first-run --no-default-browser-check",
+                    UseShellExecute = false
+                };
+                Process.Start(psi);
+                return true;
+            }
+
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public async Task UpdateKeySettingsAsync(int keyIndex, string pluginUuid, string actionUuid, string settingsJson)
+    {
+        string context = _keyToContextMap.TryGetValue(keyIndex, out var ctx) ? ctx : $"key_{keyIndex}";
+        _contextToKeyMap[context] = keyIndex;
+        _keyToContextMap[keyIndex] = context;
+
+        if (_activeKeyAssignments.TryGetValue(keyIndex, out var cur))
+        {
+            _activeKeyAssignments[keyIndex] = (cur.PluginUuid, cur.ActionUuid, settingsJson);
+        }
+        else
+        {
+            _activeKeyAssignments[keyIndex] = (pluginUuid, actionUuid, settingsJson);
+        }
+
+        await _server.UpdateKeySettingsAsync(context, pluginUuid, actionUuid, settingsJson);
+    }
+
+    public async Task UpdateGlobalSettingsAsync(string pluginUuid, string globalSettingsJson)
+    {
+        await _server.UpdateGlobalSettingsAsync(pluginUuid, globalSettingsJson);
+    }
+
+    public string? GetGlobalSettings(string pluginUuid) => _server.GetGlobalSettings(pluginUuid);
+
+    public string? GetKeySettings(int keyIndex)
+    {
+        string context = _keyToContextMap.TryGetValue(keyIndex, out var ctx) ? ctx : $"key_{keyIndex}";
+        return _server.GetKeySettings(context);
     }
 
     public void Dispose()

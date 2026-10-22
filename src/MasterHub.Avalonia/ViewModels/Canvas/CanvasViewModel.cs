@@ -814,6 +814,39 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
                     }
                 });
             };
+
+            _streamDeckPluginHost.KeySettingsUpdated += (keyIndex, settingsJson) =>
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (keyIndex >= 0 && keyIndex < Keys.Count)
+                    {
+                        var key = Keys[keyIndex];
+                        if (key.AssignedAction == DeckActionType.StreamDeckPluginAction)
+                        {
+                            key.StreamDeckSettingsJson = settingsJson;
+                            ScheduleAutoSave();
+                        }
+                    }
+                });
+            };
+
+            _streamDeckPluginHost.SwitchToProfileRequested += (profileName) =>
+            {
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (string.IsNullOrWhiteSpace(profileName)) return;
+                    var targetProf = _profileService.GetAllProfiles().FirstOrDefault(p =>
+                        p.Id.Equals(profileName, StringComparison.OrdinalIgnoreCase) ||
+                        p.Name.Equals(profileName, StringComparison.OrdinalIgnoreCase));
+                    if (targetProf != null)
+                    {
+                        DeselectAll();
+                        _profileService.SetActiveProfile(targetProf.Id);
+                        ApplyProfile(targetProf);
+                    }
+                });
+            };
         }
 
         InitializeHardwareCollections();
@@ -1261,7 +1294,19 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
                     var obsCfg = _profileService.GetObsSettings();
                     if (obsCfg.AutoConnect)
                     {
-                        await _obsService.ConnectAsync(obsCfg.Host, obsCfg.Port, obsCfg.Password);
+                        bool isLocal = string.IsNullOrWhiteSpace(obsCfg.Host) ||
+                                       obsCfg.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                                       obsCfg.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase);
+
+                        bool isRunning = !isLocal ||
+                                         Process.GetProcessesByName("obs64").Length > 0 ||
+                                         Process.GetProcessesByName("obs32").Length > 0 ||
+                                         Process.GetProcessesByName("obs").Length > 0;
+
+                        if (isRunning)
+                        {
+                            await _obsService.ConnectAsync(obsCfg.Host, obsCfg.Port, obsCfg.Password);
+                        }
                     }
                 }
                 catch { }

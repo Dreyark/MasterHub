@@ -27,6 +27,29 @@ public class VoicemodService : IVoicemodService
         59129, 20000, 39273, 42152, 43782, 46667, 35679, 37170, 38501, 33952, 30546
     ];
 
+    private static DateTime s_lastProcessCheck = DateTime.MinValue;
+    private static bool s_cachedProcessRunning = false;
+    private DateTime _nextConnectAttemptUtc = DateTime.MinValue;
+
+    private static bool IsVoicemodProcessRunning()
+    {
+        if (DateTime.UtcNow - s_lastProcessCheck < TimeSpan.FromSeconds(3))
+        {
+            return s_cachedProcessRunning;
+        }
+        s_lastProcessCheck = DateTime.UtcNow;
+        try
+        {
+            s_cachedProcessRunning = Process.GetProcessesByName("Voicemod").Length > 0 ||
+                                     Process.GetProcessesByName("VoicemodDesktop").Length > 0;
+        }
+        catch
+        {
+            s_cachedProcessRunning = false;
+        }
+        return s_cachedProcessRunning;
+    }
+
     private VoicemodSettingsModel _settings = new();
     private ClientWebSocket? _webSocket;
     private CancellationTokenSource? _connectionCts;
@@ -144,6 +167,15 @@ public class VoicemodService : IVoicemodService
             {
                 candidatePorts.Add(p);
             }
+        }
+
+        bool isLocal = host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+                       host.Equals("localhost", StringComparison.OrdinalIgnoreCase);
+
+        if (isLocal && !IsVoicemodProcessRunning())
+        {
+            _nextConnectAttemptUtc = DateTime.UtcNow.AddSeconds(5);
+            return (false, "Aplikacja Voicemod nie jest uruchomiona na komputerze.");
         }
 
         await DisconnectInternalAsync().ConfigureAwait(false);
@@ -522,14 +554,35 @@ public class VoicemodService : IVoicemodService
     private async Task ReconnectCycleAsync()
     {
         if (_isConnecting || IsConnected) return;
+        if (DateTime.UtcNow < _nextConnectAttemptUtc) return;
+
+        string host;
+        lock (_stateLock)
+        {
+            host = string.IsNullOrWhiteSpace(_settings.Host) ? "127.0.0.1" : _settings.Host.Trim();
+        }
+
+        bool isLocal = host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+                       host.Equals("localhost", StringComparison.OrdinalIgnoreCase);
+
+        if (isLocal && !IsVoicemodProcessRunning())
+        {
+            _nextConnectAttemptUtc = DateTime.UtcNow.AddSeconds(5);
+            return;
+        }
 
         _isConnecting = true;
         try
         {
-            await ConnectAsync(CancellationToken.None).ConfigureAwait(false);
+            var res = await ConnectAsync(CancellationToken.None).ConfigureAwait(false);
+            if (!res.Success)
+            {
+                _nextConnectAttemptUtc = DateTime.UtcNow.AddSeconds(15);
+            }
         }
         catch (Exception ex)
         {
+            _nextConnectAttemptUtc = DateTime.UtcNow.AddSeconds(15);
             Debug.WriteLine($"[VoicemodService] Reconnect error: {ex.Message}");
         }
         finally

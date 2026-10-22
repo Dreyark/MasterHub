@@ -379,6 +379,11 @@ public partial class KeyItemViewModel : ObservableObject
             if (SetField(ref _streamDeckPluginUuid, value))
             {
                 OnPropertyChanged(nameof(ActionDisplayName));
+                OnPropertyChanged(nameof(HasStreamDeckPlugin));
+                OnPropertyChanged(nameof(StreamDeckPluginName));
+                OnPropertyChanged(nameof(StreamDeckActionName));
+                OnPropertyChanged(nameof(StreamDeckActionTooltip));
+                OnPropertyChanged(nameof(HasPropertyInspector));
                 ActionChangedCallback?.Invoke(this);
             }
         }
@@ -392,6 +397,11 @@ public partial class KeyItemViewModel : ObservableObject
             if (SetField(ref _streamDeckActionUuid, value))
             {
                 OnPropertyChanged(nameof(ActionDisplayName));
+                OnPropertyChanged(nameof(HasStreamDeckPlugin));
+                OnPropertyChanged(nameof(StreamDeckPluginName));
+                OnPropertyChanged(nameof(StreamDeckActionName));
+                OnPropertyChanged(nameof(StreamDeckActionTooltip));
+                OnPropertyChanged(nameof(HasPropertyInspector));
                 ActionChangedCallback?.Invoke(this);
             }
         }
@@ -1436,7 +1446,7 @@ public partial class KeyItemViewModel : ObservableObject
         _renderedJpegBytes = jpeg;
         _renderedBitmap?.Dispose();
         _renderedBitmap = null;
-        if (jpeg != null && jpeg.Length > 0)
+        if (jpeg != null && jpeg.Length >= 4 && ((jpeg[0] == 0xFF && jpeg[1] == 0xD8) || (jpeg[0] == 0x89 && jpeg[1] == 0x50)))
         {
             try
             {
@@ -1627,6 +1637,12 @@ public partial class KeyItemViewModel : ObservableObject
                 OnPropertyChanged(nameof(HomeAssistantConnectionStatusDisplay));
                 OnPropertyChanged(nameof(AvailableHomeAssistantEntities));
                 OnPropertyChanged(nameof(SelectedHomeAssistantEntity));
+                OnPropertyChanged(nameof(IsStreamDeckAction));
+                OnPropertyChanged(nameof(HasStreamDeckPlugin));
+                OnPropertyChanged(nameof(StreamDeckPluginName));
+                OnPropertyChanged(nameof(StreamDeckActionName));
+                OnPropertyChanged(nameof(StreamDeckActionTooltip));
+                OnPropertyChanged(nameof(HasPropertyInspector));
                 ActionChangedCallback?.Invoke(this);
             }
         }
@@ -1966,7 +1982,81 @@ public partial class KeyItemViewModel : ObservableObject
         !IsFileBrowseSupported && !IsNetworkMonitorAction && !IsDiskAction &&
         !IsGoToProfileAction && !IsGoToPageAction && !IsOpenFolderAction &&
         !IsGoBackAction && !IsGoHomeAction && !IsNextPageAction && !IsPreviousPageAction &&
-        !IsVoicemodVoiceAction && !IsVoicemodSoundAction && !IsHomeAssistantAction;
+        !IsVoicemodVoiceAction && !IsVoicemodSoundAction && !IsHomeAssistantAction && !IsStreamDeckAction;
+
+    public bool IsStreamDeckAction => AssignedAction == DeckActionType.StreamDeckPluginAction;
+    public bool HasStreamDeckPlugin => IsStreamDeckAction && !string.IsNullOrEmpty(StreamDeckPluginUuid);
+
+    public string StreamDeckPluginName
+    {
+        get
+        {
+            var host = App.Services?.GetService<IStreamDeckPluginHost>();
+            var pl = host?.GetPlugin(StreamDeckPluginUuid);
+            return pl?.Name ?? StreamDeckPluginUuid;
+        }
+    }
+
+    public string StreamDeckActionName
+    {
+        get
+        {
+            var host = App.Services?.GetService<IStreamDeckPluginHost>();
+            var act = host?.GetActionManifest(StreamDeckPluginUuid, StreamDeckActionUuid);
+            return act?.Name ?? StreamDeckActionUuid;
+        }
+    }
+
+    public string StreamDeckActionTooltip
+    {
+        get
+        {
+            var host = App.Services?.GetService<IStreamDeckPluginHost>();
+            var act = host?.GetActionManifest(StreamDeckPluginUuid, StreamDeckActionUuid);
+            return act?.Tooltip ?? "";
+        }
+    }
+
+    public bool HasPropertyInspector
+    {
+        get
+        {
+            var host = App.Services?.GetService<IStreamDeckPluginHost>();
+            return !string.IsNullOrEmpty(host?.GetPropertyInspectorPath(StreamDeckPluginUuid, StreamDeckActionUuid));
+        }
+    }
+
+    [RelayCommand]
+    public void OpenPropertyInspector()
+    {
+        var host = App.Services?.GetService<IStreamDeckPluginHost>();
+        host?.OpenPropertyInspector(Index, StreamDeckPluginUuid, StreamDeckActionUuid, StreamDeckSettingsJson);
+    }
+
+    [RelayCommand]
+    public async Task SaveStreamDeckSettingsJsonAsync(string? newJson)
+    {
+        string toSave = newJson ?? StreamDeckSettingsJson;
+        StreamDeckSettingsJson = toSave;
+        var host = App.Services?.GetService<IStreamDeckPluginHost>();
+        if (host != null && !string.IsNullOrEmpty(StreamDeckPluginUuid))
+        {
+            await host.UpdateKeySettingsAsync(Index, StreamDeckPluginUuid, StreamDeckActionUuid, toSave);
+        }
+        ActionChangedCallback?.Invoke(this);
+    }
+
+    [RelayCommand]
+    public async Task ResetStreamDeckSettingsAsync()
+    {
+        StreamDeckSettingsJson = "{}";
+        var host = App.Services?.GetService<IStreamDeckPluginHost>();
+        if (host != null && !string.IsNullOrEmpty(StreamDeckPluginUuid))
+        {
+            await host.UpdateKeySettingsAsync(Index, StreamDeckPluginUuid, StreamDeckActionUuid, "{}");
+        }
+        ActionChangedCallback?.Invoke(this);
+    }
 
     public Action<KeyItemViewModel, DeckActionType, string?>? NavigationRequestedCallback { get; set; }
     public Action<string>? FolderDeletedCallback { get; set; }
@@ -3119,5 +3209,8 @@ public partial class KeyItemViewModel : ObservableObject
         IsBold = model.IsBold;
         IsItalic = model.IsItalic;
         IsStrikeThrough = model.IsStrikeThrough;
+        StreamDeckPluginUuid = model.StreamDeckPluginUuid ?? "";
+        StreamDeckActionUuid = model.StreamDeckActionUuid ?? "";
+        StreamDeckSettingsJson = model.StreamDeckSettingsJson ?? "";
     }
 }

@@ -61,6 +61,14 @@ public partial class ActionStorePageViewModel : ObservableObject
     [ObservableProperty]
     private int _selectedTabIndex;
 
+    partial void OnSelectedTabIndexChanged(int value)
+    {
+        if (value == 2)
+        {
+            _ = Catalog?.EnsureCatalogLoadedAsync();
+        }
+    }
+
     [ObservableProperty]
     private string _statusMessage = "";
 
@@ -180,6 +188,24 @@ public partial class ActionStorePageViewModel : ObservableObject
             Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });
         }
         catch { }
+    }
+
+    [RelayCommand]
+    public void OpenPluginSettings(StreamDeckPluginItemViewModel? item)
+    {
+        if (item == null) return;
+        var vm = new PluginSettingsViewModel(item, _streamDeckHost);
+        var win = new Views.Pages.PluginSettingsWindow(vm);
+
+        var topLevel = (global::Avalonia.Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+        if (topLevel != null)
+        {
+            win.ShowDialog(topLevel);
+        }
+        else
+        {
+            win.Show();
+        }
     }
 
     [RelayCommand]

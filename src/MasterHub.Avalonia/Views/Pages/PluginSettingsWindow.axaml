@@ -1,0 +1,105 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
+        x:Class="MasterHub.Avalonia.Views.Pages.PluginSettingsWindow"
+        x:DataType="vm:PluginSettingsViewModel"
+        Title="{Binding PluginName, StringFormat='Ustawienia wtyczki: {0}'}"
+        Width="540" Height="600"
+        WindowStartupLocation="CenterOwner"
+        Background="#0F121D"
+        Icon="/Assets/masterhub-logo.ico">
+
+    <Grid RowDefinitions="Auto,*,Auto">
+        <!-- Nagłówek wtyczki -->
+        <Border Grid.Row="0" Background="#161B2B" Padding="16,12" BorderBrush="#262E48" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="Auto,*">
+                <Border Grid.Column="0" Width="40" Height="40" CornerRadius="8" Background="#101320" Margin="0,0,12,0" ClipToBounds="True">
+                    <Panel>
+                        <Image Source="{Binding PluginBitmap}" Width="32" Height="32"
+                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               IsVisible="{Binding PluginBitmap, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        <TextBlock Text="🔌" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                   IsVisible="{Binding PluginBitmap, Converter={x:Static ObjectConverters.IsNull}}" />
+                    </Panel>
+                </Border>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <TextBlock Text="{Binding PluginName}" FontSize="15" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
+                        <TextBlock Text="{Binding Version, StringFormat='v{0}'}" Classes="dim" FontSize="11" VerticalAlignment="Center" />
+                    </StackPanel>
+                    <TextBlock Text="{Binding PluginUuid}" Classes="dim" FontSize="10" Foreground="{StaticResource AccentPrimaryBrush}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Zakładki ustawień -->
+        <TabControl Grid.Row="1" Margin="8,4">
+            <TabItem Header="⚙️ Konfiguracja globalna" FontSize="12">
+                <ScrollViewer Margin="8,10">
+                    <StackPanel Spacing="12">
+                        <Button Command="{Binding OpenGlobalPropertyInspectorCommand}"
+                                Classes="accentBtn"
+                                HorizontalAlignment="Stretch"
+                                Padding="10,8"
+                                IsVisible="{Binding HasPropertyInspector}">
+                            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                                <TextBlock Text="🌐" FontSize="14" />
+                                <TextBlock Text="Otwórz konfigurator wtyczki (Property Inspector)" FontWeight="SemiBold" FontSize="12" />
+                            </StackPanel>
+                        </Button>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Ustawienia globalne JSON (np. klucze API, waluta, parametry konta):" Classes="caption" />
+                            <TextBox Text="{Binding GlobalSettingsJson, Mode=TwoWay}"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     MinHeight="130"
+                                     MaxHeight="220"
+                                     FontFamily="Cascadia Code, Consolas, Courier New, monospace"
+                                     FontSize="11"
+                                     Background="#141724" />
+                        </StackPanel>
+
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" Classes="dim" Foreground="#00E5A3" VerticalAlignment="Center" TextWrapping="Wrap" />
+                            <Button Grid.Column="1" Content="💾 Zapisz ustawienia" Command="{Binding SaveGlobalSettingsCommand}" Classes="accentBtn" Padding="12,6" />
+                        </Grid>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="⚡ Akcje wtyczki" FontSize="12">
+                <ScrollViewer Margin="8,10">
+                    <ItemsControl ItemsSource="{Binding Actions}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Classes="glassCard" Margin="0,0,0,8" Padding="10">
+                                    <Grid ColumnDefinitions="*,Auto">
+                                        <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}" />
+                                            <TextBlock Text="{Binding UUID}" Classes="dim" FontSize="10" />
+                                            <TextBlock Text="{Binding Tooltip}" Classes="dim" FontSize="10" TextWrapping="Wrap"
+                                                       IsVisible="{Binding Tooltip, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Content="🌐 Otwórz w PI"
+                                                Command="{Binding $parent[Window].((vm:PluginSettingsViewModel)DataContext).OpenActionPropertyInspectorCommand}"
+                                                CommandParameter="{Binding UUID}"
+                                                Classes="pillBtn" Padding="8,4" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </TabItem>
+        </TabControl>
+
+        <!-- Dolny pasek akcji -->
+        <Border Grid.Row="2" Background="#161B2B" Padding="16,10" BorderBrush="#262E48" BorderThickness="0,1,0,0">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+                <Button Grid.Column="0" Content="📂 Folder wtyczki" Command="{Binding OpenFolderCommand}" Classes="pillBtn" Padding="10,6" />
+                <Button Grid.Column="2" Content="Zamknij" Command="{Binding CloseCommand}" Classes="pillBtn" Padding="14,6" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -125,6 +125,9 @@
         <!-- Home Assistant: Status połączenia, wybór encji lub ręczna nazwa -->
         <inspector:KeyHomeAssistantSettingsSectionView IsVisible="{Binding IsHomeAssistantAction}" />
 
+        <!-- Wtyczki Stream Deck: Konfigurator Property Inspector i ustawienia JSON -->
+        <inspector:KeyStreamDeckSettingsSectionView IsVisible="{Binding IsStreamDeckAction}" />
+
         <!-- Parametr ogólny -->
         <StackPanel Spacing="4" IsVisible="{Binding IsGenericParameterAction}">
             <TextBlock Text="{Binding ActionParameterLabel, FallbackValue='Parametr akcji:'}" Classes="caption" />

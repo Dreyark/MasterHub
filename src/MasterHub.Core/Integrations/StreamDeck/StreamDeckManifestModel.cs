@@ -117,4 +117,5 @@ public class StreamDeckInstalledPlugin
     public string StatusDisplay => IsRunning ? "🟢 Uruchomiono" : "⚪ Gotowy";
     public string ToggleButtonText => IsRunning ? "⏹️ Zatrzymaj" : "▶️ Uruchom";
     public string ActionsCountDisplay => $"{Manifest.Actions.Count} akcji";
+    public bool HasPropertyInspector => !string.IsNullOrEmpty(Manifest.PropertyInspectorPath) || Manifest.Actions.Exists(a => !string.IsNullOrEmpty(a.PropertyInspectorPath));
 }
