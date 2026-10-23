@@ -1280,8 +1280,15 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
             {
                 try
                 {
-                    var dcCfg = _profileService.GetDiscordSettings();
-                    await _discordService.ConnectAsync(dcCfg.ClientId, dcCfg.AccessToken);
+                    bool isDiscordRunning = Process.GetProcessesByName("Discord").Length > 0 ||
+                                            Process.GetProcessesByName("DiscordCanary").Length > 0 ||
+                                            Process.GetProcessesByName("DiscordPTB").Length > 0;
+
+                    if (isDiscordRunning)
+                    {
+                        var dcCfg = _profileService.GetDiscordSettings();
+                        await _discordService.ConnectAsync(dcCfg.ClientId, dcCfg.AccessToken);
+                    }
                 }
                 catch { }
             });
@@ -1347,7 +1354,12 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
                 {
                     var jetCfg = _profileService.GetJetKvmSettings();
                     _jetKvmService.Configure(jetCfg);
-                    if (jetCfg.AutoConnect)
+                    bool isConfigured = !string.IsNullOrWhiteSpace(jetCfg.Host) &&
+                                        (!jetCfg.Host.Equals("192.168.1.100", StringComparison.OrdinalIgnoreCase) ||
+                                         !string.IsNullOrEmpty(jetCfg.LocalPassword) ||
+                                         !string.IsNullOrEmpty(jetCfg.AuthToken));
+
+                    if (jetCfg.AutoConnect && isConfigured)
                     {
                         await _jetKvmService.RefreshStateAsync();
                     }
@@ -1533,8 +1545,15 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
                 {
                     try
                     {
-                        var dc = _profileService.GetDiscordSettings();
-                        await _discordService.ConnectAsync(dc.ClientId, dc.AccessToken);
+                        bool isDiscordRunning = Process.GetProcessesByName("Discord").Length > 0 ||
+                                                Process.GetProcessesByName("DiscordCanary").Length > 0 ||
+                                                Process.GetProcessesByName("DiscordPTB").Length > 0;
+
+                        if (isDiscordRunning)
+                        {
+                            var dc = _profileService.GetDiscordSettings();
+                            await _discordService.ConnectAsync(dc.ClientId, dc.AccessToken);
+                        }
                     }
                     catch { }
                 });
@@ -1548,7 +1567,19 @@ public partial class CanvasViewModel : ObservableObject, IDisposable
                         var obs = _profileService.GetObsSettings();
                         if (obs.AutoConnect)
                         {
-                            await _obsService.ConnectAsync(obs.Host, obs.Port, obs.Password);
+                            bool isLocal = string.IsNullOrWhiteSpace(obs.Host) ||
+                                           obs.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                                           obs.Host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase);
+
+                            bool isRunning = !isLocal ||
+                                             Process.GetProcessesByName("obs64").Length > 0 ||
+                                             Process.GetProcessesByName("obs32").Length > 0 ||
+                                             Process.GetProcessesByName("obs").Length > 0;
+
+                            if (isRunning)
+                            {
+                                await _obsService.ConnectAsync(obs.Host, obs.Port, obs.Password);
+                            }
                         }
                     }
                     catch { }

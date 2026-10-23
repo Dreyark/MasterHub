@@ -59,7 +59,12 @@ public class JetKvmService : IJetKvmService
             CloseWebRtc();
             RebuildHttpClient();
 
-            if (_settings.AutoConnect)
+            bool isConfigured = !string.IsNullOrWhiteSpace(_settings.Host) &&
+                                (!_settings.Host.Equals("192.168.1.100", StringComparison.OrdinalIgnoreCase) ||
+                                 !string.IsNullOrEmpty(_settings.LocalPassword) ||
+                                 !string.IsNullOrEmpty(_settings.AuthToken));
+
+            if (_settings.AutoConnect && isConfigured)
             {
                 StartMonitoring();
             }

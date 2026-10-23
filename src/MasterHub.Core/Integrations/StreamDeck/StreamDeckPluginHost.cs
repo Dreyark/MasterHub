@@ -5,10 +5,12 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Management;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using MasterHub.Core.SystemControl;
 using SkiaSharp;
 using Svg.Skia;
 
@@ -705,6 +707,8 @@ public sealed class StreamDeckPluginHost : IStreamDeckPluginHost
             _server.Start();
         }
 
+        KillOrphanedPluginProcesses();
+
         RefreshPlugins();
 
         foreach (var plugin in _plugins.Values)
@@ -714,6 +718,45 @@ public sealed class StreamDeckPluginHost : IStreamDeckPluginHost
                 await StartPluginAsync(plugin.PluginUuid);
             }
         }
+    }
+
+    private void KillOrphanedPluginProcesses()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+
+        try
+        {
+            using var searcher = new ManagementObjectSearcher("SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name = 'node.exe'");
+            using var objects = searcher.Get();
+            foreach (ManagementObject obj in objects)
+            {
+                try
+                {
+                    string? cmdLine = obj["CommandLine"]?.ToString();
+                    if (!string.IsNullOrEmpty(cmdLine))
+                    {
+                        bool isPluginProcess = cmdLine.Contains("MasterHub", StringComparison.OrdinalIgnoreCase) ||
+                                               cmdLine.Contains(".sdPlugin", StringComparison.OrdinalIgnoreCase) ||
+                                               cmdLine.Contains("-pluginUUID", StringComparison.OrdinalIgnoreCase);
+
+                        if (isPluginProcess && uint.TryParse(obj["ProcessId"]?.ToString(), out uint pid))
+                        {
+                            try
+                            {
+                                var proc = Process.GetProcessById((int)pid);
+                                if (!proc.HasExited)
+                                {
+                                    proc.Kill(true);
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                }
+                catch { }
+            }
+        }
+        catch { }
     }
 
     public async Task StopAsync()
@@ -892,6 +935,7 @@ setTimeout(initPlugin, 250);
 
                 if (process.Start())
                 {
+                    ChildProcessTracker.AddProcess(process);
                     process.BeginOutputReadLine();
                     process.BeginErrorReadLine();
                     _runningProcesses[pluginUuid] = process;
@@ -1467,7 +1511,8 @@ setTimeout(initPlugin, 250);
                     Arguments = $"--app=\"{url}\" --window-size=520,680 --user-data-dir=\"{tempProfile}\" --no-first-run --no-default-browser-check",
                     UseShellExecute = false
                 };
-                Process.Start(psi);
+                var proc = Process.Start(psi);
+                if (proc != null) ChildProcessTracker.AddProcess(proc);
                 return true;
             }
 

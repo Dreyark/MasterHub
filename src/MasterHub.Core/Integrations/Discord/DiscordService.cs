@@ -2,6 +2,7 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
 using System.Net.Http;
@@ -175,6 +176,19 @@ public sealed class DiscordService : IDiscordService
         {
             return await ConnectWithCustomHandlerAsync(_clientId, trimmedToken, cancellationToken).ConfigureAwait(false);
         }
+
+        // Sprawdź czy Discord jest w ogóle uruchomiony w systemie przed odpytywaniem potoków
+        try
+        {
+            if (Process.GetProcessesByName("Discord").Length == 0 &&
+                Process.GetProcessesByName("DiscordCanary").Length == 0 &&
+                Process.GetProcessesByName("DiscordPTB").Length == 0)
+            {
+                SetConnectedState(false);
+                return false;
+            }
+        }
+        catch { }
 
         // 2. Wyszukiwanie lokalnego potoku Named Pipe: discord-ipc-0 .. discord-ipc-9
         for (int i = 0; i < 10; i++)

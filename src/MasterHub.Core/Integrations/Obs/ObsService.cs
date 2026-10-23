@@ -2,6 +2,7 @@ namespace MasterHub.Core.Integrations.Obs;
 
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.IO;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
@@ -18,6 +19,28 @@ using System.Threading.Tasks;
 public sealed class ObsService : IObsService
 {
     private static readonly JsonElement s_emptyObject = JsonDocument.Parse("{}").RootElement;
+    private static DateTime s_lastProcessCheck = DateTime.MinValue;
+    private static bool s_cachedProcessRunning = false;
+
+    private static bool IsObsProcessRunning()
+    {
+        if (DateTime.UtcNow - s_lastProcessCheck < TimeSpan.FromSeconds(3))
+        {
+            return s_cachedProcessRunning;
+        }
+        s_lastProcessCheck = DateTime.UtcNow;
+        try
+        {
+            s_cachedProcessRunning = Process.GetProcessesByName("obs64").Length > 0 ||
+                                     Process.GetProcessesByName("obs32").Length > 0 ||
+                                     Process.GetProcessesByName("obs").Length > 0;
+        }
+        catch
+        {
+            s_cachedProcessRunning = false;
+        }
+        return s_cachedProcessRunning;
+    }
 
     private ClientWebSocket? _webSocket;
     private CancellationTokenSource? _cts;
@@ -195,6 +218,15 @@ public sealed class ObsService : IObsService
 
             Host = cleanHost;
             Port = port > 0 ? port : 4455;
+
+            bool isLocal = cleanHost.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                           cleanHost.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase);
+
+            if (isLocal && !IsObsProcessRunning())
+            {
+                LastError = "Aplikacja OBS Studio nie jest uruchomiona na komputerze.";
+                return false;
+            }
 
             _cts = new CancellationTokenSource();
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _cts.Token);
