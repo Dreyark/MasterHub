@@ -135,6 +135,11 @@ public sealed class StreamDeckWebSocketServer : IDisposable
             try
             {
                 var context = await _listener.GetContextAsync();
+                if (_cts == null || _cts.IsCancellationRequested || context.Request.Url?.AbsolutePath == "/__shutdown")
+                {
+                    try { context.Response.Close(); } catch { }
+                    break;
+                }
                 if (context.Request.IsWebSocketRequest)
                 {
                     _ = ProcessWebSocketRequestAsync(context);
@@ -973,6 +978,60 @@ public sealed class StreamDeckWebSocketServer : IDisposable
         }
     }
 
+    public async Task ClosePluginSocketAsync(string pluginUuid)
+    {
+        if (_pluginSockets.TryRemove(pluginUuid, out var ws))
+        {
+            try
+            {
+                if (ws.State == WebSocketState.Open || ws.State == WebSocketState.CloseReceived)
+                {
+                    var sendLock = _socketSendLocks.GetOrAdd(ws, _ => new SemaphoreSlim(1, 1));
+                    await sendLock.WaitAsync().ConfigureAwait(false);
+                    try
+                    {
+                        using var closeCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
+                        await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Plugin stopping", closeCts.Token).ConfigureAwait(false);
+                    }
+                    catch { }
+                    finally
+                    {
+                        sendLock.Release();
+                    }
+                }
+            }
+            catch { }
+            try { ws.Dispose(); } catch { }
+        }
+    }
+
+    public async Task ClosePropertyInspectorSocketAsync(string contextOrUuid)
+    {
+        if (_piSockets.TryRemove(contextOrUuid, out var ws))
+        {
+            try
+            {
+                if (ws.State == WebSocketState.Open || ws.State == WebSocketState.CloseReceived)
+                {
+                    var sendLock = _socketSendLocks.GetOrAdd(ws, _ => new SemaphoreSlim(1, 1));
+                    await sendLock.WaitAsync().ConfigureAwait(false);
+                    try
+                    {
+                        using var closeCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
+                        await ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Inspector stopping", closeCts.Token).ConfigureAwait(false);
+                    }
+                    catch { }
+                    finally
+                    {
+                        sendLock.Release();
+                    }
+                }
+            }
+            catch { }
+            try { ws.Dispose(); } catch { }
+        }
+    }
+
     public void Dispose()
     {
         if (_isDisposed) return;
@@ -980,16 +1039,13 @@ public sealed class StreamDeckWebSocketServer : IDisposable
 
         try
         {
-            _cts?.Cancel();
-            _listener.Stop();
-            _listener.Close();
-
+            // 1. Zamknij gniazda klientów płynnie przed anulowaniem nasłuchu HTTP
             var allSockets = _pluginSockets.Values.Concat(_piSockets.Values).Distinct().ToList();
             foreach (var ws in allSockets)
             {
                 try
                 {
-                    if (ws.State == WebSocketState.Open)
+                    if (ws.State == WebSocketState.Open || ws.State == WebSocketState.CloseReceived)
                     {
                         using var closeCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
                         ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Host shutdown", closeCts.Token).GetAwaiter().GetResult();
@@ -1000,6 +1056,23 @@ public sealed class StreamDeckWebSocketServer : IDisposable
             }
             _pluginSockets.Clear();
             _piSockets.Clear();
+
+            // 2. Anuluj pętlę roboczą
+            _cts?.Cancel();
+
+            // 3. Płynne wybudzenie GetContextAsync na HttpListenerze zapobiegające rzuceniu HttpListenerException
+            try
+            {
+                if (_listener.IsListening)
+                {
+                    using var pingClient = new HttpClient { Timeout = TimeSpan.FromMilliseconds(150) };
+                    _ = pingClient.GetAsync($"http://127.0.0.1:{Port}/__shutdown");
+                }
+            }
+            catch { }
+
+            try { _listener.Stop(); } catch { }
+            try { _listener.Close(); } catch { }
         }
         catch { }
     }

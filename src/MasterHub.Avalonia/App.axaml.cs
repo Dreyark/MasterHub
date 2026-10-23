@@ -56,11 +56,9 @@ public partial class App : Application
             desktop.MainWindow = mainWindow;
             desktop.ShutdownRequested += (s, e) => ShutdownHardware();
             desktop.Exit += (s, e) => ShutdownHardware();
-
             var appSettings = Services.GetRequiredService<IProfileService>().GetAppSettings();
             if (!string.IsNullOrWhiteSpace(appSettings.LanguageCode))
                 LocalizationService.Instance.SetLanguage(appSettings.LanguageCode);
-
             bool isAutostart = desktop.Args?.Any(a => a.Equals("--autostart", StringComparison.OrdinalIgnoreCase) || a.Equals("--minimized", StringComparison.OrdinalIgnoreCase)) == true;
             if (isAutostart && appSettings.StartMinimizedToTray)
                 mainWindow.Opened += (s, e) => Services.GetRequiredService<ITrayService>().MinimizeToTray();
@@ -73,17 +71,20 @@ public partial class App : Application
 
         var haSettings = Services.GetRequiredService<IProfileService>().GetHomeAssistantSettings();
         if (haSettings.AutoConnect && !string.IsNullOrWhiteSpace(haSettings.AccessToken))
-        {
             _ = Services.GetRequiredService<IHomeAssistantService>().ConnectAsync();
-        }
     }
+
+    private static int s_isShuttingDown;
 
     private static void ShutdownHardware()
     {
-        try { Services?.GetService<IStreamDeckPluginHost>()?.StopAsync().GetAwaiter().GetResult(); } catch { }
-        try { Services?.GetService<CanvasViewModel>()?.SaveCurrentStateToActiveProfile(); } catch { }
-        try { Services?.GetService<IMasterHubDeviceService>()?.Dispose(); } catch { }
-        try { (Services as IDisposable)?.Dispose(); } catch { }
+        if (System.Threading.Interlocked.Exchange(ref s_isShuttingDown, 1) != 0) return;
+        var sp = Services;
+        Services = null!;
+        try { sp?.GetService<IStreamDeckPluginHost>()?.StopAsync().GetAwaiter().GetResult(); } catch { }
+        try { sp?.GetService<CanvasViewModel>()?.SaveCurrentStateToActiveProfile(); } catch { }
+        try { sp?.GetService<IMasterHubDeviceService>()?.Dispose(); } catch { }
+        try { (sp as IDisposable)?.Dispose(); } catch { }
     }
 
     private static void ConfigureServices(IServiceCollection services)

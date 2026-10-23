@@ -956,15 +956,24 @@ setTimeout(initPlugin, 250);
         }
     }
 
-    public Task StopPluginAsync(string pluginUuid)
+    public async Task StopPluginAsync(string pluginUuid)
     {
+        try
+        {
+            await _server.ClosePluginSocketAsync(pluginUuid);
+        }
+        catch { }
+
         if (_runningProcesses.TryRemove(pluginUuid, out var proc))
         {
             try
             {
                 if (!proc.HasExited)
                 {
-                    proc.Kill(true);
+                    if (!proc.WaitForExit(150))
+                    {
+                        proc.Kill(true);
+                    }
                 }
                 proc.Dispose();
             }
@@ -981,8 +990,6 @@ setTimeout(initPlugin, 250);
             }
             catch { }
         }
-
-        return Task.CompletedTask;
     }
 
     private static string? FindBrowserExecutable()
