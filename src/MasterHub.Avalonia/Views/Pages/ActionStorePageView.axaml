@@ -35,7 +35,7 @@
                                         <Border Grid.Column="2" Classes="statusBadgeCard" VerticalAlignment="Center">
                                             <StackPanel Orientation="Horizontal" Spacing="8">
                                                 <Ellipse Width="8" Height="8"
-                                                         Fill="{Binding IsOnline, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                                                         Fill="{Binding StatusColor}" />
                                                 <TextBlock Text="{Binding Status}" FontSize="10" FontWeight="SemiBold"
                                                            Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
                                             </StackPanel>
