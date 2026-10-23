@@ -230,6 +230,13 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                                                 name = "MasterHub Keydeck 15",
                                                 size = new { columns = 5, rows = 3 },
                                                 type = 0
+                                            },
+                                            new
+                                            {
+                                                id = "masterhub-keydeck-plus",
+                                                name = "MasterHub Keydeck Plus",
+                                                size = new { columns = 4, rows = 2 },
+                                                type = 7
                                             }
                                         }
                                     };
@@ -481,6 +488,8 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                             _pluginSockets[uuid] = socket;
                             PluginRegistered?.Invoke(uuid, eventName);
                             _ = FlushPendingMessagesAsync(uuid);
+                            _ = SendDeviceDidConnectAsync(uuid, "masterhub-keydeck-15", "MasterHub Keydeck 15", 0, 5, 3);
+                            _ = SendDeviceDidConnectAsync(uuid, "masterhub-keydeck-plus", "MasterHub Keydeck Plus", 7, 4, 2);
                         }
                     }
                 }
@@ -715,6 +724,10 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                             SetFeedbackRequested?.Invoke(context, fblPayload.GetRawText());
                         }
                         break;
+
+                    case "setTriggerDescription":
+                        // Dynamic trigger descriptions for rotary dials/encoders
+                        break;
                 }
             }
         }
@@ -851,6 +864,158 @@ public sealed class StreamDeckWebSocketServer : IDisposable
         {
             await SendRawJsonAsync(socket, json);
         }
+    }
+
+    public async Task SendDeviceDidConnectAsync(string pluginUuid, string deviceId, string deviceName, int type, int cols, int rows)
+    {
+        var msg = new
+        {
+            @event = "deviceDidConnect",
+            device = deviceId,
+            deviceInfo = new
+            {
+                name = deviceName,
+                type = type,
+                size = new { columns = cols, rows = rows }
+            }
+        };
+        await SendEventAsync(pluginUuid, msg);
+    }
+
+    public async Task SendDeviceDidDisconnectAsync(string pluginUuid, string deviceId)
+    {
+        var msg = new
+        {
+            @event = "deviceDidDisconnect",
+            device = deviceId
+        };
+        await SendEventAsync(pluginUuid, msg);
+    }
+
+    public async Task SendSystemDidWakeUpAsync(string pluginUuid)
+    {
+        var msg = new
+        {
+            @event = "systemDidWakeUp"
+        };
+        await SendEventAsync(pluginUuid, msg);
+    }
+
+    public async Task SendApplicationDidLaunchAsync(string pluginUuid, string application)
+    {
+        var msg = new
+        {
+            @event = "applicationDidLaunch",
+            payload = new { application = application }
+        };
+        await SendEventAsync(pluginUuid, msg);
+    }
+
+    public async Task SendApplicationDidTerminateAsync(string pluginUuid, string application)
+    {
+        var msg = new
+        {
+            @event = "applicationDidTerminate",
+            payload = new { application = application }
+        };
+        await SendEventAsync(pluginUuid, msg);
+    }
+
+    public async Task SendDialRotateAsync(string pluginUuid, string context, string actionUuid, int ticks, bool pressed, object? settings = null)
+    {
+        int col = 0, row = 0;
+        var msg = new
+        {
+            @event = "dialRotate",
+            action = actionUuid,
+            context = context,
+            device = "masterhub-keydeck-plus",
+            payload = new
+            {
+                settings = settings ?? new { },
+                coordinates = new { column = col, row = row },
+                ticks = ticks,
+                pressed = pressed,
+                controller = "Encoder"
+            }
+        };
+        await SendEventAsync(pluginUuid, msg);
+    }
+
+    public async Task SendDialPressAsync(string pluginUuid, string context, string actionUuid, bool isDown, object? settings = null)
+    {
+        int col = 0, row = 0;
+        var msg = new
+        {
+            @event = isDown ? "dialDown" : "dialUp",
+            action = actionUuid,
+            context = context,
+            device = "masterhub-keydeck-plus",
+            payload = new
+            {
+                settings = settings ?? new { },
+                coordinates = new { column = col, row = row },
+                controller = "Encoder"
+            }
+        };
+        await SendEventAsync(pluginUuid, msg);
+    }
+
+    public async Task SendTouchTapAsync(string pluginUuid, string context, string actionUuid, float x, float y, bool hold, object? settings = null)
+    {
+        int col = 0, row = 0;
+        var msg = new
+        {
+            @event = "touchTap",
+            action = actionUuid,
+            context = context,
+            device = "masterhub-keydeck-plus",
+            payload = new
+            {
+                settings = settings ?? new { },
+                coordinates = new { column = col, row = row },
+                tapPos = new[] { (int)x, (int)y },
+                hold = hold,
+                controller = "Encoder"
+            }
+        };
+        await SendEventAsync(pluginUuid, msg);
+    }
+
+    public async Task SendTitleParametersDidChangeAsync(string pluginUuid, string context, string actionUuid, string title, string? font = null, int? fontSize = null, string? fontColor = null)
+    {
+        int col = 0, row = 0;
+        if (context.StartsWith("key_") && int.TryParse(context.AsSpan(4), out int kIdx))
+        {
+            col = kIdx % 5;
+            row = kIdx / 5;
+        }
+
+        var msg = new
+        {
+            @event = "titleParametersDidChange",
+            action = actionUuid,
+            context = context,
+            device = "masterhub-keydeck-15",
+            payload = new
+            {
+                coordinates = new { column = col, row = row },
+                settings = _keySettings.TryGetValue(context, out var s) ? (object)s : new { },
+                state = 0,
+                title = title,
+                titleParameters = new
+                {
+                    fontFamily = font ?? "Segoe UI",
+                    fontSize = fontSize ?? 12,
+                    fontStyle = "Regular",
+                    fontUnderline = false,
+                    showTitle = !string.IsNullOrEmpty(title),
+                    titleAlignment = "middle",
+                    titleColor = fontColor ?? "#ffffff"
+                }
+            }
+        };
+        await SendEventAsync(pluginUuid, msg);
     }
 
     public async Task SendGlobalSettingsToSocketAsync(WebSocket socket, string? pluginUuid)
@@ -1067,19 +1232,8 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                 try { ws.Dispose(); } catch { }
             }
 
-            // 2. Anuluj pętlę roboczą
+            // 2. Anuluj pętlę roboczą i zamknij listener
             _cts?.Cancel();
-
-            // 3. Płynne wybudzenie GetContextAsync na HttpListenerze zapobiegające rzuceniu HttpListenerException
-            if (_listener.IsListening)
-            {
-                try
-                {
-                    using var pingClient = new HttpClient { Timeout = TimeSpan.FromMilliseconds(250) };
-                    pingClient.GetAsync($"http://127.0.0.1:{Port}/__shutdown").GetAwaiter().GetResult();
-                }
-                catch { }
-            }
 
             try { _listener.Stop(); } catch { }
             try { _listener.Close(); } catch { }

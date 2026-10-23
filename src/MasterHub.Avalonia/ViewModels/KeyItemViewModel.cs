@@ -383,6 +383,8 @@ public partial class KeyItemViewModel : ObservableObject
                 OnPropertyChanged(nameof(StreamDeckPluginName));
                 OnPropertyChanged(nameof(StreamDeckActionName));
                 OnPropertyChanged(nameof(StreamDeckActionTooltip));
+                OnPropertyChanged(nameof(StreamDeckActionControllers));
+                OnPropertyChanged(nameof(StreamDeckActionHasDial));
                 OnPropertyChanged(nameof(HasPropertyInspector));
                 ActionChangedCallback?.Invoke(this);
             }
@@ -401,6 +403,8 @@ public partial class KeyItemViewModel : ObservableObject
                 OnPropertyChanged(nameof(StreamDeckPluginName));
                 OnPropertyChanged(nameof(StreamDeckActionName));
                 OnPropertyChanged(nameof(StreamDeckActionTooltip));
+                OnPropertyChanged(nameof(StreamDeckActionControllers));
+                OnPropertyChanged(nameof(StreamDeckActionHasDial));
                 OnPropertyChanged(nameof(HasPropertyInspector));
                 ActionChangedCallback?.Invoke(this);
             }
@@ -2017,6 +2021,26 @@ public partial class KeyItemViewModel : ObservableObject
         }
     }
 
+    public string StreamDeckActionControllers
+    {
+        get
+        {
+            var host = App.Services?.GetService<IStreamDeckPluginHost>();
+            var act = host?.GetActionManifest(StreamDeckPluginUuid, StreamDeckActionUuid);
+            return act?.ControllersDisplay ?? "Klawisze";
+        }
+    }
+
+    public bool StreamDeckActionHasDial
+    {
+        get
+        {
+            var host = App.Services?.GetService<IStreamDeckPluginHost>();
+            var act = host?.GetActionManifest(StreamDeckPluginUuid, StreamDeckActionUuid);
+            return act?.SupportsEncoder ?? false;
+        }
+    }
+
     public bool HasPropertyInspector
     {
         get
@@ -2037,6 +2061,14 @@ public partial class KeyItemViewModel : ObservableObject
     public async Task SaveStreamDeckSettingsJsonAsync(string? newJson)
     {
         string toSave = newJson ?? StreamDeckSettingsJson;
+        if (string.IsNullOrWhiteSpace(toSave)) toSave = "{}";
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(toSave);
+            toSave = System.Text.Json.JsonSerializer.Serialize(doc.RootElement, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+        }
+        catch { }
+
         StreamDeckSettingsJson = toSave;
         var host = App.Services?.GetService<IStreamDeckPluginHost>();
         if (host != null && !string.IsNullOrEmpty(StreamDeckPluginUuid))

@@ -27,8 +27,13 @@ public class PluginCatalogService : IPluginCatalogService, IDisposable
         }
         else
         {
-            var handler = new HttpClientHandler { AutomaticDecompression = System.Net.DecompressionMethods.All };
-            _httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(30) };
+            var handler = new SocketsHttpHandler
+            {
+                AutomaticDecompression = System.Net.DecompressionMethods.All,
+                PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+                ConnectTimeout = TimeSpan.FromSeconds(5)
+            };
+            _httpClient = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
             _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("MasterHub/1.0 (Windows NT 10.0; Win64; x64)");
             _ownsHttpClient = true;
         }

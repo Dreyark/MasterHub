@@ -798,6 +798,13 @@ public sealed class StreamDeckPluginHost : IStreamDeckPluginHost
                         name = "MasterHub Keydeck 15",
                         size = new { columns = 5, rows = 3 },
                         type = 0
+                    },
+                    new
+                    {
+                        id = "masterhub-keydeck-plus",
+                        name = "MasterHub Keydeck Plus",
+                        size = new { columns = 4, rows = 2 },
+                        type = 7
                     }
                 }
             });
@@ -1151,6 +1158,70 @@ setTimeout(initPlugin, 250);
         };
 
         await _server.SendEventAsync(pluginUuid, msg);
+    }
+
+    public async Task SendDialRotateAsync(int dialIndex, string pluginUuid, string actionUuid, int ticks, bool pressed, string? settingsJson = null)
+    {
+        string context = $"dial_{dialIndex}";
+        await _server.SendDialRotateAsync(pluginUuid, context, actionUuid, ticks, pressed, ParseJsonOrEmpty(settingsJson));
+    }
+
+    public async Task SendDialPressAsync(int dialIndex, string pluginUuid, string actionUuid, bool isDown, string? settingsJson = null)
+    {
+        string context = $"dial_{dialIndex}";
+        await _server.SendDialPressAsync(pluginUuid, context, actionUuid, isDown, ParseJsonOrEmpty(settingsJson));
+    }
+
+    public async Task SendTouchTapAsync(int dialIndex, string pluginUuid, string actionUuid, float x, float y, bool hold, string? settingsJson = null)
+    {
+        string context = $"dial_{dialIndex}";
+        await _server.SendTouchTapAsync(pluginUuid, context, actionUuid, x, y, hold, ParseJsonOrEmpty(settingsJson));
+    }
+
+    public async Task SendTitleParametersDidChangeAsync(int keyIndex, string pluginUuid, string actionUuid, string title, string? font = null, int? fontSize = null, string? fontColor = null)
+    {
+        string context = $"key_{keyIndex}";
+        await _server.SendTitleParametersDidChangeAsync(pluginUuid, context, actionUuid, title, font, fontSize, fontColor);
+    }
+
+    public async Task SendDeviceDidConnectAsync(string deviceId, string deviceName, int type, int cols, int rows)
+    {
+        foreach (var plugin in _plugins.Values)
+        {
+            await _server.SendDeviceDidConnectAsync(plugin.PluginUuid, deviceId, deviceName, type, cols, rows);
+        }
+    }
+
+    public async Task SendDeviceDidDisconnectAsync(string deviceId)
+    {
+        foreach (var plugin in _plugins.Values)
+        {
+            await _server.SendDeviceDidDisconnectAsync(plugin.PluginUuid, deviceId);
+        }
+    }
+
+    public async Task SendSystemDidWakeUpAsync()
+    {
+        foreach (var plugin in _plugins.Values)
+        {
+            await _server.SendSystemDidWakeUpAsync(plugin.PluginUuid);
+        }
+    }
+
+    public async Task SendApplicationDidLaunchAsync(string application)
+    {
+        foreach (var plugin in _plugins.Values)
+        {
+            await _server.SendApplicationDidLaunchAsync(plugin.PluginUuid, application);
+        }
+    }
+
+    public async Task SendApplicationDidTerminateAsync(string application)
+    {
+        foreach (var plugin in _plugins.Values)
+        {
+            await _server.SendApplicationDidTerminateAsync(plugin.PluginUuid, application);
+        }
     }
 
     private static object ParseJsonOrEmpty(string? json)
