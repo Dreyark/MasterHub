@@ -80,6 +80,7 @@ public partial class App : Application
 
     private static void ShutdownHardware()
     {
+        try { Services?.GetService<IStreamDeckPluginHost>()?.StopAsync().GetAwaiter().GetResult(); } catch { }
         try { Services?.GetService<CanvasViewModel>()?.SaveCurrentStateToActiveProfile(); } catch { }
         try { Services?.GetService<IMasterHubDeviceService>()?.Dispose(); } catch { }
         try { (Services as IDisposable)?.Dispose(); } catch { }

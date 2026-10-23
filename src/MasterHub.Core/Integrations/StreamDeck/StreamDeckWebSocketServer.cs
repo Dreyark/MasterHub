@@ -24,6 +24,7 @@ public sealed class StreamDeckWebSocketServer : IDisposable
     private readonly ConcurrentDictionary<string, ConcurrentQueue<object>> _pendingMessagesByPlugin = new();
     private readonly ConcurrentDictionary<string, JsonElement> _keySettings = new();
     private readonly ConcurrentDictionary<string, JsonElement> _globalSettings = new();
+    private readonly ConcurrentDictionary<WebSocket, SemaphoreSlim> _socketSendLocks = new();
     private readonly string _globalSettingsFilePath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "MasterHub", "streamdeck_global_settings.json");
@@ -355,7 +356,20 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                     result = await webSocket.ReceiveAsync(new ArraySegment<byte>(buffer), _cts.Token);
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
-                        await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
+                        var sendLock = _socketSendLocks.GetOrAdd(webSocket, _ => new SemaphoreSlim(1, 1));
+                        await sendLock.WaitAsync().ConfigureAwait(false);
+                        try
+                        {
+                            if (webSocket.State == WebSocketState.Open || webSocket.State == WebSocketState.CloseReceived)
+                            {
+                                await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
+                            }
+                        }
+                        catch { }
+                        finally
+                        {
+                            sendLock.Release();
+                        }
                         return;
                     }
                     ms.Write(buffer, 0, result.Count);
@@ -374,9 +388,13 @@ public sealed class StreamDeckWebSocketServer : IDisposable
         {
             if (associatedPluginUuid != null)
             {
-                _pluginSockets.TryRemove(associatedPluginUuid, out _);
-                if (_piSockets.TryRemove(associatedPluginUuid, out _))
+                if (_pluginSockets.TryGetValue(associatedPluginUuid, out var curPl) && curPl == webSocket)
                 {
+                    _pluginSockets.TryRemove(associatedPluginUuid, out _);
+                }
+                if (_piSockets.TryGetValue(associatedPluginUuid, out var curPi) && curPi == webSocket)
+                {
+                    _piSockets.TryRemove(associatedPluginUuid, out _);
                     if (_contextToPluginMap.TryGetValue(associatedPluginUuid, out var plUuid))
                     {
                         _contextToActionMap.TryGetValue(associatedPluginUuid, out var actUuid);
@@ -390,6 +408,19 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                     }
                 }
             }
+            if (webSocket != null && _socketSendLocks.TryRemove(webSocket, out var sl))
+            {
+                sl.Dispose();
+            }
+            try
+            {
+                if (webSocket != null && webSocket.State == WebSocketState.Open)
+                {
+                    using var closeCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+                    webSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Closing", closeCts.Token).GetAwaiter().GetResult();
+                }
+            }
+            catch { }
             webSocket?.Dispose();
         }
     }
@@ -414,6 +445,16 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                         currentUuid = uuid;
                         if (eventName == "registerPropertyInspector")
                         {
+                            if (_piSockets.TryGetValue(uuid, out var oldPi) && oldPi != socket)
+                            {
+                                try
+                                {
+                                    if (oldPi.State == WebSocketState.Open)
+                                        oldPi.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Replaced", CancellationToken.None).GetAwaiter().GetResult();
+                                }
+                                catch { }
+                                try { oldPi.Dispose(); } catch { }
+                            }
                             _piSockets[uuid] = socket;
                             if (_contextToPluginMap.TryGetValue(uuid, out var plUuid))
                             {
@@ -429,6 +470,16 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                         }
                         else
                         {
+                            if (_pluginSockets.TryGetValue(uuid, out var oldPl) && oldPl != socket)
+                            {
+                                try
+                                {
+                                    if (oldPl.State == WebSocketState.Open)
+                                        oldPl.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Replaced", CancellationToken.None).GetAwaiter().GetResult();
+                                }
+                                catch { }
+                                try { oldPl.Dispose(); } catch { }
+                            }
                             _pluginSockets[uuid] = socket;
                             PluginRegistered?.Invoke(uuid, eventName);
                             _ = FlushPendingMessagesAsync(uuid);
@@ -679,13 +730,8 @@ public sealed class StreamDeckWebSocketServer : IDisposable
     {
         if (_pluginSockets.TryGetValue(pluginUuid, out var socket) && socket.State == WebSocketState.Open)
         {
-            try
-            {
-                string json = JsonSerializer.Serialize(payload);
-                byte[] bytes = Encoding.UTF8.GetBytes(json);
-                await socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
-            }
-            catch { }
+            string json = JsonSerializer.Serialize(payload);
+            await SendRawJsonAsync(socket, json);
         }
         else
         {
@@ -702,13 +748,8 @@ public sealed class StreamDeckWebSocketServer : IDisposable
         {
             while (queue.TryDequeue(out var payload))
             {
-                try
-                {
-                    string json = JsonSerializer.Serialize(payload);
-                    byte[] bytes = Encoding.UTF8.GetBytes(json);
-                    await socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
-                }
-                catch { }
+                string json = JsonSerializer.Serialize(payload);
+                await SendRawJsonAsync(socket, json);
             }
         }
     }
@@ -783,14 +824,22 @@ public sealed class StreamDeckWebSocketServer : IDisposable
 
     public async Task SendRawJsonAsync(WebSocket socket, string json)
     {
-        if (socket.State == WebSocketState.Open)
+        if (socket.State != WebSocketState.Open) return;
+
+        var sendLock = _socketSendLocks.GetOrAdd(socket, _ => new SemaphoreSlim(1, 1));
+        await sendLock.WaitAsync().ConfigureAwait(false);
+        try
         {
-            try
+            if (socket.State == WebSocketState.Open)
             {
                 byte[] bytes = Encoding.UTF8.GetBytes(json);
-                await socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
+                await socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None).ConfigureAwait(false);
             }
-            catch { }
+        }
+        catch { }
+        finally
+        {
+            sendLock.Release();
         }
     }
 
@@ -798,12 +847,7 @@ public sealed class StreamDeckWebSocketServer : IDisposable
     {
         if (_pluginSockets.TryGetValue(pluginUuid, out var socket) && socket.State == WebSocketState.Open)
         {
-            try
-            {
-                byte[] bytes = Encoding.UTF8.GetBytes(json);
-                await socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None);
-            }
-            catch { }
+            await SendRawJsonAsync(socket, json);
         }
     }
 
@@ -940,16 +984,21 @@ public sealed class StreamDeckWebSocketServer : IDisposable
             _listener.Stop();
             _listener.Close();
 
-            foreach (var ws in _pluginSockets.Values)
+            var allSockets = _pluginSockets.Values.Concat(_piSockets.Values).Distinct().ToList();
+            foreach (var ws in allSockets)
             {
+                try
+                {
+                    if (ws.State == WebSocketState.Open)
+                    {
+                        using var closeCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+                        ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Host shutdown", closeCts.Token).GetAwaiter().GetResult();
+                    }
+                }
+                catch { }
                 try { ws.Dispose(); } catch { }
             }
             _pluginSockets.Clear();
-
-            foreach (var ws in _piSockets.Values)
-            {
-                try { ws.Dispose(); } catch { }
-            }
             _piSockets.Clear();
         }
         catch { }

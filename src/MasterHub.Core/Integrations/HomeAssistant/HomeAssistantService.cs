@@ -413,6 +413,11 @@ public class HomeAssistantService : IHomeAssistantService
         try
         {
             _wsCts?.Cancel();
+            if (_webSocket?.State == WebSocketState.Open)
+            {
+                using var closeCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+                _webSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Closing", closeCts.Token).GetAwaiter().GetResult();
+            }
             _webSocket?.Dispose();
         }
         catch { }
