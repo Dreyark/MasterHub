@@ -1,10 +1,11 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
+        xmlns:deck="using:MasterHub.Core.Integrations.StreamDeck"
         x:Class="MasterHub.Avalonia.Views.Pages.PluginSettingsWindow"
         x:DataType="vm:PluginSettingsViewModel"
         Title="{Binding PluginName, StringFormat='Ustawienia wtyczki: {0}'}"
-        Width="540" Height="600"
+        Width="560" Height="620"
         WindowStartupLocation="CenterOwner"
         Background="#0F121D"
         Icon="/Assets/masterhub-logo.ico">
@@ -26,6 +27,9 @@
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <TextBlock Text="{Binding PluginName}" FontSize="15" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
                         <TextBlock Text="{Binding Version, StringFormat='v{0}'}" Classes="dim" FontSize="11" VerticalAlignment="Center" />
+                        <Border Background="#25354B" CornerRadius="4" Padding="5,1" IsVisible="{Binding HasDials}">
+                            <TextBlock Text="Pokrętła (Dials)" FontSize="10" Foreground="#00E5A3" FontWeight="SemiBold" />
+                        </Border>
                     </StackPanel>
                     <TextBlock Text="{Binding PluginUuid}" Classes="dim" FontSize="10" Foreground="{StaticResource AccentPrimaryBrush}" />
                 </StackPanel>
@@ -60,9 +64,10 @@
                                      Background="#141724" />
                         </StackPanel>
 
-                        <Grid ColumnDefinitions="*,Auto">
-                            <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" Classes="dim" Foreground="#00E5A3" VerticalAlignment="Center" TextWrapping="Wrap" />
-                            <Button Grid.Column="1" Content="💾 Zapisz ustawienia" Command="{Binding SaveGlobalSettingsCommand}" Classes="accentBtn" Padding="12,6" />
+                        <Grid ColumnDefinitions="*,Auto,Auto">
+                            <TextBlock Grid.Column="0" Text="{Binding StatusMessage}" Classes="dim" Foreground="#00E5A3" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,8,0" />
+                            <Button Grid.Column="1" Content="↺ Formatuj JSON" Command="{Binding FormatJsonCommandCommand}" Classes="pillBtn" Padding="10,6" Margin="0,0,6,0" />
+                            <Button Grid.Column="2" Content="💾 Zapisz" Command="{Binding SaveGlobalSettingsCommand}" Classes="accentBtn" Padding="12,6" />
                         </Grid>
                     </StackPanel>
                 </ScrollViewer>
@@ -72,11 +77,16 @@
                 <ScrollViewer Margin="8,10">
                     <ItemsControl ItemsSource="{Binding Actions}">
                         <ItemsControl.ItemTemplate>
-                            <DataTemplate>
+                            <DataTemplate x:DataType="deck:StreamDeckActionManifest">
                                 <Border Classes="glassCard" Margin="0,0,0,8" Padding="10">
                                     <Grid ColumnDefinitions="*,Auto">
                                         <StackPanel Grid.Column="0" Spacing="2" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}" />
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <TextBlock Text="{Binding Name}" FontWeight="Bold" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}" />
+                                                <Border Background="#1C2030" CornerRadius="3" Padding="4,1">
+                                                    <TextBlock Text="{Binding ControllersDisplay}" FontSize="9" Foreground="#A0AEC0" />
+                                                </Border>
+                                            </StackPanel>
                                             <TextBlock Text="{Binding UUID}" Classes="dim" FontSize="10" />
                                             <TextBlock Text="{Binding Tooltip}" Classes="dim" FontSize="10" TextWrapping="Wrap"
                                                        IsVisible="{Binding Tooltip, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
@@ -96,9 +106,10 @@
 
         <!-- Dolny pasek akcji -->
         <Border Grid.Row="2" Background="#161B2B" Padding="16,10" BorderBrush="#262E48" BorderThickness="0,1,0,0">
-            <Grid ColumnDefinitions="Auto,*,Auto">
-                <Button Grid.Column="0" Content="📂 Folder wtyczki" Command="{Binding OpenFolderCommand}" Classes="pillBtn" Padding="10,6" />
-                <Button Grid.Column="2" Content="Zamknij" Command="{Binding CloseCommand}" Classes="pillBtn" Padding="14,6" />
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                <Button Grid.Column="0" Content="📂 Folder" Command="{Binding OpenFolderCommand}" Classes="pillBtn" Padding="10,6" Margin="0,0,8,0" />
+                <Button Grid.Column="1" Content="🌐 Repo/Strona" Command="{Binding OpenUrlCommand}" Classes="pillBtn" Padding="10,6" IsVisible="{Binding HasUrl}" />
+                <Button Grid.Column="3" Content="Zamknij" Command="{Binding CloseCommand}" Classes="pillBtn" Padding="14,6" />
             </Grid>
         </Border>
     </Grid>

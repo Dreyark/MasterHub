@@ -13,8 +13,12 @@
                                VerticalAlignment="Center" Margin="0,0,8,0" />
                     <TextBlock Grid.Column="1" Grid.Row="0" Text="{Binding StreamDeckPluginName}"
                                FontWeight="Bold" FontSize="12" Foreground="{StaticResource TextPrimaryBrush}" />
-                    <TextBlock Grid.Column="1" Grid.Row="1" Text="{Binding StreamDeckActionName}"
-                               Classes="dim" FontSize="11" />
+                    <StackPanel Grid.Column="1" Grid.Row="1" Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="{Binding StreamDeckActionName}" Classes="dim" FontSize="11" />
+                        <Border Background="#1C2030" CornerRadius="3" Padding="4,1">
+                            <TextBlock Text="{Binding StreamDeckActionControllers}" FontSize="9" Foreground="#A0AEC0" />
+                        </Border>
+                    </StackPanel>
                 </Grid>
 
                 <TextBlock Text="{Binding StreamDeckActionTooltip}"

@@ -38,6 +38,16 @@ public interface IStreamDeckPluginHost : IDisposable
     Task SendKeyDownAsync(int keyIndex, string pluginUuid, string actionUuid, string? settingsJson = null);
     Task SendKeyUpAsync(int keyIndex, string pluginUuid, string actionUuid, string? settingsJson = null);
 
+    Task SendDialRotateAsync(int dialIndex, string pluginUuid, string actionUuid, int ticks, bool pressed, string? settingsJson = null);
+    Task SendDialPressAsync(int dialIndex, string pluginUuid, string actionUuid, bool isDown, string? settingsJson = null);
+    Task SendTouchTapAsync(int dialIndex, string pluginUuid, string actionUuid, float x, float y, bool hold, string? settingsJson = null);
+    Task SendTitleParametersDidChangeAsync(int keyIndex, string pluginUuid, string actionUuid, string title, string? font = null, int? fontSize = null, string? fontColor = null);
+    Task SendDeviceDidConnectAsync(string deviceId, string deviceName, int type, int cols, int rows);
+    Task SendDeviceDidDisconnectAsync(string deviceId);
+    Task SendSystemDidWakeUpAsync();
+    Task SendApplicationDidLaunchAsync(string application);
+    Task SendApplicationDidTerminateAsync(string application);
+
     StreamDeckActionManifest? GetActionManifest(string pluginUuid, string actionUuid);
     StreamDeckInstalledPlugin? GetPlugin(string pluginUuid);
 

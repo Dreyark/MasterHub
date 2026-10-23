@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.IO;
+using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
@@ -13,7 +14,17 @@ namespace MasterHub.Avalonia.ViewModels.Pages;
 public partial class PluginCatalogItemViewModel : ObservableObject
 {
     private static readonly ConcurrentDictionary<string, Bitmap> s_iconCache = new();
-    private static readonly HttpClient s_imageClient = new() { Timeout = TimeSpan.FromSeconds(5) };
+    private static readonly ConcurrentDictionary<string, byte> s_failedUrls = new();
+    private static readonly HttpClient s_imageClient = new(new SocketsHttpHandler
+    {
+        PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+        ConnectTimeout = TimeSpan.FromSeconds(3),
+        AutomaticDecompression = DecompressionMethods.All,
+        MaxConnectionsPerServer = 4
+    })
+    {
+        Timeout = TimeSpan.FromSeconds(4)
+    };
     private static readonly System.Threading.SemaphoreSlim s_downloadThrottle = new(4, 4);
 
     public PluginCatalogEntry Entry { get; }
@@ -27,8 +38,22 @@ public partial class PluginCatalogItemViewModel : ObservableObject
     public bool HasDial => Entry.Dial;
     public string Repository => Entry.Repository;
 
-    [ObservableProperty]
     private Bitmap? _iconBitmap;
+    private bool _iconRequested;
+
+    public Bitmap? IconBitmap
+    {
+        get
+        {
+            if (!_iconRequested && !string.IsNullOrEmpty(Entry.Icon))
+            {
+                _iconRequested = true;
+                _ = LoadIconAsync(Entry.Icon);
+            }
+            return _iconBitmap;
+        }
+        set => SetProperty(ref _iconBitmap, value);
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ButtonText))]
@@ -44,16 +69,12 @@ public partial class PluginCatalogItemViewModel : ObservableObject
     {
         Entry = entry;
         _isInstalled = isInstalled;
-
-        if (!string.IsNullOrEmpty(entry.Icon))
-        {
-            _ = LoadIconAsync(entry.Icon);
-        }
     }
 
     private async Task LoadIconAsync(string url)
     {
         if (string.IsNullOrWhiteSpace(url)) return;
+        if (s_failedUrls.ContainsKey(url)) return;
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
             return;
 
@@ -77,23 +98,31 @@ public partial class PluginCatalogItemViewModel : ObservableObject
 
             using var req = new HttpRequestMessage(HttpMethod.Get, uri);
             req.Headers.TryAddWithoutValidation("User-Agent", "MasterHub/1.0");
+            req.Headers.TryAddWithoutValidation("Accept", "image/png,image/webp,image/jpeg,image/*,*/*;q=0.8");
 
             using var resp = await s_imageClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
-            if (!resp.IsSuccessStatusCode) return;
-
-            string? contentType = resp.Content.Headers.ContentType?.MediaType;
-            if (contentType != null && !contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+            if (!resp.IsSuccessStatusCode)
+            {
+                s_failedUrls.TryAdd(url, 0);
                 return;
+            }
 
             byte[] bytes = await resp.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
-            if (!IsValidRasterImage(bytes)) return;
+            if (!IsValidRasterImage(bytes))
+            {
+                s_failedUrls.TryAdd(url, 0);
+                return;
+            }
 
             using var ms = new MemoryStream(bytes);
             var bmp = new Bitmap(ms);
             s_iconCache.TryAdd(url, bmp);
             Dispatcher.UIThread.Post(() => IconBitmap = bmp);
         }
-        catch { }
+        catch
+        {
+            s_failedUrls.TryAdd(url, 0);
+        }
         finally
         {
             if (acquired) s_downloadThrottle.Release();
