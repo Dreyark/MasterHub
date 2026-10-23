@@ -362,18 +362,20 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                     if (result.MessageType == WebSocketMessageType.Close)
                     {
                         var sendLock = _socketSendLocks.GetOrAdd(webSocket, _ => new SemaphoreSlim(1, 1));
-                        await sendLock.WaitAsync().ConfigureAwait(false);
-                        try
+                        if (await sendLock.WaitAsync(200).ConfigureAwait(false))
                         {
-                            if (webSocket.State == WebSocketState.Open || webSocket.State == WebSocketState.CloseReceived)
+                            try
                             {
-                                await webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None);
+                                if (webSocket.State == WebSocketState.CloseReceived)
+                                {
+                                    await webSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Closing", CancellationToken.None).ConfigureAwait(false);
+                                }
                             }
-                        }
-                        catch { }
-                        finally
-                        {
-                            sendLock.Release();
+                            catch { }
+                            finally
+                            {
+                                sendLock.Release();
+                            }
                         }
                         return;
                     }
@@ -417,16 +419,7 @@ public sealed class StreamDeckWebSocketServer : IDisposable
             {
                 sl.Dispose();
             }
-            try
-            {
-                if (webSocket != null && webSocket.State == WebSocketState.Open)
-                {
-                    using var closeCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
-                    webSocket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Closing", closeCts.Token).GetAwaiter().GetResult();
-                }
-            }
-            catch { }
-            webSocket?.Dispose();
+            try { webSocket?.Dispose(); } catch { }
         }
     }
 
@@ -655,6 +648,10 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                                 {
                                     _contextToPluginMap.TryGetValue(currentUuid, out targetPlugin);
                                 }
+                            }
+                            if (string.IsNullOrEmpty(targetPlugin) && !string.IsNullOrEmpty(context))
+                            {
+                                targetPlugin = context;
                             }
                             _ = SendGlobalSettingsToSocketAsync(socket, targetPlugin);
                         }
@@ -1041,35 +1038,48 @@ public sealed class StreamDeckWebSocketServer : IDisposable
         {
             // 1. Zamknij gniazda klientów płynnie przed anulowaniem nasłuchu HTTP
             var allSockets = _pluginSockets.Values.Concat(_piSockets.Values).Distinct().ToList();
+            _pluginSockets.Clear();
+            _piSockets.Clear();
+
             foreach (var ws in allSockets)
             {
                 try
                 {
                     if (ws.State == WebSocketState.Open || ws.State == WebSocketState.CloseReceived)
                     {
-                        using var closeCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
-                        ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Host shutdown", closeCts.Token).GetAwaiter().GetResult();
+                        var sendLock = _socketSendLocks.GetOrAdd(ws, _ => new SemaphoreSlim(1, 1));
+                        if (sendLock.Wait(150))
+                        {
+                            try
+                            {
+                                using var closeCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
+                                ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Host shutdown", closeCts.Token).GetAwaiter().GetResult();
+                            }
+                            catch { }
+                            finally
+                            {
+                                sendLock.Release();
+                            }
+                        }
                     }
                 }
                 catch { }
                 try { ws.Dispose(); } catch { }
             }
-            _pluginSockets.Clear();
-            _piSockets.Clear();
 
             // 2. Anuluj pętlę roboczą
             _cts?.Cancel();
 
             // 3. Płynne wybudzenie GetContextAsync na HttpListenerze zapobiegające rzuceniu HttpListenerException
-            try
+            if (_listener.IsListening)
             {
-                if (_listener.IsListening)
+                try
                 {
-                    using var pingClient = new HttpClient { Timeout = TimeSpan.FromMilliseconds(150) };
-                    _ = pingClient.GetAsync($"http://127.0.0.1:{Port}/__shutdown");
+                    using var pingClient = new HttpClient { Timeout = TimeSpan.FromMilliseconds(250) };
+                    pingClient.GetAsync($"http://127.0.0.1:{Port}/__shutdown").GetAwaiter().GetResult();
                 }
+                catch { }
             }
-            catch { }
 
             try { _listener.Stop(); } catch { }
             try { _listener.Close(); } catch { }

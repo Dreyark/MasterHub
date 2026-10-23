@@ -700,7 +700,7 @@ public sealed class StreamDeckPluginHost : IStreamDeckPluginHost
         return null;
     }
 
-    public async Task StartAsync()
+    public Task StartAsync()
     {
         if (!_server.IsRunning)
         {
@@ -711,13 +711,7 @@ public sealed class StreamDeckPluginHost : IStreamDeckPluginHost
 
         RefreshPlugins();
 
-        foreach (var plugin in _plugins.Values)
-        {
-            if (plugin.IsEnabled)
-            {
-                await StartPluginAsync(plugin.PluginUuid);
-            }
-        }
+        return Task.CompletedTask;
     }
 
     private void KillOrphanedPluginProcesses()

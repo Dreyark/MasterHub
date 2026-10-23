@@ -17,7 +17,10 @@ using MasterHub.Core.Localization;
 
 namespace MasterHub.Avalonia.ViewModels.Pages;
 
-public record IntegrationStatusItem(string Name, string Description, string Icon, string Status, bool IsOnline);
+public record IntegrationStatusItem(string Name, string Description, string Icon, string Status, bool IsOnline)
+{
+    public string StatusColor => IsOnline ? "#10B981" : "#6B7280";
+}
 
 public class StreamDeckPluginItemViewModel : ObservableObject
 {
