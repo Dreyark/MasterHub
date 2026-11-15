@@ -12,11 +12,11 @@
             <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
                     <TextBlock Text="{Binding VoicemodConnectionStatusDisplay}" FontSize="12" FontWeight="SemiBold" />
-                    <TextBlock Text="{loc:Loc Voicemod_PortHint, FallbackValue='Port: 59129 | Control WebSocket API'}" Classes="dim" FontSize="10" />
+                    <TextBlock Text="{loc:Loc Voicemod_PortHint, FallbackValue='Port: 59129 | Control WebSocket API'}" Classes="dim" FontSize="10.5" />
                 </StackPanel>
                 <Button Grid.Column="1" Classes="pillBtn" Padding="8,4"
                         Command="{Binding OpenVoicemodSettingsCommand}"
-                        Content="{loc:Loc Key_VoicemodOpenSettingsBtn, FallbackValue='⚙️ Ustawienia połączenia'}" />
+                        Content="{loc:Loc Key_VoicemodOpenSettingsBtn, FallbackValue='Ustawienia połączenia'}" />
             </Grid>
         </Border>
 

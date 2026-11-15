@@ -1,0 +1,60 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Pages.AppPickerPanelView"
+             x:DataType="vm:AppPickerViewModel"
+             IsVisible="{Binding IsOpen}">
+    <!-- Wybór aplikacji do powiązania z profilem: uruchomione + zainstalowane aplikacje i gry, z prawdziwymi ikonami. -->
+    <Grid Background="{StaticResource ScrimBrush}">
+        <Border Classes="glassCard" Background="{StaticResource PanelBgBrush}" Padding="20"
+                Width="520" MaxHeight="560" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" RowSpacing="10">
+                <Grid Grid.Row="0" ColumnDefinitions="*,Auto">
+                    <StackPanel VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Text="{loc:Loc Picker_Title}" Classes="h2" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding TargetProfileName}" Classes="dim" FontSize="11" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="{loc:Loc Picker_Close}" Command="{Binding CloseCommand}" Classes="actionBtn" />
+                </Grid>
+
+                <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <TextBox Text="{Binding Filter, Mode=TwoWay}" PlaceholderText="{loc:Loc Picker_Search}" />
+                    <Button Grid.Column="1" Content="{loc:Loc Picker_Rescan}" Command="{Binding RefreshInstalledCommand}" Classes="actionBtn"
+                            IsEnabled="{Binding !IsScanning}" />
+                </Grid>
+
+                <ScrollViewer Grid.Row="2" MinHeight="200">
+                    <ItemsControl ItemsSource="{Binding Items}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:AppPickerItemViewModel">
+                                <Button Classes="ghostBtn" Margin="0,0,0,4" HorizontalAlignment="Stretch"
+                                        Command="{Binding $parent[UserControl].((vm:AppPickerViewModel)DataContext).PickCommand}"
+                                        CommandParameter="{Binding}">
+                                    <Border Classes="statusBadgeCard" Padding="10,8">
+                                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                                            <Border Width="32" Height="32" CornerRadius="8" Background="{StaticResource InsetBgBrush}">
+                                                <Image Source="{Binding Icon}" Width="24" Height="24" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+                                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="12" TextTrimming="CharacterEllipsis" />
+                                                <TextBlock Text="{Binding Subtitle}" Classes="dim" FontSize="10.5" TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <TextBlock Grid.Row="3" Text="{loc:Loc Picker_GamesHint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+
+                <Grid Grid.Row="4" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <TextBox Text="{Binding ManualProcess, Mode=TwoWay}" PlaceholderText="{loc:Loc Picker_ManualHint}" />
+                    <Button Grid.Column="1" Content="{loc:Loc Picker_Link}" Command="{Binding AddManualCommand}" Classes="accentBtn" />
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

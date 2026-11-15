@@ -3,18 +3,47 @@ using System.Collections.Concurrent;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading.Tasks;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using MasterHub.Core.Integrations.StreamDeck;
 
 namespace MasterHub.Avalonia.ViewModels.Pages;
 
 public partial class PluginCatalogItemViewModel : ObservableObject
 {
+    private const int MaxCatalogIconCache = 64;
     private static readonly ConcurrentDictionary<string, Bitmap> s_iconCache = new();
+    private static readonly ConcurrentQueue<string> s_iconKeys = new();
     private static readonly ConcurrentDictionary<string, byte> s_failedUrls = new();
+
+    /// <remarks>
+    /// An icon that leaves the cache is only <b>forgotten</b>, never disposed: the catalog list may still show it (the cache holds 64 icons
+    /// and the catalog has hundreds), and an <c>Image</c> that arranges a disposed bitmap throws <see cref="ObjectDisposedException"/> in the
+    /// layout pass. The bitmap is freed by the garbage collector once no item shows it any more.
+    /// </remarks>
+    internal static void AddToCache(string url, Bitmap bmp)
+    {
+        if (s_iconCache.TryAdd(url, bmp))
+        {
+            s_iconKeys.Enqueue(url);
+            while (s_iconKeys.Count > MaxCatalogIconCache && s_iconKeys.TryDequeue(out var oldKey))
+            {
+                s_iconCache.TryRemove(oldKey, out _);
+            }
+        }
+    }
+
+    /// <summary>Forgets the cached icons (memory trimming). Not disposed, for the reason given at <see cref="AddToCache"/>.</summary>
+    public static void ClearCache()
+    {
+        s_iconCache.Clear();
+        while (s_iconKeys.TryDequeue(out _)) { }
+    }
     private static readonly HttpClient s_imageClient = new(new SocketsHttpHandler
     {
         PooledConnectionLifetime = TimeSpan.FromMinutes(2),
@@ -65,10 +94,29 @@ public partial class PluginCatalogItemViewModel : ObservableObject
 
     public string ButtonText => IsInstalling ? "Pobieranie..." : (IsInstalled ? "Zainstalowano" : "Zainstaluj");
 
-    public PluginCatalogItemViewModel(PluginCatalogEntry entry, bool isInstalled)
+    /// <summary>T-31 e: for an installed plugin, the badge of the compatibility check ("Runs here" / "Cannot run here" …).</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCompatBadge))]
+    private string _compatBadge = "";
+
+    public bool HasCompatBadge => !string.IsNullOrEmpty(CompatBadge);
+
+    private readonly Func<PluginCatalogItemViewModel, Task>? _installAction;
+
+    [RelayCommand]
+    public async Task InstallAsync()
+    {
+        if (_installAction != null)
+        {
+            await _installAction(this);
+        }
+    }
+
+    public PluginCatalogItemViewModel(PluginCatalogEntry entry, bool isInstalled, Func<PluginCatalogItemViewModel, Task>? installAction = null)
     {
         Entry = entry;
         _isInstalled = isInstalled;
+        _installAction = installAction;
     }
 
     private async Task LoadIconAsync(string url)
@@ -82,6 +130,30 @@ public partial class PluginCatalogItemViewModel : ObservableObject
         {
             IconBitmap = cached;
             return;
+        }
+
+        string cacheDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MasterHub", "cache", "icons");
+        try { Directory.CreateDirectory(cacheDir); } catch { }
+        string fileHash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(url)));
+        string localPath = Path.Combine(cacheDir, fileHash + ".img");
+
+        if (File.Exists(localPath))
+        {
+            try
+            {
+                byte[] diskBytes = File.ReadAllBytes(localPath);
+                if (IsValidRasterImage(diskBytes))
+                {
+                    using var diskMs = new MemoryStream(diskBytes);
+                    Bitmap diskBmp;
+                    try { diskBmp = Bitmap.DecodeToWidth(diskMs, 72); }
+                    catch { diskMs.Position = 0; diskBmp = new Bitmap(diskMs); }
+                    AddToCache(url, diskBmp);
+                    IconBitmap = diskBmp;
+                    return;
+                }
+            }
+            catch { }
         }
 
         bool acquired = false;
@@ -114,10 +186,22 @@ public partial class PluginCatalogItemViewModel : ObservableObject
                 return;
             }
 
+            try { File.WriteAllBytes(localPath, bytes); } catch { }
+
             using var ms = new MemoryStream(bytes);
-            var bmp = new Bitmap(ms);
-            s_iconCache.TryAdd(url, bmp);
+            Bitmap bmp;
+            try { bmp = Bitmap.DecodeToWidth(ms, 72); }
+            catch { ms.Position = 0; bmp = new Bitmap(ms); }
+            AddToCache(url, bmp);
             Dispatcher.UIThread.Post(() => IconBitmap = bmp);
+        }
+        catch (HttpRequestException)
+        {
+            s_failedUrls.TryAdd(url, 0);
+        }
+        catch (TaskCanceledException)
+        {
+            s_failedUrls.TryAdd(url, 0);
         }
         catch
         {

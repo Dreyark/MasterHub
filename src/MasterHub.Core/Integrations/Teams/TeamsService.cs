@@ -108,16 +108,14 @@ public class TeamsService : ITeamsService
         try
         {
             // Nowy Teams (Teams 2.0 / WebView2): ms-teams.exe
-            var newTeams = Process.GetProcessesByName("ms-teams");
-            if (newTeams.Length > 0)
+            if (MasterHub.Core.SystemControl.ProcessHelper.IsProcessRunning("ms-teams"))
             {
                 UpdateRunningState(true, "ms-teams");
                 return true;
             }
 
             // Klasyczny Teams (Teams 1.0 / Electron): Teams.exe
-            var classicTeams = Process.GetProcessesByName("Teams");
-            if (classicTeams.Length > 0)
+            if (MasterHub.Core.SystemControl.ProcessHelper.IsProcessRunning("Teams"))
             {
                 UpdateRunningState(true, "Teams");
                 return true;
@@ -334,13 +332,36 @@ public class TeamsService : ITeamsService
         // Fallback: MainWindowHandle z procesów ms-teams lub Teams
         try
         {
-            foreach (var proc in Process.GetProcessesByName("ms-teams"))
+            var msTeams = Process.GetProcessesByName("ms-teams");
+            try
             {
-                if (proc.MainWindowHandle != IntPtr.Zero) return proc.MainWindowHandle;
+                foreach (var proc in msTeams)
+                {
+                    if (proc.MainWindowHandle != IntPtr.Zero) return proc.MainWindowHandle;
+                }
             }
-            foreach (var proc in Process.GetProcessesByName("Teams"))
+            finally
             {
-                if (proc.MainWindowHandle != IntPtr.Zero) return proc.MainWindowHandle;
+                for (int i = 0; i < msTeams.Length; i++)
+                {
+                    try { msTeams[i].Dispose(); } catch { }
+                }
+            }
+
+            var teams = Process.GetProcessesByName("Teams");
+            try
+            {
+                foreach (var proc in teams)
+                {
+                    if (proc.MainWindowHandle != IntPtr.Zero) return proc.MainWindowHandle;
+                }
+            }
+            finally
+            {
+                for (int i = 0; i < teams.Length; i++)
+                {
+                    try { teams[i].Dispose(); } catch { }
+                }
             }
         }
         catch { }

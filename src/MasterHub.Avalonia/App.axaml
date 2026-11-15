@@ -4,7 +4,14 @@
              RequestedThemeVariant="Dark">
 
     <Application.Styles>
-        <FluentTheme />
+        <!-- Paleta Fluent z akcentem aplikacji: bez tego CheckBox/ToggleSwitch/RadioButton/TabControl/ListBox/ProgressBar
+             przyjmują kolor akcentu systemu Windows użytkownika i wygląd różni się między komputerami. -->
+        <FluentTheme>
+            <FluentTheme.Palettes>
+                <ColorPaletteResources x:Key="Dark" Accent="#5E81F4" ErrorText="#F45E6D" />
+                <ColorPaletteResources x:Key="Light" Accent="#5E81F4" ErrorText="#F45E6D" />
+            </FluentTheme.Palettes>
+        </FluentTheme>
         <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
         <StyleInclude Source="avares://MasterHub.Avalonia/Styles/Themes.axaml" />
     </Application.Styles>

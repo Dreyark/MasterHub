@@ -40,8 +40,7 @@ public class VoicemodService : IVoicemodService
         s_lastProcessCheck = DateTime.UtcNow;
         try
         {
-            s_cachedProcessRunning = Process.GetProcessesByName("Voicemod").Length > 0 ||
-                                     Process.GetProcessesByName("VoicemodDesktop").Length > 0;
+            s_cachedProcessRunning = MasterHub.Core.SystemControl.ProcessHelper.IsAnyProcessRunning("Voicemod", "VoicemodDesktop");
         }
         catch
         {

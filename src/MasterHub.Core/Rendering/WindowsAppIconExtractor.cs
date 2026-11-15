@@ -11,7 +11,25 @@ namespace MasterHub.Core.Rendering;
 /// </summary>
 public static class WindowsAppIconExtractor
 {
+    private const int MaxIconCacheEntries = 64;
     private static readonly ConcurrentDictionary<string, byte[]> s_iconCache = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentQueue<string> s_iconKeys = new();
+
+    private static void CacheIcon(string key, byte[] bytes)
+    {
+        s_iconCache[key] = bytes;
+        s_iconKeys.Enqueue(key);
+        while (s_iconKeys.Count > MaxIconCacheEntries && s_iconKeys.TryDequeue(out var oldKey))
+        {
+            s_iconCache.TryRemove(oldKey, out _);
+        }
+    }
+
+    public static void ClearCache()
+    {
+        s_iconCache.Clear();
+        while (s_iconKeys.TryDequeue(out _)) { }
+    }
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern int SHDefExtractIconW(
@@ -163,7 +181,7 @@ public static class WindowsAppIconExtractor
                     using var image = SKImage.FromBitmap(bmp);
                     using var data = image.Encode(SKEncodedImageFormat.Png, 100);
                     byte[] pngBytes = data.ToArray();
-                    s_iconCache[exePath] = pngBytes;
+                    CacheIcon(exePath, pngBytes);
 
                     return SKBitmap.Decode(pngBytes);
                 }

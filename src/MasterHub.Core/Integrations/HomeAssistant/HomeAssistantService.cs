@@ -83,21 +83,29 @@ public class HomeAssistantService : IHomeAssistantService
             if (!string.IsNullOrWhiteSpace(s.ServerUrl)) _serverUrl = s.ServerUrl;
             if (!string.IsNullOrWhiteSpace(s.AccessToken)) _accessToken = s.AccessToken;
         }
+
+        if (string.IsNullOrWhiteSpace(_serverUrl) || string.IsNullOrWhiteSpace(_accessToken))
+        {
+            IsConnected = false;
+            return false;
+        }
+
         return await ConnectAsync(_serverUrl, _accessToken, ct).ConfigureAwait(false);
     }
 
     public async Task<bool> ConnectAsync(string serverUrl, string accessToken, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(serverUrl)) return false;
+        if (string.IsNullOrWhiteSpace(serverUrl) || string.IsNullOrWhiteSpace(accessToken))
+        {
+            IsConnected = false;
+            return false;
+        }
 
         _serverUrl = serverUrl.Trim().TrimEnd('/');
-        _accessToken = accessToken?.Trim() ?? "";
+        _accessToken = accessToken.Trim();
 
         _httpClient.DefaultRequestHeaders.Clear();
-        if (!string.IsNullOrWhiteSpace(_accessToken))
-        {
-            _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
-        }
+        _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _accessToken);
 
         try
         {
@@ -112,9 +120,13 @@ public class HomeAssistantService : IHomeAssistantService
                 return true;
             }
         }
-        catch
+        catch (HttpRequestException)
         {
-            // Błąd połączenia
+            // Błąd połączenia sieciowego
+        }
+        catch (Exception)
+        {
+            // Inny błąd
         }
 
         IsConnected = false;
@@ -131,7 +143,7 @@ public class HomeAssistantService : IHomeAssistantService
 
     public async Task<List<HomeAssistantEntityModel>> FetchEntitiesAsync(CancellationToken ct = default)
     {
-        if (!IsConnected && string.IsNullOrWhiteSpace(_accessToken))
+        if (!IsConnected || string.IsNullOrWhiteSpace(_accessToken) || string.IsNullOrWhiteSpace(_serverUrl))
             return new List<HomeAssistantEntityModel>();
 
         try
@@ -147,6 +159,7 @@ public class HomeAssistantService : IHomeAssistantService
                     {
                         _entities[item.EntityId] = item;
                     }
+                    _lastFullFetchUtc = DateTime.UtcNow;
                     IsConnected = true;
                     var result = _entities.Values.ToList();
                     EntitiesUpdated?.Invoke(this, result);
@@ -154,9 +167,12 @@ public class HomeAssistantService : IHomeAssistantService
                 }
             }
         }
-        catch
+        catch (HttpRequestException)
         {
-            // Błąd pobierania
+            IsConnected = false;
+        }
+        catch (Exception)
+        {
         }
 
         return _entities.Values.ToList();
@@ -164,7 +180,8 @@ public class HomeAssistantService : IHomeAssistantService
 
     public async Task<HomeAssistantEntityModel?> GetEntityStateAsync(string entityId, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(entityId)) return null;
+        if (string.IsNullOrWhiteSpace(entityId) || !IsConnected || string.IsNullOrWhiteSpace(_accessToken) || string.IsNullOrWhiteSpace(_serverUrl))
+            return null;
 
         if (_entities.TryGetValue(entityId, out var cached))
             return cached;
@@ -184,7 +201,13 @@ public class HomeAssistantService : IHomeAssistantService
                 }
             }
         }
-        catch { }
+        catch (HttpRequestException)
+        {
+            IsConnected = false;
+        }
+        catch (Exception)
+        {
+        }
 
         return null;
     }
@@ -269,6 +292,11 @@ public class HomeAssistantService : IHomeAssistantService
 
     public async Task<bool> CallServiceAsync(string domain, string service, string? entityId = null, object? serviceData = null, CancellationToken ct = default)
     {
+        if (!IsConnected || string.IsNullOrWhiteSpace(_accessToken) || string.IsNullOrWhiteSpace(_serverUrl))
+        {
+            return false;
+        }
+
         try
         {
             string url = $"{_serverUrl}/api/services/{domain}/{service}";
@@ -293,7 +321,12 @@ public class HomeAssistantService : IHomeAssistantService
             var response = await _httpClient.PostAsync(url, content, ct).ConfigureAwait(false);
             return response.IsSuccessStatusCode;
         }
-        catch
+        catch (HttpRequestException)
+        {
+            IsConnected = false;
+            return false;
+        }
+        catch (Exception)
         {
             return false;
         }
@@ -312,13 +345,51 @@ public class HomeAssistantService : IHomeAssistantService
     private void StartPollingTimer()
     {
         StopPollingTimer();
-        _pollTimer = new System.Threading.Timer(async _ =>
+
+        // Interwał z ustawień (wcześniej pole StatusPollIntervalSeconds było ignorowane - na stałe 2 s).
+        int seconds = Math.Max(2, _profileService?.GetHomeAssistantSettings().StatusPollIntervalSeconds ?? 2);
+        _pollTimer = new System.Threading.Timer(_ => _ = PollOnceAsync(), null, TimeSpan.FromSeconds(seconds), TimeSpan.FromSeconds(seconds));
+    }
+
+    private int _pollBusy;
+    private volatile bool _wsLive;
+    private DateTime _lastFullFetchUtc = DateTime.MinValue;
+
+    /// <summary>
+    /// Jeden cykl odpytywania: odświeża encje, a po utracie połączenia (np. restart HA, chwilowy brak sieci) próbuje je
+    /// przywrócić. Wcześniej po pierwszym błędzie sieci IsConnected=false i timer nigdy więcej nie próbował -
+    /// integracja zostawała rozłączona do ręcznego ponownego połączenia. Cykle nie nakładają się na siebie.
+    /// </summary>
+    internal async Task PollOnceAsync()
+    {
+        if (_isDisposed || Interlocked.Exchange(ref _pollBusy, 1) == 1) return;
+        try
         {
             if (IsConnected)
             {
+                // Gdy WebSocket działa, zmiany stanów przychodzą na żywo (state_changed) - pełne GET /api/states (setki KB
+                // przy dużej instalacji) robimy tylko jako siatkę bezpieczeństwa co 60 s zamiast co 2 s.
+                if (_wsLive && DateTime.UtcNow - _lastFullFetchUtc < TimeSpan.FromSeconds(60)) return;
                 await FetchEntitiesAsync(CancellationToken.None).ConfigureAwait(false);
             }
-        }, null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+            else if (!string.IsNullOrWhiteSpace(_serverUrl) && !string.IsNullOrWhiteSpace(_accessToken))
+            {
+                using var response = await _httpClient.GetAsync($"{_serverUrl}/api/", CancellationToken.None).ConfigureAwait(false);
+                if (response.IsSuccessStatusCode)
+                {
+                    IsConnected = true;
+                    await FetchEntitiesAsync(CancellationToken.None).ConfigureAwait(false);
+                }
+            }
+        }
+        catch
+        {
+            // Serwer nadal niedostępny - spróbujemy w następnym cyklu.
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _pollBusy, 0);
+        }
     }
 
     private void StopPollingTimer()
@@ -364,10 +435,12 @@ public class HomeAssistantService : IHomeAssistantService
                         }
                     }
 
+                    _wsLive = false;
                     // 4. Subskrypcja zdarzeń state_changed
                     string subMsg = JsonSerializer.Serialize(new { id = 1, type = "subscribe_events", event_type = "state_changed" });
                     await SendWebSocketTextAsync(ws, subMsg, token).ConfigureAwait(false);
 
+                    _wsLive = true;
                     // Pętla nasłuchu zdarzeń
                     while (ws.State == WebSocketState.Open && !token.IsCancellationRequested)
                     {
@@ -397,6 +470,7 @@ public class HomeAssistantService : IHomeAssistantService
                 }
                 catch
                 {
+                    _wsLive = false;
                     // W razie utraty połączenia WebSocket, odczekaj 5s i spróbuj ponownie
                     try
                     {

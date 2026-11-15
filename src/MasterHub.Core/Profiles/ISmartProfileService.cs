@@ -12,7 +12,7 @@ public interface ISmartProfileService : IDisposable
     /// <summary>Określa czy automatyczne przełączanie profili jest aktywne.</summary>
     bool IsEnabled { get; set; }
 
-    /// <summary>Interwał sprawdzania aktywnego okna w milisekundach (domyślnie 500 ms).</summary>
+    /// <summary>Interwał zabezpieczającego porównania okna pierwszoplanowego (stałe 250 ms; główny sygnał to hook systemowy).</summary>
     int PollingIntervalMs { get; set; }
 
     /// <summary>Profil bazowy/domyślny, do którego następuje powrót po utracie fokusa (Etap 2.2).</summary>
@@ -29,6 +29,9 @@ public interface ISmartProfileService : IDisposable
 
     /// <summary>Zdarzenie żądania przełączenia profilu (profileId).</summary>
     event Action<string>? AutoSwitchProfileRequested;
+
+    /// <summary>Zdarzenie: globalny przełącznik Auto-switch został zmieniony (np. z paska zadań).</summary>
+    event Action<bool>? IsEnabledChanged;
 
     /// <summary>Rejestruje listę reguł Smart Profile do monitorowania.</summary>
     void UpdateRules(IEnumerable<SmartProfileRule> rules);

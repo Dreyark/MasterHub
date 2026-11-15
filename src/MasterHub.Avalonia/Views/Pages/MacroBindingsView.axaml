@@ -1,0 +1,45 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Pages.MacroBindingsView"
+             x:DataType="vm:MacrosPageViewModel">
+
+    <Border Classes="glassCard" Padding="14">
+        <StackPanel Spacing="10">
+            <TextBlock Text="{loc:Loc Macro_Bindings}" Classes="h2" />
+            <TextBlock Text="{loc:Loc Macro_NoBindings}" Classes="dim" IsVisible="{Binding HasNoBindings}" />
+
+            <ItemsControl ItemsSource="{Binding Bindings}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MacroBindingItemViewModel">
+                        <Border Classes="statusBadgeCard" Margin="0,0,0,4" Padding="10,6">
+                            <Grid ColumnDefinitions="*,Auto,Auto">
+                                <TextBlock Grid.Column="0" Text="{Binding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <TextBlock Grid.Column="1" Text="{Binding Scope}" Classes="dim" FontSize="10.5" Margin="8,0" VerticalAlignment="Center" />
+                                <Button Grid.Column="2" Classes="iconBtn" Padding="6,2"
+                                        Command="{Binding $parent[UserControl].((vm:MacrosPageViewModel)DataContext).RemoveBindingCommand}" CommandParameter="{Binding}" >
+    <PathIcon Data="{StaticResource IconClose}" Width="12" Height="12" />
+</Button>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Nowe przypisanie -->
+            <Grid ColumnDefinitions="*,12,*">
+                <StackPanel Grid.Column="0" Spacing="4">
+                    <TextBlock Text="{loc:Loc Macro_Trigger}" Classes="caption" />
+                    <ComboBox ItemsSource="{Binding TriggerOptions}" SelectedItem="{Binding SelectedTrigger}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="4" IsVisible="{Binding IsKeyTrigger}">
+                    <TextBlock Text="{loc:Loc Macro_PressKey}" Classes="caption" />
+                    <TextBox Text="{Binding CapturedKeyName}" IsReadOnly="True" KeyDown="OnKeyCapture" />
+                </StackPanel>
+            </Grid>
+            <CheckBox IsChecked="{Binding OnlyRazerMouse}" IsVisible="{Binding IsMouseTrigger}" Content="{loc:Loc Macro_OnlyRazer}" />
+            <Button Classes="accentBtn" HorizontalAlignment="Left" Command="{Binding AddBindingCommand}" Content="{loc:Loc Macro_AddBinding}" />
+        </StackPanel>
+    </Border>
+</UserControl>

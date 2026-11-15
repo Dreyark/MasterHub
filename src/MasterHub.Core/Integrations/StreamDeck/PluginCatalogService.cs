@@ -11,15 +11,21 @@ namespace MasterHub.Core.Integrations.StreamDeck;
 
 public class PluginCatalogService : IPluginCatalogService, IDisposable
 {
-    private const string CatalogUrl = "https://openactionapi.github.io/plugins/catalogue.json";
+    /// <summary>The public OpenAction plugin registry (a community index of open-source plugins, many of them Stream Deck plugins).
+    /// Only the index comes from here; every plugin is downloaded from the GitHub repository the index points to.</summary>
+    public const string DefaultCatalogUrl = "https://openactionapi.github.io/plugins/catalogue.json";
+
+    private const long MaxPackageBytes = 256L * 1024 * 1024;
     private readonly HttpClient _httpClient;
     private readonly bool _ownsHttpClient;
     private readonly string _cachePath;
+    private readonly string _catalogUrl;
     private List<PluginCatalogEntry>? _memoryCache;
     private readonly SemaphoreSlim _lock = new(1, 1);
 
-    public PluginCatalogService(HttpClient? httpClient = null)
+    public PluginCatalogService(HttpClient? httpClient = null, string? catalogUrl = null, string? cachePath = null)
     {
+        _catalogUrl = catalogUrl ?? DefaultCatalogUrl;
         if (httpClient != null)
         {
             _httpClient = httpClient;
@@ -38,10 +44,21 @@ public class PluginCatalogService : IPluginCatalogService, IDisposable
             _ownsHttpClient = true;
         }
 
-        string appData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MasterHub");
-        Directory.CreateDirectory(appData);
-        _cachePath = Path.Combine(appData, "catalog_cache.json");
+        if (cachePath != null)
+        {
+            _cachePath = cachePath;
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(cachePath))!);
+        }
+        else
+        {
+            string appData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MasterHub");
+            Directory.CreateDirectory(appData);
+            _cachePath = Path.Combine(appData, "catalog_cache.json");
+        }
     }
+
+    private static List<PluginCatalogEntry> OnlyWindows(IEnumerable<PluginCatalogEntry> entries) =>
+        entries.Where(p => p.Systems.Count == 0 || p.Systems.Any(s => s.Contains("Windows", StringComparison.OrdinalIgnoreCase))).ToList();
 
     public async Task<IReadOnlyList<PluginCatalogEntry>> GetCatalogAsync(bool forceRefresh = false, CancellationToken ct = default)
     {
@@ -56,28 +73,26 @@ public class PluginCatalogService : IPluginCatalogService, IDisposable
             // 1. Spróbuj pobrać z internetu
             try
             {
-                using var request = new HttpRequestMessage(HttpMethod.Get, CatalogUrl);
+                using var request = new HttpRequestMessage(HttpMethod.Get, _catalogUrl);
                 using var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
                 if (response.IsSuccessStatusCode)
                 {
-                    await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-                    var catalogFile = await JsonSerializer.DeserializeAsync<PluginCatalogFile>(stream, cancellationToken: ct).ConfigureAwait(false);
-                    if (catalogFile != null && catalogFile.Plugins.Count > 0)
+                    string body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+                    var parsed = PluginCatalogParser.Parse(body);
+                    if (parsed.Count > 0)
                     {
                         // Filtruj do wspierających Windows (lub ogólnych)
-                        var list = catalogFile.Plugins
-                            .Where(p => p.Systems.Count == 0 || p.Systems.Any(s => s.Contains("Windows", StringComparison.OrdinalIgnoreCase)))
-                            .ToList();
-
+                        var list = OnlyWindows(parsed);
                         _memoryCache = list;
 
-                        // Zapisz do pamięci podręcznej na dysku
+                        // Zapisz do pamięci podręcznej na dysku (w naszym formacie: czytają go obie wersje)
                         try
                         {
-                            string json = JsonSerializer.Serialize(catalogFile);
+                            string json = JsonSerializer.Serialize(new PluginCatalogFile { Plugins = parsed });
                             await File.WriteAllTextAsync(_cachePath, json, ct).ConfigureAwait(false);
                         }
-                        catch { }
+                        catch (IOException) { /* a cache that cannot be written only costs a download next time */ }
+                        catch (UnauthorizedAccessException) { }
 
                         return list;
                     }
@@ -94,12 +109,10 @@ public class PluginCatalogService : IPluginCatalogService, IDisposable
                 try
                 {
                     string json = await File.ReadAllTextAsync(_cachePath, ct).ConfigureAwait(false);
-                    var catalogFile = JsonSerializer.Deserialize<PluginCatalogFile>(json);
-                    if (catalogFile != null && catalogFile.Plugins.Count > 0)
+                    var cached = PluginCatalogParser.Parse(json);
+                    if (cached.Count > 0)
                     {
-                        var list = catalogFile.Plugins
-                            .Where(p => p.Systems.Count == 0 || p.Systems.Any(s => s.Contains("Windows", StringComparison.OrdinalIgnoreCase)))
-                            .ToList();
+                        var list = OnlyWindows(cached);
                         _memoryCache = list;
                         return list;
                     }
@@ -131,25 +144,53 @@ public class PluginCatalogService : IPluginCatalogService, IDisposable
             return null;
         }
 
+        // Wtyczki zawierają wykonywalny kod - pobieramy wyłącznie przez HTTPS (bez downgrade'u do HTTP).
+        if (!Uri.TryCreate(directUrl, UriKind.Absolute, out var downloadUri) || downloadUri.Scheme != Uri.UriSchemeHttps)
+        {
+            return null;
+        }
+
+        string? tempFile = null;
         try
         {
-            using var req = new HttpRequestMessage(HttpMethod.Get, directUrl);
+            using var req = new HttpRequestMessage(HttpMethod.Get, downloadUri);
             req.Headers.UserAgent.ParseAdd("MasterHub/1.0");
             using var resp = await _httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode) return null;
 
-            string ext = directUrl.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? ".zip" : ".streamDeckPlugin";
-            string tempFile = Path.Combine(Path.GetTempPath(), $"{entry.Id}_{Guid.NewGuid():N}{ext}");
+            long? declaredLength = resp.Content.Headers.ContentLength;
+            if (declaredLength > MaxPackageBytes) return null;
+
+            string ext = downloadUri.AbsolutePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? ".zip" : ".streamDeckPlugin";
+            // Id pochodzi ze zdalnego katalogu - zawsze redukujemy je do bezpiecznej nazwy pliku (bez separatorów ścieżek).
+            string safeId = new string((entry.Id ?? "plugin").Where(char.IsAsciiLetterOrDigit).Take(48).ToArray());
+            if (safeId.Length == 0) safeId = "plugin";
+            tempFile = Path.Combine(Path.GetTempPath(), $"{safeId}_{Guid.NewGuid():N}{ext}");
 
             await using (var fs = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None))
             {
-                await resp.Content.CopyToAsync(fs, ct).ConfigureAwait(false);
+                await using var body = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+                var buffer = new byte[81920];
+                long total = 0;
+                int read;
+                while ((read = await body.ReadAsync(buffer, ct).ConfigureAwait(false)) > 0)
+                {
+                    total += read;
+                    if (total > MaxPackageBytes)
+                        throw new InvalidDataException("Pakiet wtyczki przekracza dopuszczalny rozmiar.");
+                    await fs.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+                }
             }
 
             return tempFile;
         }
         catch
         {
+            // Nie zostawiamy w %TEMP% niedokończonych pobrań.
+            if (tempFile != null)
+            {
+                try { File.Delete(tempFile); } catch { }
+            }
             return null;
         }
     }

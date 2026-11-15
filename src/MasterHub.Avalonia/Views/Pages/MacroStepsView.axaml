@@ -1,0 +1,54 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Pages.MacroStepsView"
+             x:DataType="vm:MacrosPageViewModel">
+
+    <Border Classes="glassCard" Padding="14">
+        <StackPanel Spacing="10">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{loc:Loc Macro_Steps}" Classes="h2" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="pillBtn" Padding="8,3" Command="{Binding ClearStepsCommand}" Content="{loc:Loc Macro_ClearSteps}" />
+            </Grid>
+
+            <ItemsControl ItemsSource="{Binding Steps}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:MacroStepItemViewModel">
+                        <Border Classes="statusBadgeCard" Margin="0,0,0,4" Padding="8,4">
+                            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+                                <TextBlock Grid.Column="0" Text="{Binding Description}" IsVisible="{Binding IsPlain}"
+                                           VerticalAlignment="Center" FontFamily="Consolas, monospace" />
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsDelay}">
+                                    <TextBlock Text="⏱" VerticalAlignment="Center" />
+                                    <NumericUpDown Value="{Binding DelayMs}" Minimum="0" Maximum="600000" Increment="10" FormatString="0" Width="140" />
+                                    <TextBlock Text="ms" Classes="dim" VerticalAlignment="Center" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsText}">
+                                    <TextBlock Text="⌨" VerticalAlignment="Center" />
+                                    <TextBox Text="{Binding TextValue}" Width="260" />
+                                </StackPanel>
+                                <Button Grid.Column="1" Classes="iconBtn" Content="↑" Padding="6,2"
+                                        Command="{Binding $parent[UserControl].((vm:MacrosPageViewModel)DataContext).MoveStepUpCommand}" CommandParameter="{Binding}" />
+                                <Button Grid.Column="2" Classes="iconBtn" Content="↓" Padding="6,2"
+                                        Command="{Binding $parent[UserControl].((vm:MacrosPageViewModel)DataContext).MoveStepDownCommand}" CommandParameter="{Binding}" />
+                                <Button Grid.Column="3" Classes="iconBtn" Padding="6,2"
+                                        Command="{Binding $parent[UserControl].((vm:MacrosPageViewModel)DataContext).RemoveStepCommand}" CommandParameter="{Binding}" >
+    <PathIcon Data="{StaticResource IconClose}" Width="12" Height="12" />
+</Button>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Ręczne dodawanie kroków -->
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <NumericUpDown Value="{Binding NewDelayMs}" Minimum="0" Maximum="600000" Increment="10" FormatString="0" Width="130" />
+                <Button Classes="actionBtn" Command="{Binding AddDelayStepCommand}" Content="{loc:Loc Macro_AddDelay}" />
+                <TextBox Text="{Binding NewText}" Width="180" PlaceholderText="{loc:Loc Macro_TextPlaceholder}" />
+                <Button Classes="actionBtn" Command="{Binding AddTextStepCommand}" Content="{loc:Loc Macro_AddText}" />
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

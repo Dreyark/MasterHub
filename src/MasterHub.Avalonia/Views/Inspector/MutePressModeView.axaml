@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.MutePressModeView"
+             x:DataType="vm:KeyItemViewModel">
+    <!-- T-17 f: klawisz wyciszenia jako przełącznik, push-to-talk albo push-to-mute -->
+    <StackPanel Spacing="4" IsVisible="{Binding IsMuteAction}">
+        <TextBlock Text="{loc:Loc Mute_ModeLabel}" Classes="caption" />
+        <ComboBox SelectedIndex="{Binding MutePressModeIndex, Mode=TwoWay}" HorizontalAlignment="Stretch">
+            <ComboBoxItem Content="{loc:Loc Mute_ModeToggle}" />
+            <ComboBoxItem Content="{loc:Loc Mute_ModePushToTalk}" />
+            <ComboBoxItem Content="{loc:Loc Mute_ModePushToMute}" />
+        </ComboBox>
+        <TextBlock Text="{loc:Loc Mute_ModeHint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+    </StackPanel>
+</UserControl>

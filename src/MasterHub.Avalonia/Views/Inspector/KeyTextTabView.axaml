@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:ins="using:MasterHub.Avalonia.Views.Inspector"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyTextTabView"
+             x:DataType="vm:KeyItemViewModel">
+    <!-- Zakładka "Tekst": co jest napisane na klawiszu. Czcionka i pozycja są zwinięte w każdej karcie, żeby na wierzchu został sam tekst i kolor. -->
+    <StackPanel Spacing="10">
+        <ins:KeyStateSwitchView />
+        <ins:KeyTitleSettingsView />
+        <ins:KeySubtitleSettingsView />
+    </StackPanel>
+</UserControl>

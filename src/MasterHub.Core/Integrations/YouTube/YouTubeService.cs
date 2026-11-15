@@ -20,6 +20,10 @@ public sealed class YouTubeService : IYouTubeService
     private readonly HttpClient _httpClient;
     private readonly bool _disposeHttpClient;
     private readonly object _syncLock = new();
+    // Cache ograniczajacy zuzycie dziennego limitu YouTube Data API (10 000 jednostek): search kosztuje 100 jednostek,
+    // a poprzednio KAZDE odpytanie (domyslnie co 30 s) robilo channels + search + videos = ~102 jednostki.
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (string Id, string Title)> _channelCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> _liveVideoByChannel = new(StringComparer.Ordinal);
 
     private CancellationTokenSource? _pollingCts;
     private Task? _pollingTask;
@@ -160,6 +164,72 @@ public sealed class YouTubeService : IYouTubeService
         }
     }
 
+    /// <summary>
+    /// Szuka trwajacej transmisji wsrod 3 ostatnich uploadow kanalu (playlist "UU..." = 1 j. + videos = 1 j.).
+    /// Gdy playlista jest niedostepna, spada do drogiego search?eventType=live (100 j.).
+    /// </summary>
+    private async Task<string?> FindLiveVideoViaUploadsAsync(string channelId, string apiKey, CancellationToken ct)
+    {
+        if (channelId.Length > 2 && channelId.StartsWith("UC", StringComparison.Ordinal))
+        {
+            string playlistId = "UU" + channelId[2..];
+            string plUrl = $"{YouTubeApiBaseUrl}/playlistItems?part=contentDetails&playlistId={Uri.EscapeDataString(playlistId)}&maxResults=3&key={Uri.EscapeDataString(apiKey)}";
+            using var plResp = await _httpClient.GetAsync(plUrl, ct).ConfigureAwait(false);
+            if (plResp.IsSuccessStatusCode)
+            {
+                using var plDoc = JsonDocument.Parse(await plResp.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+                var ids = new List<string>();
+                if (plDoc.RootElement.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var it in items.EnumerateArray())
+                    {
+                        if (it.TryGetProperty("contentDetails", out var cd) && cd.TryGetProperty("videoId", out var v) && v.ValueKind == JsonValueKind.String)
+                            ids.Add(v.GetString()!);
+                    }
+                }
+                if (ids.Count == 0) return null;
+
+                string vidUrl = $"{YouTubeApiBaseUrl}/videos?part=snippet&id={Uri.EscapeDataString(string.Join(",", ids))}&key={Uri.EscapeDataString(apiKey)}";
+                using var vResp = await _httpClient.GetAsync(vidUrl, ct).ConfigureAwait(false);
+                if (vResp.IsSuccessStatusCode)
+                {
+                    using var vDoc = JsonDocument.Parse(await vResp.Content.ReadAsStringAsync(ct).ConfigureAwait(false));
+                    if (vDoc.RootElement.TryGetProperty("items", out var vItems) && vItems.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var vi in vItems.EnumerateArray())
+                        {
+                            if (vi.TryGetProperty("snippet", out var sn) &&
+                                sn.TryGetProperty("liveBroadcastContent", out var lbc) &&
+                                string.Equals(lbc.GetString(), "live", StringComparison.OrdinalIgnoreCase) &&
+                                vi.TryGetProperty("id", out var idp) && idp.ValueKind == JsonValueKind.String)
+                            {
+                                return idp.GetString();
+                            }
+                        }
+                    }
+                    return null;
+                }
+            }
+        }
+
+        // Fallback: oficjalne wyszukiwanie transmisji na zywo (100 jednostek limitu)
+        string searchUrl = $"{YouTubeApiBaseUrl}/search?part=id&channelId={Uri.EscapeDataString(channelId)}&eventType=live&type=video&maxResults=1&key={Uri.EscapeDataString(apiKey)}";
+        using var sResp = await _httpClient.GetAsync(searchUrl, ct).ConfigureAwait(false);
+        string sBody = await sResp.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+        if (!sResp.IsSuccessStatusCode)
+        {
+            // np. przekroczony dzienny limit (quotaExceeded) - blad ma byc widoczny, a nie udawac "offline"
+            throw new InvalidOperationException(ExtractApiErrorMessage(sBody, (int)sResp.StatusCode));
+        }
+        using var sDoc = JsonDocument.Parse(sBody);
+        if (sDoc.RootElement.TryGetProperty("items", out var sItems) && sItems.ValueKind == JsonValueKind.Array && sItems.GetArrayLength() > 0 &&
+            sItems[0].TryGetProperty("id", out var sid) && sid.TryGetProperty("videoId", out var svid) && svid.ValueKind == JsonValueKind.String)
+        {
+            return svid.GetString();
+        }
+        return null;
+    }
+
     private async Task<YouTubeStreamStatus> FetchViaDataApiV3Async(
         (string Identifier, bool IsChannelId, bool IsHandle, bool IsVideoId) target,
         string apiKey,
@@ -167,6 +237,7 @@ public sealed class YouTubeService : IYouTubeService
     {
         string? videoId = null;
         string resolvedChannelTitle = string.Empty;
+        string? channelIdForCache = null;
 
         if (target.IsVideoId)
         {
@@ -175,8 +246,13 @@ public sealed class YouTubeService : IYouTubeService
         else
         {
             string? channelId = target.IsChannelId ? target.Identifier : null;
+            if (!target.IsChannelId && _channelCache.TryGetValue(target.Identifier, out var cachedChannel))
+            {
+                channelId = cachedChannel.Id;
+                resolvedChannelTitle = cachedChannel.Title;
+            }
 
-            if (target.IsHandle || (!target.IsChannelId && !target.IsVideoId))
+            if (string.IsNullOrWhiteSpace(channelId) && (target.IsHandle || (!target.IsChannelId && !target.IsVideoId)))
             {
                 string handleParam = target.Identifier.TrimStart('@');
                 string channelUrl = $"{YouTubeApiBaseUrl}/channels?part=id,snippet&forHandle={Uri.EscapeDataString(handleParam)}&key={Uri.EscapeDataString(apiKey)}";
@@ -209,6 +285,11 @@ public sealed class YouTubeService : IYouTubeService
                 }
             }
 
+            if (!string.IsNullOrWhiteSpace(channelId) && !target.IsChannelId)
+            {
+                _channelCache[target.Identifier] = (channelId, resolvedChannelTitle);
+            }
+
             if (string.IsNullOrWhiteSpace(channelId))
             {
                 return new YouTubeStreamStatus(
@@ -222,37 +303,19 @@ public sealed class YouTubeService : IYouTubeService
                     ErrorMessage: $"Nie znaleziono kanału YouTube dla: {target.Identifier}");
             }
 
-            string searchUrl = $"{YouTubeApiBaseUrl}/search?part=id,snippet&channelId={Uri.EscapeDataString(channelId)}&eventType=live&type=video&maxResults=1&key={Uri.EscapeDataString(apiKey)}";
-            using var searchResp = await _httpClient.GetAsync(searchUrl, cancellationToken).ConfigureAwait(false);
-            string searchBody = await searchResp.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            channelIdForCache = channelId;
 
-            if (!searchResp.IsSuccessStatusCode)
+            // 1) znany trwajacy live: odswiezamy tylko videos (1 jednostka)
+            if (_liveVideoByChannel.TryGetValue(channelId!, out var knownLive))
             {
-                string apiErr = ExtractApiErrorMessage(searchBody, (int)searchResp.StatusCode);
-                return new YouTubeStreamStatus(false, false, 0, 0, string.Empty, resolvedChannelTitle, null, apiErr);
+                videoId = knownLive;
+            }
+            else
+            {
+                // 2) playlistItems uploadow kanalu (1 j.) + videos (1 j.) zamiast search (100 j.)
+                videoId = await FindLiveVideoViaUploadsAsync(channelId!, apiKey, cancellationToken).ConfigureAwait(false);
             }
 
-            using var searchDoc = JsonDocument.Parse(searchBody);
-            if (searchDoc.RootElement.TryGetProperty("items", out var searchItems) &&
-                searchItems.ValueKind == JsonValueKind.Array &&
-                searchItems.GetArrayLength() > 0)
-            {
-                var firstItem = searchItems[0];
-                if (firstItem.TryGetProperty("id", out var idObj) &&
-                    idObj.ValueKind == JsonValueKind.Object &&
-                    idObj.TryGetProperty("videoId", out var vidProp) &&
-                    vidProp.ValueKind == JsonValueKind.String)
-                {
-                    videoId = vidProp.GetString();
-                }
-
-                if (firstItem.TryGetProperty("snippet", out var sSnip) &&
-                    sSnip.TryGetProperty("channelTitle", out var sChTitle) &&
-                    sChTitle.ValueKind == JsonValueKind.String)
-                {
-                    resolvedChannelTitle = sChTitle.GetString() ?? resolvedChannelTitle;
-                }
-            }
 
             if (string.IsNullOrWhiteSpace(videoId))
             {
@@ -375,6 +438,12 @@ public sealed class YouTubeService : IYouTubeService
         if (!isLive)
         {
             concurrentViewers = 0;
+        }
+
+        if (!string.IsNullOrWhiteSpace(channelIdForCache))
+        {
+            if (isLive) _liveVideoByChannel[channelIdForCache] = videoId!;
+            else _liveVideoByChannel.TryRemove(channelIdForCache, out _);
         }
 
         return new YouTubeStreamStatus(

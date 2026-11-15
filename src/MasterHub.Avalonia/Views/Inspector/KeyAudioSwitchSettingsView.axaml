@@ -1,0 +1,29 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyAudioSwitchSettingsView"
+             x:DataType="vm:KeyItemViewModel">
+    <!-- Przełączanie urządzenia audio: jedno naciśnięcie przełącza domyślne urządzenie między A i B (głośniki ⇄ słuchawki / dwa mikrofony). -->
+    <StackPanel Spacing="6" IsVisible="{Binding IsAudioSwitchAction}">
+        <TextBlock Text="{loc:Loc AudioSwitch_Kind}" Classes="caption" />
+        <StackPanel Orientation="Horizontal" Spacing="16">
+            <RadioButton GroupName="AudioSwitchKind" Content="{loc:Loc AudioSwitch_Output}"
+                         IsChecked="{Binding !AudioSwitchCapture, Mode=OneWay}" Command="{Binding SetAudioSwitchKindCommand}" CommandParameter="output" />
+            <RadioButton GroupName="AudioSwitchKind" Content="{loc:Loc AudioSwitch_Input}"
+                         IsChecked="{Binding AudioSwitchCapture, Mode=OneWay}" Command="{Binding SetAudioSwitchKindCommand}" CommandParameter="input" />
+        </StackPanel>
+
+        <TextBlock Text="{loc:Loc AudioSwitch_DeviceA}" Classes="caption" />
+        <ComboBox ItemsSource="{Binding AudioSwitchDevices}" SelectedItem="{Binding AudioSwitchDeviceA, Mode=TwoWay}" HorizontalAlignment="Stretch" />
+
+        <TextBlock Text="{loc:Loc AudioSwitch_DeviceB}" Classes="caption" />
+        <ComboBox ItemsSource="{Binding AudioSwitchDevices}" SelectedItem="{Binding AudioSwitchDeviceB, Mode=TwoWay}" HorizontalAlignment="Stretch" />
+
+        <!-- Brakujące urządzenie widać od razu, nie dopiero po naciśnięciu klawisza -->
+        <Border Classes="callout" IsVisible="{Binding HasAudioSwitchProblem}" Padding="10,8">
+            <TextBlock Text="{Binding AudioSwitchProblemText}" TextWrapping="Wrap" Foreground="{StaticResource AccentCautionBrush}" />
+        </Border>
+        <TextBlock Text="{loc:Loc AudioSwitch_Hint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+    </StackPanel>
+</UserControl>

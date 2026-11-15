@@ -19,6 +19,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="MasterHub.Core.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Profiles\Templates\*.json" />
+    <EmbeddedResource Include="Rendering\Icons\lucide.txt.gz" LogicalName="MasterHub.Core.Rendering.Icons.lucide.txt.gz" />
     <EmbeddedResource Include="Localization\Locales\*.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </EmbeddedResource>

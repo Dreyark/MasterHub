@@ -102,7 +102,50 @@ public class WindowsSystemControlService : ISystemControlService
     private static extern IntPtr GlobalLock(IntPtr hMem);
 
     [DllImport("kernel32.dll", SetLastError = true)]
-    private static extern bool GlobalUnlock(IntPtr hMem);
+    private static extern IntPtr GlobalUnlock(IntPtr hMem);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr GlobalFree(IntPtr hMem);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct INPUT
+    {
+        public uint type;
+        public InputUnion u;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    private struct InputUnion
+    {
+        // Unia musi mieć rozmiar największego członka (MOUSEINPUT), inaczej sizeof(INPUT) wynosi 32 B zamiast
+        // wymaganych 40 B na x64 i SendInput kończy się błędem ERROR_INVALID_PARAMETER.
+        [FieldOffset(0)] public MOUSEINPUT mi;
+        [FieldOffset(0)] public KEYBDINPUT ki;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MOUSEINPUT
+    {
+        public int dx;
+        public int dy;
+        public uint mouseData;
+        public uint dwFlags;
+        public uint time;
+        public UIntPtr dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KEYBDINPUT
+    {
+        public ushort wVk;
+        public ushort wScan;
+        public uint dwFlags;
+        public uint time;
+        public UIntPtr dwExtraInfo;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
 
     private static void PressKey(byte vk)
     {
@@ -248,18 +291,21 @@ public class WindowsSystemControlService : ISystemControlService
 
                 foreach (var proc in procs)
                 {
-                    try
+                    using (proc)
                     {
-                        if (proc.MainWindowHandle != IntPtr.Zero)
+                        try
                         {
-                            SendMessage(proc.MainWindowHandle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+                            if (proc.MainWindowHandle != IntPtr.Zero)
+                            {
+                                SendMessage(proc.MainWindowHandle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+                            }
+                            else
+                            {
+                                proc.CloseMainWindow();
+                            }
                         }
-                        else
-                        {
-                            proc.CloseMainWindow();
-                        }
+                        catch { }
                     }
-                    catch { }
                 }
             }
         }
@@ -275,11 +321,12 @@ public class WindowsSystemControlService : ISystemControlService
             bool clipboardSet = false;
             if (OpenClipboard(IntPtr.Zero))
             {
+                IntPtr hGlobal = IntPtr.Zero;
                 try
                 {
                     EmptyClipboard();
                     int byteLength = (text.Length + 1) * 2;
-                    IntPtr hGlobal = GlobalAlloc(GMEM_MOVEABLE, (UIntPtr)byteLength);
+                    hGlobal = GlobalAlloc(GMEM_MOVEABLE, (UIntPtr)byteLength);
                     if (hGlobal != IntPtr.Zero)
                     {
                         IntPtr target = GlobalLock(hGlobal);
@@ -298,6 +345,10 @@ public class WindowsSystemControlService : ISystemControlService
                 finally
                 {
                     CloseClipboard();
+                    if (!clipboardSet && hGlobal != IntPtr.Zero)
+                    {
+                        GlobalFree(hGlobal);
+                    }
                 }
             }
 
@@ -313,15 +364,60 @@ public class WindowsSystemControlService : ISystemControlService
             }
             else
             {
-                // Fallback: SendInput Unicode keystrokes directly
-                foreach (char ch in text)
-                {
-                    keybd_event(0, (byte)ch, KEYEVENTF_UNICODE, UIntPtr.Zero);
-                    keybd_event(0, (byte)ch, KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, UIntPtr.Zero);
-                }
+                SendUnicode(text);   // fallback: type it
             }
         }
         catch { }
+    }
+
+    /// <summary>T-17 c: types the text character by character (Unicode keystrokes); the clipboard is not touched.</summary>
+    public void TypeText(string text)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+        try
+        {
+            SendUnicode(text);
+        }
+        catch { }
+    }
+
+    private static void SendUnicode(string text)
+    {
+        var inputs = new INPUT[2];
+        inputs[0].type = 1;
+        inputs[1].type = 1;
+        int inputSize = Marshal.SizeOf<INPUT>();
+
+        foreach (char ch in text)
+        {
+            // a line break is typed as Enter (a Unicode \n does nothing in most programs)
+            if (ch == '\r') continue;
+            ushort scan = ch == '\n' ? (ushort)0 : ch;
+            ushort vk = ch == '\n' ? (ushort)0x0D : (ushort)0;
+            uint flags = ch == '\n' ? 0u : KEYEVENTF_UNICODE;
+
+            inputs[0].u.ki.wVk = vk;
+            inputs[0].u.ki.wScan = scan;
+            inputs[0].u.ki.dwFlags = flags;
+            inputs[0].u.ki.time = 0;
+            inputs[0].u.ki.dwExtraInfo = UIntPtr.Zero;
+
+            inputs[1].u.ki.wVk = vk;
+            inputs[1].u.ki.wScan = scan;
+            inputs[1].u.ki.dwFlags = flags | KEYEVENTF_KEYUP;
+            inputs[1].u.ki.time = 0;
+            inputs[1].u.ki.dwExtraInfo = UIntPtr.Zero;
+
+            SendInput(2, inputs, inputSize);
+        }
+    }
+
+    private readonly HotkeySender _gameHotkeys = new(new WindowsKeyboardSender());
+
+    public void SendHotkey(string hotkeyString, HotkeySendMode mode, int holdMs = 0)
+    {
+        if (mode == HotkeySendMode.Normal) { SendHotkey(hotkeyString); return; }
+        try { _gameHotkeys.Send(hotkeyString, mode, holdMs); } catch { }
     }
 
     public void SendHotkey(string hotkeyString)
@@ -400,26 +496,31 @@ public class WindowsSystemControlService : ISystemControlService
 
             if (mainKey == 0 && modifiers.Count == 0) return;
 
-            // Press modifiers
-            foreach (var mod in modifiers)
+            try
             {
-                SendKeyEvent(mod, false);
-            }
-            Thread.Sleep(15);
+                // Press modifiers
+                foreach (var mod in modifiers)
+                {
+                    SendKeyEvent(mod, false);
+                }
+                Thread.Sleep(15);
 
-            // Press main key
-            if (mainKey != 0)
-            {
-                SendKeyEvent(mainKey, false);
-                Thread.Sleep(30);
-                SendKeyEvent(mainKey, true);
+                // Press main key
+                if (mainKey != 0)
+                {
+                    SendKeyEvent(mainKey, false);
+                    Thread.Sleep(30);
+                    SendKeyEvent(mainKey, true);
+                }
+                Thread.Sleep(15);
             }
-            Thread.Sleep(15);
-
-            // Release modifiers
-            for (int i = modifiers.Count - 1; i >= 0; i--)
+            finally
             {
-                SendKeyEvent(modifiers[i], true);
+                // Release modifiers - zawsze, by nie zostawić "przyklejonego" Ctrl/Alt/Win po wyjątku
+                for (int i = modifiers.Count - 1; i >= 0; i--)
+                {
+                    SendKeyEvent(modifiers[i], true);
+                }
             }
         }
         catch { }

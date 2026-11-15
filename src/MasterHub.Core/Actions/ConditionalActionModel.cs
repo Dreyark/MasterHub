@@ -51,7 +51,7 @@ public class ConditionalActionModel
     {
         if (string.IsNullOrWhiteSpace(name)) return false;
         string procName = Path.GetFileNameWithoutExtension(name).Trim();
-        return Process.GetProcessesByName(procName).Length > 0;
+        return MasterHub.Core.SystemControl.ProcessHelper.IsProcessRunning(procName);
     }
 
     [DllImport("user32.dll")]
@@ -71,7 +71,7 @@ public class ConditionalActionModel
 
         try
         {
-            var proc = Process.GetProcessById((int)pid);
+            using var proc = Process.GetProcessById((int)pid);
             string cleanTarget = Path.GetFileNameWithoutExtension(target).Trim();
             return proc.ProcessName.Equals(cleanTarget, StringComparison.OrdinalIgnoreCase) ||
                    proc.MainWindowTitle.Contains(target, StringComparison.OrdinalIgnoreCase);

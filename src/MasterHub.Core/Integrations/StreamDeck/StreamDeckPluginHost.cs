@@ -20,7 +20,7 @@ namespace MasterHub.Core.Integrations.StreamDeck;
 /// Zarządca wtyczek Elgato Stream Deck (.streamDeckPlugin) w MasterHub.
 /// Obsługuje instalację, rekonstrukcję szyfrowanych manifestów Elgato DRM, cykl życia procesów, WebSocket oraz konwersję klatek do 72x72 JPEG.
 /// </summary>
-public sealed class StreamDeckPluginHost : IStreamDeckPluginHost
+public sealed partial class StreamDeckPluginHost : IStreamDeckPluginHost
 {
     private readonly StreamDeckWebSocketServer _server;
     private readonly string _pluginsDirectory;
@@ -258,8 +258,15 @@ public sealed class StreamDeckPluginHost : IStreamDeckPluginHost
         try
         {
             using var archive = ZipFile.OpenRead(packageFilePath);
-            var manifestEntry = archive.Entries.FirstOrDefault(e => e.FullName.EndsWith("manifest.json", StringComparison.OrdinalIgnoreCase));
-            var enEntry = archive.Entries.FirstOrDefault(e => e.FullName.EndsWith("en.json", StringComparison.OrdinalIgnoreCase));
+            // Wybieramy najpłycej położony manifest (a nie pierwszy z brzegu, np. z node_modules).
+            var manifestEntry = archive.Entries
+                .Where(e => e.FullName.EndsWith("manifest.json", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(e => e.FullName.Count(c => c == '/' || c == '\\'))
+                .FirstOrDefault();
+            var enEntry = archive.Entries
+                .Where(e => e.FullName.EndsWith("en.json", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(e => e.FullName.Count(c => c == '/' || c == '\\'))
+                .FirstOrDefault();
             if (manifestEntry == null && enEntry == null) return null;
 
             var anchorEntry = manifestEntry ?? enEntry!;
@@ -285,11 +292,21 @@ public sealed class StreamDeckPluginHost : IStreamDeckPluginHost
                 targetDir = Path.Combine(_pluginsDirectory, safeName);
             }
 
+            // Ochrona przed path traversal (zip-slip): katalog docelowy musi leżeć wewnątrz katalogu pluginów.
+            string pluginsRoot = Path.GetFullPath(_pluginsDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            targetDir = Path.GetFullPath(targetDir);
+            if (!targetDir.StartsWith(pluginsRoot, StringComparison.OrdinalIgnoreCase) ||
+                targetDir.Length <= pluginsRoot.Length)
+            {
+                return null;
+            }
+
             if (Directory.Exists(targetDir))
             {
                 try { Directory.Delete(targetDir, true); } catch { }
             }
             Directory.CreateDirectory(targetDir);
+            string targetRoot = targetDir.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
 
             foreach (var entry in archive.Entries)
             {
@@ -302,7 +319,12 @@ public sealed class StreamDeckPluginHost : IStreamDeckPluginHost
 
                 if (string.IsNullOrEmpty(entryRelPath) || entryRelPath.EndsWith('/')) continue;
 
-                string fullDestPath = Path.Combine(targetDir, entryRelPath.Replace('/', Path.DirectorySeparatorChar));
+                string fullDestPath = Path.GetFullPath(Path.Combine(targetDir, entryRelPath.Replace('/', Path.DirectorySeparatorChar)));
+                if (!fullDestPath.StartsWith(targetRoot, StringComparison.OrdinalIgnoreCase))
+                {
+                    // Wpis próbujący wyjść poza katalog pluginu (np. "..\..\evil.dll") - pomijamy.
+                    continue;
+                }
                 string? destDir = Path.GetDirectoryName(fullDestPath);
                 if (destDir != null && !Directory.Exists(destDir))
                 {
@@ -356,7 +378,11 @@ public sealed class StreamDeckPluginHost : IStreamDeckPluginHost
                 RefreshPlugins();
                 return true;
             }
-            catch { }
+            catch
+            {
+                // Usunięcie katalogu się nie powiodło (np. zablokowany plik) - przywróć wpis na liście.
+                RefreshPlugins();
+            }
         }
         return false;
     }
@@ -737,7 +763,7 @@ public sealed class StreamDeckPluginHost : IStreamDeckPluginHost
                         {
                             try
                             {
-                                var proc = Process.GetProcessById((int)pid);
+                                using var proc = Process.GetProcessById((int)pid);
                                 if (!proc.HasExited)
                                 {
                                     proc.Kill(true);
@@ -755,6 +781,7 @@ public sealed class StreamDeckPluginHost : IStreamDeckPluginHost
 
     public async Task StopAsync()
     {
+        StopCpuWatchdog();
         foreach (var uuid in _runningProcesses.Keys.ToList())
         {
             await StopPluginAsync(uuid);
@@ -771,6 +798,8 @@ public sealed class StreamDeckPluginHost : IStreamDeckPluginHost
 
         if (_server.IsPluginConnected(pluginUuid)) return;
         if (!_plugins.TryGetValue(pluginUuid, out var plugin)) return;
+        if (!_runningProcesses.ContainsKey(pluginUuid) && !EnsureCanRun(pluginUuid)) return;   // T-31 f: say why, do not fail silently
+        EnsureCpuWatchdog();   // T-31 a
 
         if (!_runningProcesses.ContainsKey(pluginUuid))
         {
@@ -816,10 +845,14 @@ public sealed class StreamDeckPluginHost : IStreamDeckPluginHost
 
             if (plugin.IsNodeJs)
             {
-                string? nodePath = FindNodeExecutable();
+                // T-31 b: the Node.js the plugin asks for (its Nodejs.Version), including one MasterHub downloaded with consent
+                var node = NodeResolver.Resolve(RealNodeFileSystem.Instance, NodeResolver.RequiredMajor(plugin.Manifest.Nodejs?.Version));
+                string? nodePath = node.Problem == NodeProblem.None ? node.Path : null;
                 if (nodePath == null)
                 {
-                    PluginLogReceived?.Invoke(pluginUuid, "Błąd: Node.js (node.exe) nie został znaleziony w systemie do uruchomienia tej wtyczki.");
+                    PluginLogReceived?.Invoke(pluginUuid, node.Problem == NodeProblem.TooOld
+                        ? $"Błąd: wtyczka potrzebuje Node.js {node.RequiredMajor}, a znaleziono {node.Version}."
+                        : "Błąd: Node.js (node.exe) nie został znaleziony w systemie do uruchomienia tej wtyczki.");
                     return;
                 }
 
@@ -1009,41 +1042,6 @@ setTimeout(initPlugin, 250);
         return paths.FirstOrDefault(File.Exists);
     }
 
-    private static string? FindNodeExecutable()
-    {
-        string[] commonPaths =
-        {
-            @"C:\nvm4w\nodejs\node.exe",
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "nodejs", "node.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "nodejs", "node.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "node", "node.exe")
-        };
-
-        foreach (var p in commonPaths)
-        {
-            if (File.Exists(p)) return p;
-        }
-
-        string? nvmSymlink = Environment.GetEnvironmentVariable("NVM_SYMLINK");
-        if (!string.IsNullOrEmpty(nvmSymlink))
-        {
-            string cand = Path.Combine(nvmSymlink, "node.exe");
-            if (File.Exists(cand)) return cand;
-        }
-
-        string? pathEnv = Environment.GetEnvironmentVariable("PATH");
-        if (pathEnv != null)
-        {
-            foreach (var part in pathEnv.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                string candidate = Path.Combine(part, "node.exe");
-                if (File.Exists(candidate)) return candidate;
-            }
-        }
-
-        return null;
-    }
-
     public async Task SendWillAppearAsync(int keyIndex, string pluginUuid, string actionUuid, string? settingsJson = null)
     {
         string context = $"key_{keyIndex}";
@@ -1058,7 +1056,7 @@ setTimeout(initPlugin, 250);
             var actionManifest = plugin.Manifest.Actions.FirstOrDefault(a => a.UUID.Equals(actionUuid, StringComparison.OrdinalIgnoreCase));
             if (actionManifest != null && actionManifest.States.Count > 0)
             {
-                showTitle = actionManifest.States[0].ShowTitle;
+                showTitle = actionManifest.States[PluginKeyStates.Clamp(_keyStates.Get(keyIndex), actionManifest.States.Count)].ShowTitle;
             }
         }
 
@@ -1073,7 +1071,7 @@ setTimeout(initPlugin, 250);
                 controller = "Keypad",
                 settings = ParseJsonOrEmpty(settingsJson),
                 coordinates = new { column = keyIndex % 5, row = keyIndex / 5 },
-                state = 0,
+                state = _keyStates.Get(keyIndex),
                 isInMultiAction = false,
                 title = "",
                 titleParameters = new
@@ -1106,7 +1104,7 @@ setTimeout(initPlugin, 250);
             {
                 controller = "Keypad",
                 coordinates = new { column = keyIndex % 5, row = keyIndex / 5 },
-                state = 0,
+                state = _keyStates.Get(keyIndex),
                 isInMultiAction = false
             }
         };
@@ -1128,7 +1126,7 @@ setTimeout(initPlugin, 250);
                 controller = "Keypad",
                 settings = ParseJsonOrEmpty(settingsJson),
                 coordinates = new { column = keyIndex % 5, row = keyIndex / 5 },
-                state = 0,
+                state = _keyStates.Get(keyIndex),
                 userDesiredState = 0,
                 isInMultiAction = false
             }
@@ -1140,6 +1138,9 @@ setTimeout(initPlugin, 250);
     public async Task SendKeyUpAsync(int keyIndex, string pluginUuid, string actionUuid, string? settingsJson = null)
     {
         string context = $"key_{keyIndex}";
+        // T-31 d: a multi-state action moves to its next state after the key-up (unless it disables automatic states)
+        var (stateCount, disableAutomatic) = StatesOf(pluginUuid, actionUuid);
+        var (reported, current) = _keyStates.AfterKeyUp(keyIndex, stateCount, disableAutomatic, out bool stateChanged);
         var msg = new
         {
             @event = "keyUp",
@@ -1151,13 +1152,14 @@ setTimeout(initPlugin, 250);
                 controller = "Keypad",
                 settings = ParseJsonOrEmpty(settingsJson),
                 coordinates = new { column = keyIndex % 5, row = keyIndex / 5 },
-                state = 0,
+                state = reported,
                 userDesiredState = 0,
                 isInMultiAction = false
             }
         };
 
         await _server.SendEventAsync(pluginUuid, msg);
+        if (stateChanged) KeyStateUpdated?.Invoke(keyIndex, current);
     }
 
     public async Task SendDialRotateAsync(int dialIndex, string pluginUuid, string actionUuid, int ticks, bool pressed, string? settingsJson = null)
@@ -1382,11 +1384,15 @@ setTimeout(initPlugin, 250);
                 catch { }
             }
 
-            if (sourceBmp == null && svg?.Picture == null) return null;
-
-            using (sourceBmp)
-            using (var surface = SKSurface.Create(new SKImageInfo(72, 72, SKColorType.Rgba8888, SKAlphaType.Premul)))
+            if (sourceBmp == null && svg?.Picture == null)
             {
+                svg?.Dispose();
+                return null;
+            }
+
+            try
+            {
+                using var surface = SKSurface.Create(new SKImageInfo(72, 72, SKColorType.Rgba8888, SKAlphaType.Premul));
                 var canvas = surface.Canvas;
                 canvas.Clear(SKColors.Black);
 
@@ -1412,8 +1418,13 @@ setTimeout(initPlugin, 250);
                 }
 
                 using var snapshot = surface.Snapshot();
-                using var encoded = snapshot.Encode(SKEncodedImageFormat.Jpeg, 90);
+                using var encoded = MasterHub.Core.Rendering.JpegEncoding.Encode(snapshot, 90);
                 return encoded.ToArray();
+            }
+            finally
+            {
+                sourceBmp?.Dispose();
+                svg?.Dispose();
             }
         }
         catch
@@ -1436,7 +1447,9 @@ setTimeout(initPlugin, 250);
         int keyIndex = ResolveContextToKey(context);
         if (keyIndex >= 0 && keyIndex < 15)
         {
-            KeyStateUpdated?.Invoke(keyIndex, state);
+            // T-31 d: any number of states; the index is kept inside the states the action defines
+            int count = _activeKeyAssignments.TryGetValue(keyIndex, out var a) ? StatesOf(a.PluginUuid, a.ActionUuid).Count : 0;
+            KeyStateUpdated?.Invoke(keyIndex, _keyStates.Set(keyIndex, state, count > 0 ? count : int.MaxValue));
         }
     }
 
@@ -1636,6 +1649,7 @@ setTimeout(initPlugin, 250);
     {
         if (_isDisposed) return;
         _isDisposed = true;
+        StopCpuWatchdog();
 
         foreach (var p in _runningProcesses.Values)
         {

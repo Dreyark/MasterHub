@@ -11,7 +11,7 @@ namespace MasterHub.Avalonia.ViewModels;
 /// Model reprezentujący stację bazową (podstawkę Cooler Master MasterHUB Base M0064).
 /// Odpowiada za kontrolę sprzętowej listwy podświetlenia RGB LED docka.
 /// </summary>
-public partial class BaseStationItemViewModel : ObservableObject
+public partial class BaseStationItemViewModel : ObservableObject, IDisposable
 {
     protected bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
@@ -21,13 +21,20 @@ public partial class BaseStationItemViewModel : ObservableObject
     private bool _isConnected = true;
     private string _colorHex = "#00F0B5";
     private byte _brightness = 100;
+    private readonly Action<string> _onLanguageChanged;
 
     public string Name => LocalizationService.Instance.GetString("BaseStation_Name", "Podstawka MasterHub (Dock Base)");
     public string ModelName => "MasterHUB Base M0064";
 
     public BaseStationItemViewModel()
     {
-        LocalizationService.Instance.LanguageChanged += _ => OnPropertyChanged(nameof(Name));
+        _onLanguageChanged = _ => OnPropertyChanged(nameof(Name));
+        LocalizationService.Instance.LanguageChanged += _onLanguageChanged;
+    }
+
+    public void Dispose()
+    {
+        LocalizationService.Instance.LanguageChanged -= _onLanguageChanged;
     }
     public static System.Collections.Generic.IReadOnlyList<MasterHub.Core.Rendering.ColorStudioHelper.ColorItem> PresetColors =>
         MasterHub.Core.Rendering.ColorStudioHelper.CuratedPalette;

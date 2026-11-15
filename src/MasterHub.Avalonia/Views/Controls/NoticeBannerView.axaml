@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Controls.NoticeBannerView"
+             x:DataType="vm:NoticeBannerViewModel"
+             HorizontalAlignment="Right" VerticalAlignment="Top">
+
+    <!-- Banery w oknie (T-34 #8): błędy i ostrzeżenia zamiast systemowych okienek; informacje znikają same -->
+    <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding HasItems}" Width="380" Margin="0,8,20,0">
+        <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:NoticeItem">
+                <Border Classes="glassCard" Background="{StaticResource PanelBgBrush}" Padding="12,10" Margin="0,0,0,8" BoxShadow="0 6 18 0 #50000000"
+                       >
+                    <Grid ColumnDefinitions="Auto,*,Auto">
+                        <Border Grid.Column="0" Width="4" CornerRadius="2" Margin="0,0,10,0" Background="{StaticResource AccentWarningBrush}" IsVisible="{Binding IsError}" />
+                        <Border Grid.Column="0" Width="4" CornerRadius="2" Margin="0,0,10,0" Background="{StaticResource AccentCautionBrush}" IsVisible="{Binding IsWarning}" />
+                        <Border Grid.Column="0" Width="4" CornerRadius="2" Margin="0,0,10,0" Background="{StaticResource AccentPrimaryBrush}" IsVisible="{Binding IsInfo}" />
+                        <TextBlock Grid.Column="1" Text="{Binding Text}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        <Button Grid.Column="2" Classes="glyphBtn" Content="✕" Margin="8,0,0,0" VerticalAlignment="Top"
+                                Tag="{Binding Id}" Click="OnDismissClick" ToolTip.Tip="{loc:Loc Check_Close}" />
+                    </Grid>
+                </Border>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+</UserControl>

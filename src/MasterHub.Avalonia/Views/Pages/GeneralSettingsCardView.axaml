@@ -18,20 +18,41 @@
             <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
                     <TextBlock Text="{loc:Loc Settings_LanguageTitle}" FontWeight="SemiBold" FontSize="12" />
-                    <TextBlock Text="{loc:Loc Settings_LanguageDesc}" Classes="dim" FontSize="10" />
+                    <TextBlock Text="{loc:Loc Settings_LanguageDesc}" Classes="dim" FontSize="10.5" />
                 </StackPanel>
                 <ComboBox Grid.Column="1" Width="180"
                           ItemsSource="{Binding AvailableLanguages}"
                           SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}"
                           VerticalAlignment="Center" />
             </Grid>
+            <!-- Własne pliki językowe (T-34 #11): szablon z wszystkimi tekstami po angielsku -->
+            <StackPanel Spacing="4">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <Button Classes="pillBtn" Content="{loc:Loc Settings_MakeLanguageFile}" Command="{Binding MakeLanguageFileCommand}"
+                            ToolTip.Tip="{loc:Loc Settings_MakeLanguageFileTip}" />
+                    <Button Classes="pillBtn" Content="{loc:Loc Settings_OpenLanguagesFolder}" Command="{Binding OpenLanguagesFolderCommand}" />
+                </StackPanel>
+                <TextBlock Text="{Binding LanguageFileStatus}" Classes="dim" FontSize="10.5" TextWrapping="Wrap"
+                           IsVisible="{Binding LanguageFileStatus, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
 
             <!-- Opcja 2: Autostart ze startem systemu Windows -->
+            <!-- T-17 g: suwak głównej głośności pokazuje też okienko głośności Windows -->
+            <Border Classes="statusBadgeCard" Padding="14,10">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Text="{loc:Loc Settings_VolumeOsdTitle}" FontWeight="SemiBold" FontSize="12" />
+                        <TextBlock Text="{loc:Loc Settings_VolumeOsdDesc}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding VolumeOsdForFaders, Mode=TwoWay}" OnContent="" OffContent="" />
+                </Grid>
+            </Border>
+
             <Border Classes="statusBadgeCard" Padding="14,10">
                 <Grid ColumnDefinitions="*,Auto">
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
                         <TextBlock Text="{loc:Loc Settings_StartupTitle}" FontWeight="SemiBold" FontSize="12" />
-                        <TextBlock Text="{loc:Loc Settings_StartupDesc}" Classes="dim" FontSize="10" TextWrapping="Wrap" />
+                        <TextBlock Text="{loc:Loc Settings_StartupDesc}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
                     </StackPanel>
                     <CheckBox Grid.Column="1" IsChecked="{Binding StartWithWindows, Mode=TwoWay}" VerticalAlignment="Center" />
                 </Grid>
@@ -42,10 +63,39 @@
                 <Grid ColumnDefinitions="*,Auto">
                     <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
                         <TextBlock Text="{loc:Loc Settings_StartMinimizedTitle}" FontWeight="SemiBold" FontSize="12" />
-                        <TextBlock Text="{loc:Loc Settings_StartMinimizedDesc}" Classes="dim" FontSize="10" TextWrapping="Wrap" />
+                        <TextBlock Text="{loc:Loc Settings_StartMinimizedDesc}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
                     </StackPanel>
                     <CheckBox Grid.Column="1" IsChecked="{Binding StartMinimizedToTray, Mode=TwoWay}" VerticalAlignment="Center" />
                 </Grid>
+            </Border>
+
+            <!-- Kreator pierwszego uruchomienia (T-08): można go uruchomić ponownie -->
+            <Border Classes="statusBadgeCard" Padding="14,10">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Text="{loc:Loc Settings_TourTitle}" FontWeight="SemiBold" FontSize="12" />
+                        <TextBlock Text="{loc:Loc Settings_TourDesc}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Classes="pillBtn" Command="{Binding RunTourCommand}" Content="{loc:Loc Settings_TourRun}" />
+                </Grid>
+            </Border>
+
+            <!-- Opcja 4: czasy gestów klawiszy (Hold / Double) -->
+            <Border Classes="statusBadgeCard" Padding="14,10">
+                <StackPanel Spacing="8">
+                    <TextBlock Text="{loc:Loc Settings_GestureTimesTitle}" FontWeight="SemiBold" FontSize="12" />
+                    <TextBlock Text="{loc:Loc Settings_GestureTimesDesc}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+                    <StackPanel Orientation="Horizontal" Spacing="18">
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="{loc:Loc Settings_HoldMs}" Classes="caption" />
+                            <NumericUpDown Value="{Binding HoldDurationMs, Mode=TwoWay}" Minimum="200" Maximum="3000" Increment="50" FormatString="0" Width="130" />
+                        </StackPanel>
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="{loc:Loc Settings_DoubleMs}" Classes="caption" />
+                            <NumericUpDown Value="{Binding DoublePressIntervalMs, Mode=TwoWay}" Minimum="100" Maximum="1000" Increment="25" FormatString="0" Width="130" />
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
             </Border>
         </StackPanel>
     </Border>

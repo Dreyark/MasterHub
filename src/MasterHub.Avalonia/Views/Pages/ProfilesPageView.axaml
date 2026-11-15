@@ -2,30 +2,39 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
              xmlns:loc="using:MasterHub.Avalonia.Localization"
+             xmlns:ctl="using:MasterHub.Avalonia.Views.Controls"
+             xmlns:local="using:MasterHub.Avalonia.Views.Pages"
              x:Class="MasterHub.Avalonia.Views.Pages.ProfilesPageView"
              x:DataType="vm:ProfilesPageViewModel">
 
     <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="24">
-        <!-- Nagłówek -->
-        <StackPanel Grid.Row="0" Spacing="4" Margin="0,0,0,20">
-            <TextBlock Text="{loc:Loc Profiles_Title}" Classes="h2" />
-            <TextBlock Text="{loc:Loc Profiles_Subtitle}" Classes="dim" />
-        </StackPanel>
+        <ctl:PageHeader Grid.Row="0" Icon="{StaticResource IconProfiles}"
+                        Title="{loc:Loc NavLabel_Profiles}" Subtitle="{loc:Loc Profiles_Subtitle}">
+            <ctl:PageHeader.Actions>
+                <!-- Globalny przełącznik Smart Profiles (to samo co pozycja w menu paska zadań) -->
+                <StackPanel Orientation="Horizontal" Spacing="8" ToolTip.Tip="{loc:Loc Profiles_AutoSwitchTip}">
+                    <TextBlock Text="{loc:Loc Profiles_AutoSwitch}" FontSize="12" VerticalAlignment="Center" />
+                    <ToggleSwitch IsChecked="{Binding AutoSwitchEnabled, Mode=TwoWay}" OnContent="" OffContent="" />
+                </StackPanel>
+            </ctl:PageHeader.Actions>
+        </ctl:PageHeader>
 
         <!-- Dodawanie nowego profilu oraz import z pliku JSON -->
         <Border Grid.Row="1" Classes="glassCard" Margin="0,0,0,16" Padding="14,12">
-            <Grid ColumnDefinitions="*,Auto,Auto">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                 <TextBox Grid.Column="0" Text="{Binding NewProfileName}"
                          PlaceholderText="{loc:Loc Profiles_NewPlaceholder}" Margin="0,0,12,0"
                          VerticalAlignment="Center" />
-                <Button Grid.Column="1" Classes="primaryBtn" Command="{Binding CreateProfileCommand}"
+                <Button Grid.Column="1" Classes="accentBtn" Command="{Binding CreateProfileCommand}"
                         Padding="16,8" VerticalAlignment="Center" Margin="0,0,8,0">
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                         <PathIcon Data="{StaticResource IconPlus}" Width="12" Height="12" />
                         <TextBlock Text="{loc:Loc Profiles_NewButton}" FontWeight="SemiBold" FontSize="12" />
                     </StackPanel>
                 </Button>
-                <Button Grid.Column="2" Classes="glassBtn" Click="OnImportProfileClick"
+                <Button Grid.Column="3" Classes="actionBtn" Content="{loc:Loc Templates_Button}" Margin="0,0,8,0"
+                        Command="{Binding Templates.OpenCommand}" IsVisible="{Binding Templates.IsAvailable}" Padding="14,8" VerticalAlignment="Center" />
+                <Button Grid.Column="2" Classes="actionBtn" Click="OnImportProfileClick"
                         ToolTip.Tip="{loc:Loc Profiles_ImportTip}"
                         Padding="14,8" VerticalAlignment="Center">
                     <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
@@ -36,22 +45,16 @@
             </Grid>
         </Border>
 
-        <!-- Komunikat statusu po operacji eksportu lub importu -->
-        <Border Grid.Row="2" Classes="glassCard" Margin="0,0,0,16" Padding="14,10"
-                IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-            <Grid ColumnDefinitions="Auto,*">
-                <PathIcon Grid.Column="0" Data="{StaticResource IconCheck}" Width="14" Height="14"
-                          Foreground="{StaticResource AccentPrimaryBrush}" Margin="0,0,10,0" VerticalAlignment="Center" />
-                <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" FontSize="12"
-                           Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" TextWrapping="Wrap" />
-            </Grid>
-        </Border>
+        <!-- Komunikat statusu po operacji eksportu lub importu + wynik sprawdzenia profilu -->
+        <local:ProfileCheckCardView Grid.Row="2" />
 
         <!-- Lista profili z wyróżnieniem profilu aktywnego i opcją eksportu -->
         <ScrollViewer Grid.Row="3">
             <ItemsControl ItemsSource="{Binding Profiles}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:ProfileItemViewModel">
+                      <StackPanel>
+                        <TextBlock Text="{Binding GroupLabel}" IsVisible="{Binding ShowGroupHeader}" Classes="caption" Margin="4,8,0,8" />
                         <Border Classes="glassCard" Classes.selected="{Binding IsActive}" Margin="0,0,0,10" Padding="16">
                             <Grid ColumnDefinitions="Auto,*,Auto">
                                 <Border Grid.Column="0" Width="40" Height="40" CornerRadius="10"
@@ -70,16 +73,51 @@
                                             <TextBlock Text="{loc:Loc Profiles_ActiveBadge}" Classes="badge"
                                                        Foreground="{StaticResource AccentPrimaryBrush}" />
                                         </Border>
+                                        <Border Classes="statusBadgeCard" IsVisible="{Binding IsNew}">
+                                            <TextBlock Text="{loc:Loc Profiles_NewBadge}" Classes="badge"
+                                                       Foreground="{StaticResource AccentSuccessBrush}" />
+                                        </Border>
                                     </StackPanel>
-                                    <TextBlock Text="{Binding Id, StringFormat='ID: {0}'}" Classes="dim" FontSize="10" />
+                                    <TextBlock Text="{Binding Id, StringFormat='ID: {0}'}" Classes="dim" FontSize="10.5" />
+                                    <TextBlock Text="{Binding ReadyHint}" IsVisible="{Binding IsReady}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+                                    <!-- Aplikacje powiązane z profilem (reguły Smart Profiles) -->
+                                    <ItemsControl ItemsSource="{Binding LinkedApps}" IsVisible="{Binding HasLinkedApps}">
+                                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:LinkedAppItemViewModel">
+                                                <Border Classes="statusBadgeCard" Padding="8,2" Margin="0,2,6,0">
+                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                        <TextBlock Text="{Binding Name}" FontSize="10.5" VerticalAlignment="Center" />
+                                                        <Button Classes="glyphBtn" Content="✕" ToolTip.Tip="{loc:Loc Profiles_Unlink}"
+                                                                Command="{Binding $parent[UserControl].((vm:ProfilesPageViewModel)DataContext).UnlinkAppCommand}"
+                                                                CommandParameter="{Binding}" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
                                 </StackPanel>
                                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                    <!-- Sprawdzenie profilu: co z tego profilu brakuje na tym PC (T-34 #9) -->
+                                    <Button Classes="iconBtn" ToolTip.Tip="{loc:Loc Check_ButtonTip}"
+                                            Command="{Binding $parent[UserControl].((vm:ProfilesPageViewModel)DataContext).CheckProfileCommand}"
+                                            CommandParameter="{Binding}">
+                                        <PathIcon Data="{StaticResource IconTarget}" Width="13" Height="13"
+                                                  Foreground="{StaticResource TextMutedBrush}" />
+                                    </Button>
                                     <!-- Przycisk eksportu profilu do pliku JSON bez haseł -->
                                     <Button Classes="iconBtn" ToolTip.Tip="{loc:Loc Profiles_ExportTip}"
                                             Click="OnExportProfileClick" Tag="{Binding}">
                                         <PathIcon Data="{StaticResource IconUpload}" Width="13" Height="13"
                                                   Foreground="{StaticResource TextMutedBrush}" />
                                     </Button>
+                                    <!-- Profil przygotowany przez asystenta: dopóki go nie włączysz, nie przełącza się sam -->
+                                    <Button Classes="accentBtn" Content="{loc:Loc Profiles_SwitchOn}" IsVisible="{Binding IsReady}"
+                                            Command="{Binding $parent[UserControl].((vm:ProfilesPageViewModel)DataContext).SwitchOnCommand}"
+                                            CommandParameter="{Binding}" />
+                                    <Button Classes="pillBtn" Content="{loc:Loc Profiles_LinkApp}"
+                                            Command="{Binding $parent[UserControl].((vm:ProfilesPageViewModel)DataContext).OpenPickerCommand}"
+                                            CommandParameter="{Binding}" />
                                     <!-- Przycisk stanu aktywacji -->
                                     <Button Classes="pillBtn" Content="{loc:Loc Profiles_ActiveBtn}" IsEnabled="False" Opacity="0.6"
                                             IsVisible="{Binding IsActive}" />
@@ -96,9 +134,16 @@
                                 </StackPanel>
                             </Grid>
                         </Border>
+                      </StackPanel>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </ScrollViewer>
+
+        <!-- Wybór aplikacji do powiązania z profilem (nakładka na całą stronę) -->
+        <local:AppPickerPanelView Grid.RowSpan="4" DataContext="{Binding Picker}" Margin="-24" />
+
+        <!-- Gotowe profile (T-10) -->
+        <local:TemplatePickerPanelView Grid.RowSpan="4" DataContext="{Binding Templates}" Margin="-24" />
     </Grid>
 </UserControl>

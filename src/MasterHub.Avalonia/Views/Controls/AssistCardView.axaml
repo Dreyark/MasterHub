@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Controls.AssistCardView"
+             x:DataType="vm:AssistViewModel"
+             HorizontalAlignment="Right" VerticalAlignment="Bottom">
+    <!-- Asystent (T-37): jedno pytanie przy pierwszym razie albo jedna podpowiedź naraz. Nic się samo nie zmienia – karta tylko pyta. -->
+    <StackPanel>
+        <!-- pytanie zadawane raz -->
+        <Border Classes="callout floating" Padding="16" Margin="16" Width="400" IsVisible="{Binding ShowOffer}">
+            <StackPanel Spacing="10">
+                <TextBlock Text="{loc:Loc Assist_OfferTitle}" Classes="h3" TextWrapping="Wrap" />
+                <TextBlock Text="{loc:Loc Assist_OfferText}" TextWrapping="Wrap" />
+                <TextBlock Text="{loc:Loc Assist_OfferPrivacy}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="accentBtn" Content="{loc:Loc Assist_OfferYes}" Command="{Binding AcceptOfferCommand}" />
+                    <Button Classes="actionBtn" Content="{loc:Loc Assist_NoThanks}" Command="{Binding DeclineOfferCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- podpowiedź -->
+        <Border Classes="callout floating" Padding="16" Margin="16" Width="400" IsVisible="{Binding HasNudge}">
+            <StackPanel Spacing="10">
+                <TextBlock Text="{Binding NudgeText}" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="accentBtn" Content="{Binding NudgeAccept}" Command="{Binding AcceptNudgeCommand}" />
+                    <Button Classes="actionBtn" Content="{Binding NudgeDismiss}" Command="{Binding DismissNudgeCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

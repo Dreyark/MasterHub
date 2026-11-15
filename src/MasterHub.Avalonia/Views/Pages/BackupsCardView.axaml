@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Pages.BackupsCardView"
+             x:DataType="vm:BackupsCardViewModel">
+
+    <Border Classes="glassCard" Padding="18">
+        <StackPanel Spacing="12">
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <PathIcon Data="{StaticResource IconSettings}" Width="16" Height="16"
+                              Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
+                    <TextBlock Text="{loc:Loc Backups_Title}" Classes="h3" VerticalAlignment="Center" />
+                </StackPanel>
+                <Button Grid.Column="1" Content="{loc:Loc Backups_OpenFolder}" Command="{Binding OpenFolderCommand}" Classes="actionBtn" Margin="0,0,8,0" />
+                <Button Grid.Column="2" Content="{loc:Loc Backups_BackUpNow}" Command="{Binding BackUpNowCommand}" Classes="accentBtn" />
+            </Grid>
+
+            <TextBlock Text="{loc:Loc Backups_Desc}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+
+            <ItemsControl ItemsSource="{Binding Items}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:BackupItemViewModel">
+                        <Border Classes="statusBadgeCard" Padding="14,8" Margin="0,0,0,6">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <StackPanel VerticalAlignment="Center" Spacing="2">
+                                    <TextBlock Text="{Binding When}" FontWeight="SemiBold" FontSize="12" />
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="{Binding Reason}" Classes="dim" FontSize="10.5" />
+                                        <TextBlock Text="·" Classes="dim" FontSize="10.5" />
+                                        <TextBlock Text="{Binding ProfilesText}" Classes="dim" FontSize="10.5" />
+                                    </StackPanel>
+                                </StackPanel>
+                                <Button Grid.Column="1" Content="{loc:Loc Backups_Restore}" Classes="actionBtn" VerticalAlignment="Center"
+                                        Command="{Binding $parent[UserControl].((vm:BackupsCardViewModel)DataContext).RestoreCommand}"
+                                        CommandParameter="{Binding}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Text="{loc:Loc Backups_Empty}" Classes="dim" IsVisible="{Binding !HasItems}" />
+
+            <StackPanel Spacing="4">
+                <TextBlock Text="{loc:Loc Backups_MirrorTitle}" FontWeight="SemiBold" FontSize="12" />
+                <TextBox Text="{Binding MirrorPath, Mode=TwoWay}" PlaceholderText="{loc:Loc Backups_MirrorHint}" />
+            </StackPanel>
+
+            <TextBlock Text="{loc:Loc Backups_DpapiNote}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource AccentSuccessBrush}" TextWrapping="Wrap"
+                       IsVisible="{Binding StatusMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+        </StackPanel>
+    </Border>
+</UserControl>

@@ -1,25 +1,43 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <!-- Tła bazowe (Dark Modern 2026) -->
-    <Color x:Key="MainBgColor">#181824</Color>
-    <Color x:Key="PanelBgColor">#202131</Color>
-    <Color x:Key="CardBgColor">#28293D</Color>
-    <Color x:Key="CardHoverBgColor">#32344D</Color>
-    <Color x:Key="CardActiveBgColor">#3B3D59</Color>
+    <!-- Tła bazowe (Midnight Indigo 2026). Hierarchia głębi: rama okna (MainBg) < panel strony (PanelBg) < karta (CardBg). -->
+    <Color x:Key="MainBgColor">#10111F</Color>
+    <Color x:Key="PanelBgColor">#1A1C33</Color>
+    <Color x:Key="CardBgColor">#24274A</Color>
+    <Color x:Key="CardHoverBgColor">#2D3159</Color>
+    <Color x:Key="CardActiveBgColor">#383D70</Color>
+    <Color x:Key="CardSoftColor">#6624274A</Color>
 
     <!-- Subtelne obramowania i poświaty -->
-    <Color x:Key="BorderSubtleColor">#18FFFFFF</Color>
+    <Color x:Key="BorderSubtleColor">#16FFFFFF</Color>
     <Color x:Key="BorderAccentColor">#405E81F4</Color>
     <Color x:Key="BorderGlowColor">#608A64EB</Color>
 
     <!-- Akcenty pastelowo-neonowe -->
-    <Color x:Key="AccentPrimaryColor">#5E81F4</Color>
+    <Color x:Key="AccentPrimaryColor">#6385FF</Color>
     <Color x:Key="AccentSecondaryColor">#8A64EB</Color>
     <Color x:Key="AccentWarningColor">#F45E6D</Color>
     <Color x:Key="AccentSuccessColor">#00E5A3</Color>
+    <!-- Półprzezroczysty akcent: tło aktywnej pozycji nawigacji, kafelek ikony nagłówka strony, podpowiedzi -->
+    <Color x:Key="AccentSoftColor">#2E6385FF</Color>
+    <!-- Delikatne podświetlenie elementu pod kursorem na ramie okna -->
+    <Color x:Key="HoverOverlayColor">#10FFFFFF</Color>
 
-    <!-- Typografia i etykiety -->
+    <!-- Kolory semantyczne (zamiast luźnych hexów w widokach) -->
+    <Color x:Key="AccentInfoColor">#38BDF8</Color>
+    <Color x:Key="AccentCautionColor">#F6AD55</Color>
+    <Color x:Key="CloseHoverColor">#E03A4B</Color>
+    <Color x:Key="OnAccentColor">#0F1117</Color>
+    <Color x:Key="InsetBgColor">#14152A</Color>
+    <!-- Nieprzezroczyste tło dymków pływających nad treścią (kreator, asystent, wersja robocza): tekst pod spodem nie może przez nie prześwitywać -->
+    <Color x:Key="FloatingBgColor">#2A2E5C</Color>
+    <Color x:Key="FloatingBorderColor">#8C6385FF</Color>
+    <!-- Półprzezroczysta zasłona pod oknami dialogowymi (potwierdzenia) -->
+    <Color x:Key="ScrimColor">#B3090A14</Color>
+
+    <!-- Typografia i etykiety. Muted >= 4.5:1 na CardBg (czytelny drobny tekst), Dim ~3.5:1 (tylko podpowiedzi). -->
     <Color x:Key="TextPrimaryColor">#FFFFFF</Color>
-    <Color x:Key="TextMutedColor">#7C7E93</Color>
-    <Color x:Key="TextDimColor">#535567</Color>
+    <Color x:Key="TextSecondaryColor">#CDD0DE</Color>
+    <Color x:Key="TextMutedColor">#9093AB</Color>
+    <Color x:Key="TextDimColor">#7A7D96</Color>
 </ResourceDictionary>

@@ -1,0 +1,56 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyLooksView"
+             x:DataType="vm:KeyItemViewModel">
+    <!-- Reguły "Gdy…": klawisz zmienia kolory / etykietę, dopóki warunek jest spełniony. Reguły to warstwy (późniejsza wygrywa),
+         pole zostawione puste nie jest ruszane. W etykietach działają tokeny {cpu} {ram} {gpu} {cpu_temp} {gpu_temp} {time} {date} {song} {artist}. -->
+    <StackPanel Spacing="8">
+        <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="{loc:Loc Look_Header}" Classes="h3" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Classes="actionBtn" Content="{loc:Loc Look_Add}" Command="{Binding AddLookRuleCommand}" />
+        </Grid>
+        <TextBlock Text="{loc:Loc Look_Hint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+
+        <ItemsControl ItemsSource="{Binding LookRuleItems}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <StackPanel Spacing="8" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:LookRuleItemViewModel">
+                    <Border Classes="inspectorSection" Padding="10">
+                        <StackPanel Spacing="6">
+                            <!-- Warunek -->
+                            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="6">
+                                <CheckBox Grid.Column="0" IsChecked="{Binding Enabled, Mode=TwoWay}" ToolTip.Tip="{loc:Loc Look_EnabledTip}" />
+                                <ComboBox Grid.Column="1" ItemsSource="{Binding Conditions}" SelectedItem="{Binding SelectedCondition, Mode=TwoWay}" HorizontalAlignment="Stretch" />
+                                <Button Grid.Column="2" Classes="iconBtn" Padding="6" ToolTip.Tip="{loc:Loc Look_Remove}"
+                                        Command="{Binding $parent[UserControl].((vm:KeyItemViewModel)DataContext).RemoveLookRuleCommand}"
+                                        CommandParameter="{Binding}">
+                                    <PathIcon Data="{StaticResource IconTrash}" Width="13" Height="13" />
+                                </Button>
+                            </Grid>
+                            <NumericUpDown Value="{Binding Threshold, Mode=TwoWay}" Minimum="0" Maximum="200" Increment="1" FormatString="0"
+                                           IsVisible="{Binding ShowsThreshold}" />
+                            <TextBox Text="{Binding ConditionText, Mode=TwoWay}" PlaceholderText="{loc:Loc Look_TextHint}" IsVisible="{Binding ShowsText}" />
+
+                            <!-- Co się zmienia -->
+                            <TextBlock Text="{loc:Loc Look_Then}" Classes="caption" />
+                            <Grid ColumnDefinitions="Auto,Auto,12,Auto,Auto" ColumnSpacing="6">
+                                <CheckBox Grid.Column="0" IsChecked="{Binding UseBackground, Mode=TwoWay}" Content="{loc:Loc Look_Background}" />
+                                <ColorPicker Grid.Column="1" Color="{Binding BackgroundColor, Mode=TwoWay}" IsAlphaEnabled="False" IsEnabled="{Binding UseBackground}" />
+                                <CheckBox Grid.Column="3" IsChecked="{Binding UseTextColor, Mode=TwoWay}" Content="{loc:Loc Look_TextColor}" />
+                                <ColorPicker Grid.Column="4" Color="{Binding TextColor, Mode=TwoWay}" IsAlphaEnabled="False" IsEnabled="{Binding UseTextColor}" />
+                            </Grid>
+                            <TextBox Text="{Binding Title, Mode=TwoWay}" PlaceholderText="{loc:Loc Look_TitleHint}" />
+                            <TextBox Text="{Binding Subtitle, Mode=TwoWay}" PlaceholderText="{loc:Loc Look_SubtitleHint}" />
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+</UserControl>

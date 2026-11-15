@@ -236,3 +236,25 @@ Rotary step multiplier based on tick delta:
 | `0` | **Success** | Packet sent or input report received successfully. |
 | `2` | **Timeout / Idle** | Normal non-blocking state when no physical interaction is occurring. |
 | `7` | **Module Disconnected** | Physical detachment from magnetic dock. Triggers non-blocking async PnP rescan. |
+
+---
+
+## 10. LED sending rules and the T-18 hardware checklist (2026-11-13)
+
+**Rules the code now enforces** (`LedCommandScheduler`, used by every live LED setter of `MasterHubManager`):
+- Commands are coalesced per target (the latest wins) and diffed against what was last sent; failed sends are not remembered.
+- **At least 40 ms between sends to the knobs, faders (and rollers) module** – the faders dropped off the USB bus at 50 LED updates per second. The base is exempt.
+- Commands marked *droppable* (lights that follow music, later) are dropped when they wait longer than 100 ms – never shown late.
+- The persist/save byte is **never** set for live updates (flash wear). The base's edge light is addressed only as index 0. There is no per-LED addressing and no roller LED.
+- Standby clears the queue (a late colour must not light a sleeping deck); a connect or wake-up invalidates the "last sent" cache so the next commands are sent in full.
+
+**Smoke test to run on the real deck and record here** (an agent cannot do this):
+
+| Check | Result |
+| :-- | :-- |
+| Base: static / breathing / strobe / spring / cycling / random / wave / water / rainbow (`0x02 0x2C`, device type 0, index 0) – which modes visibly work | _to fill in_ |
+| Base: effect speed (`0x02 0x30`) changes the animation | _to fill in_ |
+| `0x02 0x2E` brightness on the base and on the faders (*not verified*) | _to fill in_ |
+| Faders keep working while a fader LED is updated continuously (drag a fader for 30 s) | _to fill in_ |
+| Standby → wake restores colour **and** effect of the base | _to fill in_ |
+| Status light: mute the microphone → red; unmute → the profile colour/effect returns | _to fill in_ |

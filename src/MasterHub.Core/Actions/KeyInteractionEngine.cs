@@ -22,8 +22,19 @@ public sealed class KeyInteractionEngine : IKeyInteractionEngine
     public int HoldRepeatIntervalMs { get; set; } = 100;
 
     public event Action<int, KeyPressMode>? KeyTriggered;
+    public event Action<int, KeyGesture>? GestureTriggered;
 
-    public void HandleKeyEvent(int keyIndex, bool isPressed, KeyPressMode mode)
+    private readonly Func<long> _nowMs;
+    private readonly GestureRecognizer _gestures = new();
+    private Timer? _gestureTimer;
+
+    /// <param name="nowMs">Zegar w milisekundach (domyślnie monotoniczny); wstrzykiwany w testach.</param>
+    public KeyInteractionEngine(Func<long>? nowMs = null)
+    {
+        _nowMs = nowMs ?? (() => Environment.TickCount64);
+    }
+
+    public void HandleKeyEvent(int keyIndex, bool isPressed, KeyPressMode mode, int? holdDurationMs = null)
     {
         lock (_syncRoot)
         {
@@ -52,14 +63,15 @@ public sealed class KeyInteractionEngine : IKeyInteractionEngine
                         CancelHoldTimer(keyIndex);
 
                         var cts = new CancellationTokenSource();
+                        var token = cts.Token;
                         _holdTokens[keyIndex] = cts;
-                        int holdDuration = HoldDurationMs;
+                        int holdDuration = holdDurationMs ?? HoldDurationMs;
 
                         _ = Task.Run(async () =>
                         {
                             try
                             {
-                                await Task.Delay(holdDuration, cts.Token).ConfigureAwait(false);
+                                await Task.Delay(holdDuration, token).ConfigureAwait(false);
                                 lock (_syncRoot)
                                 {
                                     if (_physicalPressStates.TryGetValue(keyIndex, out bool pressed) && pressed)
@@ -68,11 +80,11 @@ public sealed class KeyInteractionEngine : IKeyInteractionEngine
                                     }
                                 }
                             }
-                            catch (OperationCanceledException)
+                            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
                             {
                                 // Klawisz puszczony przed upływem HoldDurationMs - zamierzona anulacja
                             }
-                        }, cts.Token);
+                        }, token);
                     }
                     else if (!isPressed)
                     {
@@ -106,6 +118,7 @@ public sealed class KeyInteractionEngine : IKeyInteractionEngine
                         Trigger(keyIndex, KeyPressMode.OnHoldRepeat);
 
                         var cts = new CancellationTokenSource();
+                        var token = cts.Token;
                         _holdTokens[keyIndex] = cts;
                         int initialDelay = HoldRepeatInitialDelayMs;
                         int repeatInterval = HoldRepeatIntervalMs;
@@ -114,9 +127,9 @@ public sealed class KeyInteractionEngine : IKeyInteractionEngine
                         {
                             try
                             {
-                                await Task.Delay(initialDelay, cts.Token).ConfigureAwait(false);
+                                await Task.Delay(initialDelay, token).ConfigureAwait(false);
 
-                                while (!cts.Token.IsCancellationRequested)
+                                while (!token.IsCancellationRequested)
                                 {
                                     lock (_syncRoot)
                                     {
@@ -127,14 +140,14 @@ public sealed class KeyInteractionEngine : IKeyInteractionEngine
                                         Trigger(keyIndex, KeyPressMode.OnHoldRepeat);
                                     }
 
-                                    await Task.Delay(repeatInterval, cts.Token).ConfigureAwait(false);
+                                    await Task.Delay(repeatInterval, token).ConfigureAwait(false);
                                 }
                             }
-                            catch (OperationCanceledException)
+                            catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
                             {
                                 // Klawisz zwolniony - zamierzona anulacja pętli powtarzania
                             }
-                        }, cts.Token);
+                        }, token);
                     }
                     else if (!isPressed)
                     {
@@ -142,6 +155,59 @@ public sealed class KeyInteractionEngine : IKeyInteractionEngine
                     }
                     break;
             }
+        }
+    }
+
+    public void HandleGestureEvent(int keyIndex, bool isPressed, GestureBindings bound)
+    {
+        var fired = new List<KeyGesture>();
+        lock (_syncRoot)
+        {
+            _gestures.HoldMs = HoldDurationMs;
+            _gestures.DoubleMs = DoublePressIntervalMs;
+            fired.AddRange(_gestures.OnKey(keyIndex, isPressed, bound, _nowMs()));
+            ScheduleGestureTimer();
+        }
+
+        foreach (var gesture in fired) RaiseGesture(keyIndex, gesture);
+    }
+
+    // One timer for every key: it is armed for the nearest hold / double-tap deadline and re-armed after each tick.
+    private void ScheduleGestureTimer()
+    {
+        long? deadline = _gestures.NextDeadline;
+        if (deadline == null)
+        {
+            _gestureTimer?.Change(Timeout.Infinite, Timeout.Infinite);
+            return;
+        }
+
+        int delay = (int)Math.Clamp(deadline.Value - _nowMs(), 1, int.MaxValue);
+        _gestureTimer ??= new Timer(_ => OnGestureTimer(), null, Timeout.Infinite, Timeout.Infinite);
+        _gestureTimer.Change(delay, Timeout.Infinite);
+    }
+
+    private void OnGestureTimer()
+    {
+        IReadOnlyList<(int Key, KeyGesture Gesture)> fired;
+        lock (_syncRoot)
+        {
+            fired = _gestures.Tick(_nowMs());
+            ScheduleGestureTimer();
+        }
+
+        foreach (var (key, gesture) in fired) RaiseGesture(key, gesture);
+    }
+
+    private void RaiseGesture(int keyIndex, KeyGesture gesture)
+    {
+        try
+        {
+            GestureTriggered?.Invoke(keyIndex, gesture);
+        }
+        catch
+        {
+            // a throwing handler must not break the recogniser or its timer
         }
     }
 
@@ -160,7 +226,14 @@ public sealed class KeyInteractionEngine : IKeyInteractionEngine
 
     private void Trigger(int keyIndex, KeyPressMode mode)
     {
-        KeyTriggered?.Invoke(keyIndex, mode);
+        try
+        {
+            KeyTriggered?.Invoke(keyIndex, mode);
+        }
+        catch
+        {
+            // Wyjątek w obsłudze akcji nie może przerwać pętli powtarzania ani zostawić blokady _syncRoot.
+        }
     }
 
     public void Reset()
@@ -173,6 +246,8 @@ public sealed class KeyInteractionEngine : IKeyInteractionEngine
             }
             _holdTokens.Clear();
             _lastPressTimes.Clear();
+            _gestures.Reset();
+            _gestureTimer?.Change(Timeout.Infinite, Timeout.Infinite);
             _physicalPressStates.Clear();
         }
     }
@@ -180,5 +255,7 @@ public sealed class KeyInteractionEngine : IKeyInteractionEngine
     public void Dispose()
     {
         Reset();
+        _gestureTimer?.Dispose();
+        _gestureTimer = null;
     }
 }

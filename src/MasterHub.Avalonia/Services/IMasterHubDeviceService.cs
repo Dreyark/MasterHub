@@ -48,6 +48,9 @@ public interface IMasterHubDeviceService : IDisposable
     System.Threading.Tasks.Task<bool> SetPanoramicWallpaperAsync(byte[] imageBytes);
     void SetSliderLedColor(int sliderIndex, byte r, byte g, byte b);
     void SetBaseLedColor(byte r, byte g, byte b);
+    void SetBaseLedMode(MasterHub.Core.Devices.LedEffect effect);
+    void SetSliderLedMode(int sliderIndex, MasterHub.Core.Devices.LedEffect effect);
+    void SetLedSpeed(byte speed);
     void SetRollerLedColor(int rollerIndex, byte r, byte g, byte b);
     void SetKnobLedColor(int knobIndex, byte r, byte g, byte b);
     void SetKnobLedBrightness(int knobIndex, byte brightness);

@@ -1,0 +1,68 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Pages.MacroEditorView"
+             x:DataType="vm:MacrosPageViewModel">
+
+    <Border Classes="glassCard" Padding="14">
+        <StackPanel Spacing="12">
+            <!-- Nazwa i tryb odtwarzania -->
+            <Grid ColumnDefinitions="*,12,*">
+                <StackPanel Grid.Column="0" Spacing="4">
+                    <TextBlock Text="{loc:Loc Macro_Name}" Classes="caption" />
+                    <TextBox Text="{Binding EditName}" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="4">
+                    <TextBlock Text="{loc:Loc Macro_Mode}" Classes="caption" />
+                    <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode}" />
+                </StackPanel>
+            </Grid>
+            <Grid ColumnDefinitions="*,12,*">
+                <StackPanel Grid.Column="0" Spacing="4" IsVisible="{Binding IsRepeatCountMode}">
+                    <TextBlock Text="{loc:Loc Macro_RepeatCount}" Classes="caption" />
+                    <NumericUpDown Value="{Binding EditRepeatCount}" Minimum="1" Maximum="10000" Increment="1" FormatString="0" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="4" IsVisible="{Binding UsesRepeatDelay}">
+                    <TextBlock Text="{loc:Loc Macro_RepeatDelay}" Classes="caption" />
+                    <NumericUpDown Value="{Binding EditRepeatDelayMs}" Minimum="0" Maximum="600000" Increment="10" FormatString="0" />
+                </StackPanel>
+            </Grid>
+
+            <!-- Nagrywanie (jak w Synapse) -->
+            <Border Classes="inspectorSection" Margin="0" Padding="12">
+                <StackPanel Spacing="8">
+                    <Grid ColumnDefinitions="*,12,Auto">
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Text="{loc:Loc Macro_DelayMode}" Classes="caption" />
+                            <ComboBox ItemsSource="{Binding DelayModes}" SelectedItem="{Binding SelectedDelayMode}"
+                                      IsEnabled="{Binding IsNotRecording}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Spacing="4" IsVisible="{Binding IsFixedDelayMode}">
+                            <TextBlock Text="{loc:Loc Macro_FixedMs}" Classes="caption" />
+                            <NumericUpDown Value="{Binding FixedDelayMs}" Minimum="1" Maximum="60000" Increment="5" FormatString="0" Width="130" />
+                        </StackPanel>
+                    </Grid>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Classes="accentBtn" Command="{Binding StartRecordingCommand}"
+                                IsVisible="{Binding IsNotRecording}" Content="{loc:Loc Macro_Record}" />
+                        <Button Classes="actionBtn" Command="{Binding StopRecordingCommand}"
+                                IsVisible="{Binding IsRecording}" Content="{loc:Loc Macro_StopRecord}" />
+                        <TextBlock Text="{Binding RecordingStatus}" VerticalAlignment="Center"
+                                   Foreground="{StaticResource AccentWarningBrush}" FontWeight="SemiBold" />
+                    </StackPanel>
+                    <TextBlock Text="{loc:Loc Macro_RecordHint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+                </StackPanel>
+            </Border>
+
+            <!-- Zapis / test / usunięcie -->
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <Button Classes="accentBtn" Command="{Binding SaveMacroCommand}" Content="{loc:Loc Macro_Save}" />
+                <Button Classes="actionBtn" Command="{Binding TestMacroCommand}" Content="{loc:Loc Macro_Test}" />
+                <Button Classes="actionBtn" Command="{Binding StopMacrosCommand}" Content="{loc:Loc Macro_StopAll}" />
+                <Button Classes="pillBtn" Command="{Binding DeleteMacroCommand}" Content="{loc:Loc Macro_Delete}" />
+            </StackPanel>
+            <TextBlock Text="{loc:Loc Macro_PanicHint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+        </StackPanel>
+    </Border>
+</UserControl>

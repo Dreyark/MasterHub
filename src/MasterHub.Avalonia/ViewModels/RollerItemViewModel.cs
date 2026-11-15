@@ -8,7 +8,7 @@ using MasterHub.Core.Localization;
 
 namespace MasterHub.Avalonia.ViewModels;
 
-public partial class RollerItemViewModel : ObservableObject
+public partial class RollerItemViewModel : ObservableObject, IDisposable
 {
     protected bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
@@ -21,6 +21,7 @@ public partial class RollerItemViewModel : ObservableObject
     private RollerActionType _assignedAction = RollerActionType.None;
     private string _colorHex = "#A78BFA";
     private byte _brightness = 100;
+    private readonly Action<string> _onLanguageChanged;
 
     public int Index { get; set; }
     public int Number => Index + 1;
@@ -110,7 +111,13 @@ public partial class RollerItemViewModel : ObservableObject
 
     public RollerItemViewModel()
     {
-        LocalizationService.Instance.LanguageChanged += _ => NotifyLanguageChanged();
+        _onLanguageChanged = _ => NotifyLanguageChanged();
+        LocalizationService.Instance.LanguageChanged += _onLanguageChanged;
+    }
+
+    public void Dispose()
+    {
+        LocalizationService.Instance.LanguageChanged -= _onLanguageChanged;
     }
 
     public string ActionDisplayName

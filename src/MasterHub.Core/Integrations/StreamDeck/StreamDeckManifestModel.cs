@@ -59,6 +59,29 @@ public class StreamDeckManifest
 
     [JsonPropertyName("Nodejs")]
     public StreamDeckNodejs? Nodejs { get; set; }
+
+    /// <summary>Operating systems the plugin supports (<c>mac</c> / <c>windows</c>); empty = not stated.</summary>
+    [JsonPropertyName("OS")]
+    public List<StreamDeckOs>? OS { get; set; }
+
+    /// <summary>The oldest Stream Deck app the plugin works with.</summary>
+    [JsonPropertyName("Software")]
+    public StreamDeckSoftware? Software { get; set; }
+}
+
+public class StreamDeckOs
+{
+    [JsonPropertyName("Platform")]
+    public string Platform { get; set; } = "";
+
+    [JsonPropertyName("MinimumVersion")]
+    public string? MinimumVersion { get; set; }
+}
+
+public class StreamDeckSoftware
+{
+    [JsonPropertyName("MinimumVersion")]
+    public string? MinimumVersion { get; set; }
 }
 
 public class StreamDeckNodejs

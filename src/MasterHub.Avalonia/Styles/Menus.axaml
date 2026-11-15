@@ -1,0 +1,53 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Menus (tray menu, right-click menus): the app's own colours and rounded corners instead of the default Fluent look -->
+    <Styles.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="ContextMenuBackground" Color="#24274A" />
+                    <SolidColorBrush x:Key="ContextMenuBorderBrush" Color="#33FFFFFF" />
+                    <SolidColorBrush x:Key="MenuFlyoutPresenterBackground" Color="#24274A" />
+                    <SolidColorBrush x:Key="MenuFlyoutPresenterBorderBrush" Color="#33FFFFFF" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPointerOver" Color="#2D3159" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemBackgroundPressed" Color="#383D70" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemForeground" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemForegroundPointerOver" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="MenuFlyoutItemForegroundPressed" Color="#FFFFFF" />
+                    <SolidColorBrush x:Key="MenuFlyoutSeparatorBackground" Color="#33FFFFFF" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Styles.Resources>
+
+    <Style Selector="ContextMenu">
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="4" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FontSize" Value="12.5" />
+    </Style>
+    <Style Selector="MenuFlyoutPresenter">
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="4" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="FontSize" Value="12.5" />
+    </Style>
+    <Style Selector="MenuItem">
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="10,7" />
+        <Setter Property="MinHeight" Value="30" />
+    </Style>
+    <Style Selector="MenuItem /template/ Border#PART_LayoutRoot">
+        <Setter Property="CornerRadius" Value="6" />
+    </Style>
+    <Style Selector="MenuItem:selected /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="{StaticResource CardHoverBgBrush}" />
+    </Style>
+    <Style Selector="MenuItem:pointerover /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="{StaticResource CardHoverBgBrush}" />
+    </Style>
+    <Style Selector="Separator">
+        <Setter Property="Background" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="Margin" Value="6,4" />
+    </Style>
+</Styles>

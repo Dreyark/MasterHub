@@ -1,0 +1,107 @@
+{
+  "id": "system-monitor",
+  "version": 1,
+  "ledColor": "#8A64EB",
+  "exes": [],
+  "name": {
+    "en": "System monitor",
+    "pl": "Monitor systemu",
+    "de": "Systemmonitor"
+  },
+  "description": {
+    "en": "CPU, memory, GPU, temperatures, network, disk, FPS, clock, date and the current song at a glance.",
+    "pl": "CPU, pamięć, GPU, temperatury, sieć, dysk, FPS, zegar, data i bieżący utwór na jednym ekranie."
+  },
+  "keys": [
+    {
+      "index": 0,
+      "action": "DisplayCpuUsage",
+      "title": "CPU",
+      "background": "#2A2A3A"
+    },
+    {
+      "index": 1,
+      "action": "DisplayRamUsage",
+      "title": "RAM",
+      "background": "#2A2A3A"
+    },
+    {
+      "index": 2,
+      "action": "DisplayGpuUsage",
+      "title": "GPU",
+      "background": "#2A2A3A"
+    },
+    {
+      "index": 3,
+      "action": "DisplayCpuTemp",
+      "title": "CPU TEMP",
+      "background": "#2A2A3A"
+    },
+    {
+      "index": 4,
+      "action": "DisplayGpuTemp",
+      "title": "GPU TEMP",
+      "background": "#2A2A3A"
+    },
+    {
+      "index": 5,
+      "action": "DisplayNetworkSpeed",
+      "title": "NET",
+      "background": "#2A2A3A"
+    },
+    {
+      "index": 6,
+      "action": "DisplayDiskUsage",
+      "title": "DISK",
+      "background": "#2A2A3A"
+    },
+    {
+      "index": 7,
+      "action": "DisplayFps",
+      "title": "FPS",
+      "background": "#2A2A3A"
+    },
+    {
+      "index": 8,
+      "action": "DisplayClock",
+      "title": "TIME",
+      "background": "#262A40"
+    },
+    {
+      "index": 9,
+      "action": "DisplayDate",
+      "title": "DATE",
+      "background": "#262A40"
+    },
+    {
+      "index": 10,
+      "action": "NowPlaying",
+      "title": "NOW",
+      "background": "#1B2A3D"
+    },
+    {
+      "index": 11,
+      "action": "MediaPrevious",
+      "title": "PREV",
+      "background": "#1B2A3D"
+    },
+    {
+      "index": 12,
+      "action": "MediaPlayPause",
+      "title": "PLAY",
+      "background": "#1B2A3D"
+    },
+    {
+      "index": 13,
+      "action": "MediaNext",
+      "title": "NEXT",
+      "background": "#1B2A3D"
+    },
+    {
+      "index": 14,
+      "action": "TaskManager",
+      "title": "TASKS",
+      "background": "#262A40"
+    }
+  ]
+}

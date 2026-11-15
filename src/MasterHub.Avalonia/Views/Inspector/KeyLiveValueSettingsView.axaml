@@ -1,0 +1,70 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyLiveValueSettingsView"
+             x:DataType="vm:KeyItemViewModel">
+    <!-- Wartość na żywo: źródło (web / pogoda / kalendarz / Home Assistant / polecenie), wygląd wartości i progi. -->
+    <StackPanel Spacing="6" IsVisible="{Binding IsLiveValueAction}" DataContext="{Binding}">
+        <StackPanel Spacing="6" DataContext="{Binding LiveEditor}" x:DataType="vm:LiveValueEditor">
+            <TextBlock Text="{loc:Loc Live_Source}" Classes="caption" />
+            <ComboBox ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource, Mode=TwoWay}" HorizontalAlignment="Stretch" />
+
+            <!-- Adres (web / ICS) -->
+            <StackPanel Spacing="4" IsVisible="{Binding ShowsUrl}">
+                <TextBox Text="{Binding Url, Mode=TwoWay}" PlaceholderText="{loc:Loc Live_UrlHint}" />
+                <TextBox Text="{Binding JsonPath, Mode=TwoWay}" PlaceholderText="{loc:Loc Live_PathHint}" IsVisible="{Binding ShowsPath}" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                    <TextBox Text="{Binding TokenInput, Mode=TwoWay}" PasswordChar="●" PlaceholderText="{loc:Loc Live_TokenHint}" />
+                    <Button Grid.Column="1" Classes="actionBtn" Content="{loc:Loc Live_TokenClear}" Command="{Binding ClearTokenCommand}" IsVisible="{Binding HasToken}" />
+                </Grid>
+            </StackPanel>
+
+            <TextBox Text="{Binding City, Mode=TwoWay}" PlaceholderText="{loc:Loc Live_CityHint}" IsVisible="{Binding ShowsCity}" />
+            <TextBox Text="{Binding EntityId, Mode=TwoWay}" PlaceholderText="sensor.living_room_temperature" IsVisible="{Binding ShowsEntity}" />
+
+            <!-- Polecenie: wykonuje się dopiero po zatwierdzeniu dokładnie tej linii -->
+            <StackPanel Spacing="4" IsVisible="{Binding ShowsCommand}">
+                <TextBox Text="{Binding Command, Mode=TwoWay}" PlaceholderText="{loc:Loc Live_CommandHint}" />
+                <Border Classes="callout" Padding="10,8" IsVisible="{Binding NeedsApproval}">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="{loc:Loc Live_CommandWarning}" TextWrapping="Wrap" Foreground="{StaticResource AccentCautionBrush}" />
+                        <Button Classes="accentBtn" Content="{loc:Loc Live_CommandAllow}" Command="{Binding ApproveCommandCommand}" HorizontalAlignment="Left" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <!-- Odświeżanie i wygląd wartości -->
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+                <StackPanel Grid.Column="0" Spacing="2">
+                    <TextBlock Text="{loc:Loc Live_Refresh}" Classes="caption" />
+                    <NumericUpDown Value="{Binding RefreshSeconds, Mode=TwoWay}" Minimum="5" Maximum="86400" Increment="5" FormatString="0" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="2">
+                    <TextBlock Text="{loc:Loc Live_Decimals}" Classes="caption" />
+                    <NumericUpDown Value="{Binding Decimals, Mode=TwoWay}" Minimum="-1" Maximum="10" Increment="1" FormatString="0" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Spacing="2">
+                    <TextBlock Text="{loc:Loc Live_Maximum}" Classes="caption" />
+                    <TextBox Text="{Binding MaximumText, Mode=TwoWay}" />
+                </StackPanel>
+            </Grid>
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                <TextBox Grid.Column="0" Text="{Binding Before, Mode=TwoWay}" PlaceholderText="{loc:Loc Live_Before}" />
+                <TextBox Grid.Column="1" Text="{Binding After, Mode=TwoWay}" PlaceholderText="{loc:Loc Live_After}" />
+            </Grid>
+
+            <!-- Progi: kolor klawisza przy ostrzeżeniu / alarmie -->
+            <TextBlock Text="{loc:Loc Live_Thresholds}" Classes="caption" />
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                <TextBox Grid.Column="0" Text="{Binding WarnAtText, Mode=TwoWay}" PlaceholderText="{loc:Loc Live_WarnAt}" />
+                <TextBox Grid.Column="1" Text="{Binding AlertAtText, Mode=TwoWay}" PlaceholderText="{loc:Loc Live_AlertAt}" />
+            </Grid>
+            <StackPanel Orientation="Horizontal" Spacing="16">
+                <RadioButton GroupName="LiveWorse" Content="{loc:Loc Live_WorseHigher}" IsChecked="{Binding WorseWhenHigher, Mode=TwoWay}" />
+                <RadioButton GroupName="LiveWorse" Content="{loc:Loc Live_WorseLower}" IsChecked="{Binding WorseWhenLower, Mode=OneWay}" />
+            </StackPanel>
+            <TextBlock Text="{loc:Loc Live_PressHint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>

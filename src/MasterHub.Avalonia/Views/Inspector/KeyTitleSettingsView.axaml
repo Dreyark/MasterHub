@@ -1,0 +1,140 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyTitleSettingsView"
+             x:DataType="vm:KeyItemViewModel">
+
+    <Border Background="{StaticResource CardBgBrush}" CornerRadius="8" Padding="10" Margin="0,4,0,0">
+        <StackPanel Spacing="8">
+            <!-- Nagłówek tytułu i próbnik koloru -->
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{loc:Loc Key_TitleMain, FallbackValue='TYTUŁ'}" Classes="caption" FontWeight="SemiBold" VerticalAlignment="Center" />
+                <ColorPicker Grid.Column="1" Color="{Binding CurrentEditTitleColor, Mode=TwoWay}" IsAlphaEnabled="False" ToolTip.Tip="{loc:Loc Key_TitleColorTip}" />
+            </Grid>
+
+            <!-- Pole edycyjne tekstu z przyciskiem przywracania oryginalnego tytułu (↺) -->
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBox Grid.Column="0" Text="{Binding CurrentEditTitle}" PlaceholderText="{loc:Loc Key_TitlePlaceholder, FallbackValue='Wpisz tytuł...'}"
+                         AcceptsReturn="True" TextWrapping="Wrap" MaxHeight="60" />
+                <Button Grid.Column="1" Classes="actionBtn" Width="32" Height="32" Padding="0" Margin="6,0,0,0" VerticalAlignment="Top"
+                        Command="{Binding RestoreOriginalTitleCommand}"
+                        ToolTip.Tip="{loc:Loc Key_RestoreOriginalTitle, FallbackValue='Przywróć domyślny tytuł akcji'}"
+                        AutomationProperties.Name="{loc:Loc Key_RestoreOriginalTitle, FallbackValue='Przywróć domyślny tytuł akcji'}">
+                    <PathIcon Data="{StaticResource IconRotate}" Width="12" Height="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+            </Grid>
+
+            <!-- Czcionka, rozmiar, styl i pozycja: zwinięte; na wierzchu zostaje tekst i kolor -->
+            <Expander Classes="subtle" IsExpanded="False" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="0,6,0,0"
+                      Header="{loc:Loc Key_FontAndPosition}">
+                <StackPanel Spacing="8">
+            <!-- Wybór fontu i rozmiaru czcionki tytułu -->
+            <Grid ColumnDefinitions="*,1.1*">
+                <StackPanel Grid.Column="0" Spacing="3" Margin="0,0,4,0">
+                    <TextBlock Text="{loc:Loc Key_FontFamilyLabel, FallbackValue='Czcionka'}" Classes="caption" />
+                    <ComboBox ItemsSource="{x:Static vm:KeyItemViewModel.AvailableFontFamilies}" SelectedItem="{Binding TitleFontFamily}" HorizontalAlignment="Stretch" />
+                </StackPanel>
+                <StackPanel Grid.Column="1" Spacing="3" Margin="4,0,0,0">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="{loc:Loc Key_FontSizeLabel, FallbackValue='Rozmiar'}" Classes="caption" VerticalAlignment="Center" />
+                        <TextBlock Grid.Column="1" Text="{Binding TitleFontSizeLabel}" Classes="dim" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </Grid>
+                    <Slider Minimum="0" Maximum="96" Value="{Binding TitleFontSize}" VerticalAlignment="Center" />
+                </StackPanel>
+            </Grid>
+
+            <!-- Styl tekstu (Pogrubienie, Kursywa, Przekreślenie, Zawijanie wierszy) -->
+            <StackPanel Spacing="3">
+                <TextBlock Text="{loc:Loc Key_TextStyle, FallbackValue='Styl tekstu'}" Classes="caption" />
+                <Grid ColumnDefinitions="*,*,*,*">
+                    <ToggleButton Grid.Column="0" Classes="actionBtn" Height="28" Padding="0" Margin="0,0,2,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                  IsChecked="{Binding TitleIsBold}" ToolTip.Tip="{loc:Loc Key_BoldTip}" AutomationProperties.Name="{loc:Loc Key_Bold, FallbackValue='Pogrubienie'}">
+                        <TextBlock Text="B" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </ToggleButton>
+                    <ToggleButton Grid.Column="1" Classes="actionBtn" Height="28" Padding="0" Margin="2,0,2,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                  IsChecked="{Binding TitleIsItalic}" ToolTip.Tip="{loc:Loc Key_ItalicTip}" AutomationProperties.Name="{loc:Loc Key_Italic, FallbackValue='Kursywa'}">
+                        <TextBlock Text="I" FontStyle="Italic" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </ToggleButton>
+                    <ToggleButton Grid.Column="2" Classes="actionBtn" Height="28" Padding="0" Margin="2,0,2,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                  IsChecked="{Binding TitleIsStrikeThrough}" ToolTip.Tip="{loc:Loc Key_StrikeTip}" AutomationProperties.Name="{loc:Loc Key_Strike, FallbackValue='Przekreślenie'}">
+                        <TextBlock Text="S" TextDecorations="Strikethrough" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </ToggleButton>
+                    <ToggleButton Grid.Column="3" Classes="actionBtn" Height="28" Padding="0" Margin="2,0,0,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                                  IsChecked="{Binding TitleIsTextWrappingEnabled}" ToolTip.Tip="{loc:Loc Key_WrapTip}" AutomationProperties.Name="{loc:Loc Key_Wrap, FallbackValue='Zawijanie tekstu'}">
+                        <TextBlock Text="↵" FontWeight="Bold" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </ToggleButton>
+                </Grid>
+            </StackPanel>
+
+            <!-- Pozycja tekstu: D-Pad nawigacyjny (3x3) + Suwak przesunięcia Y -->
+            <StackPanel Spacing="3">
+                <TextBlock Text="{loc:Loc Key_TextPosition, FallbackValue='Pozycja tekstu (Góra / Dół / Lewo / Prawo)'}" Classes="caption" />
+
+                <Grid ColumnDefinitions="Auto,*" Margin="0,2,0,0">
+                    <!-- D-Pad pozycjonowania tekstu -->
+                    <Grid Grid.Column="0" RowDefinitions="Auto,Auto,Auto" ColumnDefinitions="Auto,Auto,Auto"
+                          VerticalAlignment="Center" Margin="0,0,12,0">
+                        <Button Grid.Row="0" Grid.Column="1" Classes="actionBtn" Classes.tabActive="{Binding IsTitleVerticalTop}"
+                                Width="28" Height="28" Padding="0" Margin="1"
+                                Command="{Binding SetTitleVerticalPositionCommand}" CommandParameter="Top"
+                                ToolTip.Tip="{loc:Loc Key_AlignTopTip}" AutomationProperties.Name="{loc:Loc Key_AlignTop}">
+                            <PathIcon Data="{StaticResource IconArrowUp}" Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button Grid.Row="1" Grid.Column="0" Classes="actionBtn" Classes.tabActive="{Binding IsTitleAlignLeft}"
+                                Width="28" Height="28" Padding="0" Margin="1"
+                                Command="{Binding SetTitleAlignmentCommand}" CommandParameter="Left"
+                                ToolTip.Tip="{loc:Loc Key_AlignLeftTip}" AutomationProperties.Name="{loc:Loc Key_AlignLeft}">
+                            <PathIcon Data="{StaticResource IconArrowLeft}" Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button Grid.Row="1" Grid.Column="1" Classes="actionBtn" Classes.tabActive="{Binding IsTitleCenterBoth}"
+                                Width="28" Height="28" Padding="0" Margin="1"
+                                Command="{Binding ResetTitlePositionCommand}"
+                                ToolTip.Tip="{loc:Loc Key_ResetPositionTip}" AutomationProperties.Name="{loc:Loc Key_AlignCenter}">
+                            <Ellipse Width="5" Height="5" Fill="{Binding $parent[Button].Foreground}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button Grid.Row="1" Grid.Column="2" Classes="actionBtn" Classes.tabActive="{Binding IsTitleAlignRight}"
+                                Width="28" Height="28" Padding="0" Margin="1"
+                                Command="{Binding SetTitleAlignmentCommand}" CommandParameter="Right"
+                                ToolTip.Tip="{loc:Loc Key_AlignRightTip}" AutomationProperties.Name="{loc:Loc Key_AlignRight}">
+                            <PathIcon Data="{StaticResource IconArrowRight}" Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                        <Button Grid.Row="2" Grid.Column="1" Classes="actionBtn" Classes.tabActive="{Binding IsTitleVerticalBottom}"
+                                Width="28" Height="28" Padding="0" Margin="1"
+                                Command="{Binding SetTitleVerticalPositionCommand}" CommandParameter="Bottom"
+                                ToolTip.Tip="{loc:Loc Key_AlignBottomTip}" AutomationProperties.Name="{loc:Loc Key_AlignBottom}">
+                            <PathIcon Data="{StaticResource IconArrowDown}" Width="10" Height="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Button>
+                    </Grid>
+
+                    <!-- Płynne suwaki osi X i Y oraz przycisk wyśrodkowania -->
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="4">
+                        <Grid ColumnDefinitions="20,*,40" VerticalAlignment="Center">
+                            <TextBlock Grid.Column="0" Text="{loc:Loc Key_OffsetX, FallbackValue='X:'}" Classes="dim" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Slider Grid.Column="1" Minimum="-50" Maximum="50" Value="{Binding TitleOffsetX}" VerticalAlignment="Center"
+                                    ToolTip.Tip="{loc:Loc Key_OffsetXTip}" AutomationProperties.Name="{loc:Loc Key_OffsetXLabel}" />
+                            <TextBlock Grid.Column="2" Text="{Binding TitleOffsetXDisplay}" Classes="dim" FontSize="11" FontWeight="SemiBold"
+                                       TextAlignment="Right" VerticalAlignment="Center" />
+                        </Grid>
+                        <Grid ColumnDefinitions="20,*,40" VerticalAlignment="Center">
+                            <TextBlock Grid.Column="0" Text="{loc:Loc Key_OffsetY, FallbackValue='Y:'}" Classes="dim" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            <Slider Grid.Column="1" Minimum="-50" Maximum="50" Value="{Binding TitleOffsetY}" VerticalAlignment="Center"
+                                    ToolTip.Tip="{loc:Loc Key_OffsetYTip}" AutomationProperties.Name="{loc:Loc Key_OffsetYLabel}" />
+                            <TextBlock Grid.Column="2" Text="{Binding TitleOffsetYDisplay}" Classes="dim" FontSize="11" FontWeight="SemiBold"
+                                       TextAlignment="Right" VerticalAlignment="Center" />
+                        </Grid>
+                        <Button Classes="actionBtn" HorizontalAlignment="Stretch" Padding="6,4"
+                                Command="{Binding ResetTitlePositionCommand}" ToolTip.Tip="{loc:Loc Key_ResetPositionTip}">
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="5">
+                                <PathIcon Data="{StaticResource IconRotate}" Width="10" Height="10" VerticalAlignment="Center" />
+                                <TextBlock Text="{loc:Loc Key_ResetPositionBtn}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </StackPanel>
+                </StackPanel>
+            </Expander>
+        </StackPanel>
+    </Border>
+</UserControl>

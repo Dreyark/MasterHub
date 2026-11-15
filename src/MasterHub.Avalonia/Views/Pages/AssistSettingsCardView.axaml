@@ -1,0 +1,46 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Pages.AssistSettingsCardView"
+             x:DataType="vm:AssistViewModel">
+    <!-- Asystent (T-37): profile przygotowane dla programów, podpowiedzi, liczenie. Wszystko wyłączone, dopóki użytkownik nie zgodzi się. -->
+    <Border Classes="glassCard" Padding="18">
+        <StackPanel Spacing="12">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <PathIcon Data="{StaticResource IconSettings}" Width="16" Height="16"
+                          Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
+                <TextBlock Text="{loc:Loc Assist_SettingsTitle}" Classes="h3" VerticalAlignment="Center" />
+            </StackPanel>
+
+            <TextBlock Text="{loc:Loc Assist_SettingsDesc}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+
+            <!-- jeden przełącznik: wszystko -->
+            <Border Classes="statusBadgeCard" Padding="14,10">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Text="{loc:Loc Assist_MasterTitle}" FontWeight="SemiBold" FontSize="12" />
+                        <TextBlock Text="{loc:Loc Assist_MasterDesc}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding IsEnabled, Mode=TwoWay}" OnContent="" OffContent="" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+
+            <!-- liczenie naciśnięć: domyślnie wyłączone, wymaga przełącznika głównego -->
+            <Border Classes="statusBadgeCard" Padding="14,10" IsVisible="{Binding IsEnabled}">
+                <Grid ColumnDefinitions="*,Auto">
+                    <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
+                        <TextBlock Text="{loc:Loc Assist_PressTitle}" FontWeight="SemiBold" FontSize="12" />
+                        <TextBlock Text="{loc:Loc Assist_PressDesc}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ToggleSwitch Grid.Column="1" IsChecked="{Binding PressCounting, Mode=TwoWay}" OnContent="" OffContent="" VerticalAlignment="Center" />
+                </Grid>
+            </Border>
+
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{Binding DataNote}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" VerticalAlignment="Center" />
+                <Button Grid.Column="1" Classes="actionBtn" Content="{loc:Loc Assist_DeleteData}" Command="{Binding DeleteDataCommand}" />
+            </Grid>
+        </StackPanel>
+    </Border>
+</UserControl>

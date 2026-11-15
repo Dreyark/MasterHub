@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyTimerSettingsView"
+             x:DataType="vm:KeyItemViewModel">
+    <!-- Timer (T-13): długość odliczania / fazy Pomodoro. Sam timer żyje w usłudze (nie w profilu) – tu tylko jego ustawienia. -->
+    <StackPanel Spacing="8" IsVisible="{Binding IsTimerAction}">
+        <TextBlock Text="{loc:Loc Timer_Hint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+
+        <!-- Odliczanie -->
+        <StackPanel Spacing="2" IsVisible="{Binding IsCountdownTimer}">
+            <TextBlock Text="{loc:Loc Timer_Length}" Classes="caption" />
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6" DataContext="{Binding TimerEditor}" x:DataType="vm:TimerEditor">
+                <NumericUpDown Grid.Column="0" Value="{Binding Hours, Mode=TwoWay}" Minimum="0" Maximum="99" Increment="1" FormatString="0&#160;h" />
+                <NumericUpDown Grid.Column="1" Value="{Binding Minutes, Mode=TwoWay}" Minimum="0" Maximum="59" Increment="1" FormatString="0&#160;min" />
+                <NumericUpDown Grid.Column="2" Value="{Binding Seconds, Mode=TwoWay}" Minimum="0" Maximum="59" Increment="5" FormatString="0&#160;s" />
+            </Grid>
+        </StackPanel>
+
+        <!-- Pomodoro -->
+        <StackPanel Spacing="6" IsVisible="{Binding IsPomodoroTimer}">
+            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="6" RowSpacing="2"
+                  DataContext="{Binding TimerEditor}" x:DataType="vm:TimerEditor">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="{loc:Loc Timer_Work}" Classes="caption" />
+                <TextBlock Grid.Row="0" Grid.Column="1" Text="{loc:Loc Timer_Break}" Classes="caption" />
+                <NumericUpDown Grid.Row="1" Grid.Column="0" Value="{Binding WorkMinutes, Mode=TwoWay}" Minimum="1" Maximum="600" Increment="5" FormatString="0&#160;min" />
+                <NumericUpDown Grid.Row="1" Grid.Column="1" Value="{Binding BreakMinutes, Mode=TwoWay}" Minimum="1" Maximum="600" Increment="1" FormatString="0&#160;min" />
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="{loc:Loc Timer_LongBreak}" Classes="caption" Margin="0,4,0,0" />
+                <TextBlock Grid.Row="2" Grid.Column="1" Text="{loc:Loc Timer_Rounds}" Classes="caption" Margin="0,4,0,0" />
+                <NumericUpDown Grid.Row="3" Grid.Column="0" Value="{Binding LongBreakMinutes, Mode=TwoWay}" Minimum="1" Maximum="600" Increment="5" FormatString="0&#160;min" />
+                <NumericUpDown Grid.Row="3" Grid.Column="1" Value="{Binding Rounds, Mode=TwoWay}" Minimum="1" Maximum="20" Increment="1" FormatString="0" />
+            </Grid>
+            <CheckBox DataContext="{Binding TimerEditor}" x:DataType="vm:TimerEditor"
+                      IsChecked="{Binding AutoStartNextPhase, Mode=TwoWay}" Content="{loc:Loc Timer_AutoStart}" />
+        </StackPanel>
+
+        <!-- Miganie i dźwięk po dzwonku (stoper nie dzwoni) -->
+        <StackPanel IsVisible="{Binding !IsStopwatchTimer}">
+            <StackPanel Spacing="6" DataContext="{Binding TimerEditor}" x:DataType="vm:TimerEditor">
+                <CheckBox IsChecked="{Binding BlinkOnExpiry, Mode=TwoWay}" Content="{loc:Loc Timer_Blink}" />
+                <TextBlock Text="{loc:Loc Timer_EndSound}" Classes="caption" />
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                    <TextBox Grid.Column="0" Text="{Binding EndSoundPath, Mode=TwoWay}" PlaceholderText="{loc:Loc Timer_EndSoundHint}" />
+                    <Button Grid.Column="1" Classes="pillBtn" Padding="8,6" Content="{loc:Loc Key_BrowseFile}" Click="OnBrowseEndSound" />
+                </Grid>
+            </StackPanel>
+        </StackPanel>
+    </StackPanel>
+</UserControl>

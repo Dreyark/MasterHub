@@ -3,16 +3,14 @@
              xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
              xmlns:pages="using:MasterHub.Avalonia.Views.Pages"
              xmlns:loc="using:MasterHub.Avalonia.Localization"
+             xmlns:ctl="using:MasterHub.Avalonia.Views.Controls"
              x:Class="MasterHub.Avalonia.Views.Pages.SettingsPageView"
              x:DataType="vm:SettingsPageViewModel">
 
     <ScrollViewer Margin="24">
-        <StackPanel Spacing="18" Width="720" HorizontalAlignment="Left">
-            <!-- Nagłówek -->
-            <StackPanel Spacing="4">
-                <TextBlock Text="{loc:Loc Settings_Title}" Classes="h2" />
-                <TextBlock Text="{loc:Loc Settings_Subtitle}" Classes="dim" />
-            </StackPanel>
+        <StackPanel Spacing="18" MaxWidth="900" HorizontalAlignment="Stretch">
+            <ctl:PageHeader Icon="{StaticResource IconSettings}" Margin="0,0,0,-18"
+                            Title="{loc:Loc NavLabel_Settings}" Subtitle="{loc:Loc Settings_Subtitle}" />
 
             <!-- Karta 1: Jasność i Synchronizacja Podświetlenia -->
             <Border Classes="glassCard" Padding="18">
@@ -28,7 +26,7 @@
                         <Grid ColumnDefinitions="*,Auto">
                             <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
                                 <TextBlock Text="{loc:Loc Settings_SyncBrightness}" FontWeight="SemiBold" FontSize="12" />
-                                <TextBlock Text="{loc:Loc Settings_SyncBrightnessDesc}" Classes="dim" FontSize="10" />
+                                <TextBlock Text="{loc:Loc Settings_SyncBrightnessDesc}" Classes="dim" FontSize="10.5" />
                             </StackPanel>
                             <CheckBox Grid.Column="1" IsChecked="{Binding Canvas.IsSyncBrightness}" VerticalAlignment="Center" />
                         </Grid>
@@ -67,7 +65,7 @@
                     <Grid ColumnDefinitions="*,Auto">
                         <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
                             <TextBlock Text="{loc:Loc Settings_StandbyTitle}" FontWeight="SemiBold" FontSize="12" />
-                            <TextBlock Text="{loc:Loc Settings_StandbyDesc}" Classes="dim" FontSize="10" />
+                            <TextBlock Text="{loc:Loc Settings_StandbyDesc}" Classes="dim" FontSize="10.5" />
                         </StackPanel>
                         <Button Grid.Column="1" Classes="pillBtn" Command="{Binding ToggleStandbyCommand}" Content="{loc:Loc Settings_StandbyToggle}" />
                     </Grid>
@@ -76,6 +74,12 @@
 
             <!-- Karta 3: Ustawienia Aplikacji (Język i Autostart) -->
             <pages:GeneralSettingsCardView />
+
+            <!-- Karta: Asystent (profile dla programów, podpowiedzi, liczenie – T-37) -->
+            <pages:AssistSettingsCardView DataContext="{Binding Assist}" IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+            <!-- Karta: Aktualizacje (T-32) - wyłączone, dopóki użytkownik nie włączy -->
+            <pages:UpdatesCardView DataContext="{Binding Updates}" IsVisible="{Binding $self.DataContext, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
             <!-- Karta 4: Integracja z Discord -->
             <pages:DiscordSettingsCardView />
@@ -104,12 +108,15 @@
             <!-- Karta 12: Integracja z Home Assistant (Smart Home) -->
             <pages:HomeAssistantSettingsCardView x:Name="HomeAssistantCard" />
 
+            <!-- Karta: Kopie zapasowe profili i ustawień -->
+            <pages:BackupsCardView DataContext="{Binding Backups}" />
+
             <!-- Karta 13: Informacje o oprogramowaniu -->
             <Border Classes="glassCard" Padding="18">
                 <StackPanel Spacing="6">
                     <TextBlock Text="{loc:Loc Settings_AppInfoTitle}" Classes="h3" />
                     <TextBlock Text="{loc:Loc Settings_AppInfoDesc}" Classes="caption" />
-                    <TextBlock Text="{loc:Loc Settings_AppInfoModules}" Classes="dim" FontSize="10" />
+                    <TextBlock Text="{loc:Loc Settings_AppInfoModules}" Classes="dim" FontSize="10.5" />
                 </StackPanel>
             </Border>
         </StackPanel>

@@ -10,6 +10,7 @@ public enum NavigationPage
     Studio,
     Profiles,
     ActionStore,
+    Macros,
     Settings,
     Logs
 }

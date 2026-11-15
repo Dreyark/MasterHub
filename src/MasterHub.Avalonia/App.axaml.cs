@@ -6,19 +6,10 @@ using Microsoft.Extensions.DependencyInjection;
 using MasterHub.Core.Actions;
 using MasterHub.Core.Audio;
 using MasterHub.Core.Devices;
-using MasterHub.Core.Integrations.Discord;
-using MasterHub.Core.Integrations.HomeAssistant;
-using MasterHub.Core.Integrations.Obs;
-using MasterHub.Core.Integrations.Streamlabs;
-using MasterHub.Core.Integrations.StreamDeck;
-using MasterHub.Core.Integrations.Teams;
-using MasterHub.Core.Integrations.Kick;
-using MasterHub.Core.Integrations.JetKvm;
-using MasterHub.Core.Integrations.Spotify;
-using MasterHub.Core.Integrations.Vlc;
-using MasterHub.Core.Integrations.Voicemod;
-using MasterHub.Core.Integrations.Twitch;
-using MasterHub.Core.Integrations.YouTube;
+using MasterHub.Core.Integrations.Discord; using MasterHub.Core.Integrations.HomeAssistant; using MasterHub.Core.Integrations.Obs;
+using MasterHub.Core.Integrations.Streamlabs; using MasterHub.Core.Integrations.StreamDeck; using MasterHub.Core.Integrations.Teams;
+using MasterHub.Core.Integrations.Kick; using MasterHub.Core.Integrations.JetKvm; using MasterHub.Core.Integrations.Spotify;
+using MasterHub.Core.Integrations.Vlc; using MasterHub.Core.Integrations.Voicemod; using MasterHub.Core.Integrations.Twitch; using MasterHub.Core.Integrations.YouTube;
 using MasterHub.Core.Localization;
 using MasterHub.Core.Media;
 using MasterHub.Core.Monitoring;
@@ -64,10 +55,35 @@ public partial class App : Application
                 mainWindow.Opened += (s, e) => Services.GetRequiredService<ITrayService>().MinimizeToTray();
         }
 
+        // Poza klasycznym desktopem (np. headless UI testy renderujące widoki do PNG) nie startujemy usług runtime
+        // (host pluginów otwiera port i uruchamia procesy, auto-connect integracji, hook zamykania sprzętu).
+        if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime)
+        {
+            base.OnFrameworkInitializationCompleted();
+            return;
+        }
+
         AppDomain.CurrentDomain.ProcessExit += (s, e) => ShutdownHardware();
 
         base.OnFrameworkInitializationCompleted();
+
+        // T-08: a draft that a crash left behind, or the setup tour on a deck with nothing set up (never forced)
+        try { Services.GetRequiredService<MasterHub.Avalonia.ViewModels.MainViewModel>().OfferStartupHelp(); } catch { }
+
+        // Makra: wczytanie biblioteki i (tylko przy aktywnych przypisaniach) włączenie globalnych haków wejścia.
+        try { Services.GetRequiredService<MasterHub.Core.Macros.IMacroService>().Start(); } catch { }
         _ = Services.GetRequiredService<IStreamDeckPluginHost>().StartAsync();
+        // T-25: an app (or a Claude Code session) that waits for the user makes the edge light pulse orange
+        try
+        {
+            var board = Services.GetRequiredService<MasterHub.Core.Status.IStatusBoard>();
+            var lights = Services.GetRequiredService<MasterHub.Core.Devices.DeckStatusLightService>();
+            board.Changed += () => lights.Attention = board.Count(MasterHub.Core.Status.AppState.Waiting) > 0;
+        }
+        catch { /* the edge light is optional */ }
+        try { Services.GetRequiredService<MasterHub.Core.Api.ILocalApiServer>().Start(); } catch { /* port range busy: the API is optional */ }
+        // T-34 #5: one log line a minute with the outbound calls per host
+        try { Services.GetRequiredService<MasterHub.Core.Diagnostics.OutboundCallCounter>().Start(MasterHub.Core.Diagnostics.AppLog.Write); } catch { }
 
         var haSettings = Services.GetRequiredService<IProfileService>().GetHomeAssistantSettings();
         if (haSettings.AutoConnect && !string.IsNullOrWhiteSpace(haSettings.AccessToken))
@@ -76,72 +92,22 @@ public partial class App : Application
 
     private static int s_isShuttingDown;
 
-    private static void ShutdownHardware()
+    public static void ShutdownHardware()
     {
         if (System.Threading.Interlocked.Exchange(ref s_isShuttingDown, 1) != 0) return;
+        HardwareWatchdog.SignalCleanExit();
         var sp = Services;
         Services = null!;
+        try { sp?.GetService<MasterHub.Core.Api.ILocalApiServer>()?.Stop(); } catch { }
+        try { sp?.GetService<MasterHub.Core.Diagnostics.OutboundCallCounter>()?.Dispose(); } catch { }
+        try { sp?.GetService<MasterHub.Core.Macros.IMacroService>()?.Dispose(); } catch { }
         try { sp?.GetService<IStreamDeckPluginHost>()?.StopAsync().GetAwaiter().GetResult(); } catch { }
         try { sp?.GetService<CanvasViewModel>()?.SaveCurrentStateToActiveProfile(); } catch { }
+        try { sp?.GetService<MasterHub.Core.Profiles.Auto.IAppUsageService>()?.Stop(); } catch { }   // T-37: writes what was counted
+        try { sp?.GetService<MasterHub.Core.Profiles.Auto.IPressCounter>()?.Flush(); } catch { }
         try { sp?.GetService<IMasterHubDeviceService>()?.Dispose(); } catch { }
+        try { sp?.GetService<IMasterHubManager>()?.Dispose(); } catch { }
+        try { MasterHubManager.ExtinguishAllHardware(); } catch { }
         try { (sp as IDisposable)?.Dispose(); } catch { }
-    }
-
-    private static void ConfigureServices(IServiceCollection services)
-    {
-        // Core hardware & audio/system services
-        services.AddSingleton<IMasterHubManager, MasterHubManager>();
-        services.AddSingleton<IAudioService, WindowsAudioService>();
-        services.AddSingleton<ISystemControlService, WindowsSystemControlService>();
-        services.AddSingleton<IStartupService, WindowsStartupService>();
-        services.AddSingleton<ISecretProtectionService, SecretProtectionService>();
-        services.AddSingleton<IProfileService>(sp => new ProfileService(null, sp.GetRequiredService<ISecretProtectionService>()));
-        services.AddSingleton<ISmartProfileService, SmartProfileService>();
-        services.AddSingleton<ISystemMonitorService, SystemMonitorService>();
-        services.AddSingleton<INowPlayingService, NowPlayingService>();
-        // Core integrations
-        services.AddSingleton<IObsService, ObsService>();
-        services.AddSingleton<IDiscordService>(_ => new DiscordService());
-        services.AddSingleton<ITeamsService>(_ => new TeamsService());
-        services.AddSingleton<ITwitchService>(_ => new TwitchService());
-        services.AddSingleton<IKickService>(_ => new KickService());
-        services.AddSingleton<IJetKvmService>(_ => new JetKvmService());
-        services.AddSingleton<ISpotifyService, SpotifyService>();
-        services.AddSingleton<IVlcService, VlcService>();
-        services.AddSingleton<IVoicemodService, VoicemodService>();
-        services.AddSingleton<IHomeAssistantService, HomeAssistantService>();
-        services.AddSingleton<IYouTubeService>(_ => new YouTubeService());
-        services.AddSingleton<IStreamlabsService>(_ => new StreamlabsService());
-        services.AddSingleton<IRazerService, RazerService>();
-        services.AddSingleton<IWootingService, WootingService>();
-        services.AddSingleton<IStreamDeckPluginHost, StreamDeckPluginHost>();
-        services.AddSingleton<IPluginCatalogService, PluginCatalogService>();
-
-        // Core actions & rendering & localization
-        services.AddSingleton<ILocalizationService>(_ => LocalizationService.Instance);
-        services.AddSingleton<IKeyInteractionEngine, KeyInteractionEngine>();
-        services.AddSingleton<IKeyRenderer>(sp => new KeyRenderer(sp.GetRequiredService<IMasterHubManager>()));
-        services.AddSingleton<IAnimatedKeyRenderer>(sp => new AnimatedKeyRenderer(sp.GetRequiredService<IKeyRenderer>()));
-        services.AddSingleton<IAppIconExtractorService, AppIconExtractorService>();
-
-        // Avalonia Presentation Services
-        services.AddSingleton<IMasterHubDeviceService, MasterHubDeviceService>();
-        services.AddSingleton<INavigationService, NavigationService>();
-        services.AddSingleton<ITrayService, TrayService>();
-
-        // ViewModels
-        services.AddSingleton<NavigationViewModel>();
-        services.AddSingleton<CanvasViewModel>();
-        services.AddSingleton<DeviceHeaderViewModel>();
-        services.AddSingleton<ActionLibraryViewModel>();
-        services.AddSingleton<InspectorViewModel>();
-        services.AddSingleton<MasterHub.Avalonia.ViewModels.Pages.ProfilesPageViewModel>();
-        services.AddSingleton<MasterHub.Avalonia.ViewModels.Pages.ActionStorePageViewModel>();
-        services.AddSingleton<MasterHub.Avalonia.ViewModels.Pages.LogsPageViewModel>();
-        services.AddSingleton<MasterHub.Avalonia.ViewModels.Pages.SettingsPageViewModel>();
-        services.AddSingleton<MainViewModel>();
-
-        // Views
-        services.AddTransient<MainWindow>();
     }
 }

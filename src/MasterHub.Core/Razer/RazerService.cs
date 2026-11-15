@@ -607,12 +607,18 @@ public class RazerService : IRazerService, IDisposable
             byte[] req = CreateRazerReport(0x07, 0x80, 2, [0x00, 0x00]);
             if (SendAndReceiveReport(req, out byte[] resp) && (resp[7] == 0x07 && resp[8] == 0x80))
             {
-                bool isCharging = resp[9] == 0x01;
+                // Protokół Razer (openrazer, class 0x07 id 0x80): poziom baterii = arguments[1] w skali 0..255.
+                // Wcześniej wartości <= 100 uznawano za gotowe procenty, więc np. 35% (raw 90) pokazywało się jako 90%.
                 int rawLevel = resp[10];
                 int pct = Math.Clamp((int)Math.Round(rawLevel / 255.0 * 100.0), 0, 100);
-                if (rawLevel > 0 && rawLevel <= 100 && resp[11] == 0)
+
+                // Stan ładowania to osobna komenda (class 0x07 id 0x84, arguments[1] == 1); arguments[0] odpowiedzi
+                // na poziom baterii nie niesie tej informacji (wcześniej "isCharging" było praktycznie zawsze false).
+                bool isCharging = _isCharging;
+                byte[] chargeReq = CreateRazerReport(0x07, 0x84, 2, [0x00, 0x00]);
+                if (SendAndReceiveReport(chargeReq, out byte[] chargeResp) && chargeResp[7] == 0x07 && chargeResp[8] == 0x84)
                 {
-                    pct = rawLevel;
+                    isCharging = chargeResp[10] == 0x01;
                 }
 
                 if (pct > 0)

@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyActionResultView"
+             x:DataType="vm:KeyItemViewModel">
+    <!-- Ostatnie naciśnięcie się nie udało: czerwony róg na klawiszu do czasu udanego naciśnięcia. -->
+    <Border Classes="callout" Padding="10,8" IsVisible="{Binding LastActionFailed}">
+        <StackPanel Spacing="2">
+            <TextBlock Text="{loc:Loc Key_LastActionFailed}" FontWeight="SemiBold" Foreground="{StaticResource AccentWarningBrush}" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding LastActionError}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+        </StackPanel>
+    </Border>
+</UserControl>

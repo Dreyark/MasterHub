@@ -23,6 +23,24 @@ public sealed record GpuDeviceInfo(
 }
 
 /// <summary>
+/// Grupy metryk próbkowane przez monitor. Próbkowanie jest kosztowne (PDH, NVML/ADL, RTSS, sieć, dysk), więc
+/// serwis zbiera TYLKO te grupy, o które poproszono przez <see cref="ISystemMonitorService.RequiredMetrics"/>.
+/// </summary>
+[Flags]
+public enum MonitorMetrics
+{
+    None = 0,
+    Cpu = 1,
+    Ram = 2,
+    Gpu = 4,
+    CpuTemperature = 8,
+    Network = 16,
+    Disk = 32,
+    Fps = 64,
+    All = Cpu | Ram | Gpu | CpuTemperature | Network | Disk | Fps
+}
+
+/// <summary>
 /// Interfejs serwisu monitorującego zasoby systemowe w czasie rzeczywistym (Etap 3).
 /// Dostarcza rzeczywiste metryki sprzętowe CPU, RAM, GPU (z wyborem karty z listy), temperaturę, prędkość sieci, dysku oraz FPS.
 /// </summary>
@@ -30,6 +48,9 @@ public interface ISystemMonitorService : IDisposable
 {
     /// <summary>Czy serwis aktywnie monitoruje parametry systemowe.</summary>
     bool IsEnabled { get; set; }
+
+    /// <summary>Które grupy metryk mają być próbkowane (domyślnie wszystkie). Brak żądanych metryk = tik bez kosztownego próbkowania.</summary>
+    MonitorMetrics RequiredMetrics { get; set; }
 
     /// <summary>Interwał próbkowania metryk w milisekundach (domyślnie 1000 ms).</summary>
     int RefreshIntervalMs { get; set; }

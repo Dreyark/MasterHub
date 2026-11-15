@@ -24,6 +24,8 @@ public sealed class TwitchService : ITwitchService
     private string? _cachedToken;
     private string? _cachedClientId;
     private string? _cachedBroadcasterId;
+    private string? _cachedUserId;
+    private string? _cachedLogin;
 
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private readonly SemaphoreSlim _sendLock = new(1, 1);
@@ -173,6 +175,8 @@ public sealed class TwitchService : ITwitchService
             _cachedToken = rawBearerToken;
             _cachedClientId = !string.IsNullOrWhiteSpace(clientId) ? clientId.Trim() : null;
             _cachedBroadcasterId = null;
+            _cachedUserId = null;
+            _cachedLogin = null;
 
             if (!cleanToken.StartsWith("oauth:", StringComparison.OrdinalIgnoreCase))
             {
@@ -315,8 +319,7 @@ public sealed class TwitchService : ITwitchService
     public async Task<bool> SetEmoteOnlyAsync(bool enabled, CancellationToken cancellationToken = default)
     {
         if (!IsConnected || string.IsNullOrEmpty(ChannelName)) return false;
-        string cmd = enabled ? "/emoteonly" : "/emoteonlyoff";
-        bool sent = await SendChatMessageAsync(cmd, cancellationToken);
+        bool sent = await PatchChatSettingsAsync(new Dictionary<string, object> { ["emote_mode"] = enabled }, cancellationToken);
         if (sent)
         {
             IsEmoteOnly = enabled;
@@ -335,8 +338,7 @@ public sealed class TwitchService : ITwitchService
     public async Task<bool> SetSubOnlyAsync(bool enabled, CancellationToken cancellationToken = default)
     {
         if (!IsConnected || string.IsNullOrEmpty(ChannelName)) return false;
-        string cmd = enabled ? "/subscribers" : "/subscribersoff";
-        bool sent = await SendChatMessageAsync(cmd, cancellationToken);
+        bool sent = await PatchChatSettingsAsync(new Dictionary<string, object> { ["subscriber_mode"] = enabled }, cancellationToken);
         if (sent)
         {
             IsSubOnly = enabled;
@@ -355,9 +357,13 @@ public sealed class TwitchService : ITwitchService
     public async Task<bool> SetSlowModeAsync(bool enabled, int seconds = 30, CancellationToken cancellationToken = default)
     {
         if (!IsConnected || string.IsNullOrEmpty(ChannelName)) return false;
-        seconds = Math.Clamp(seconds, 1, 86400);
-        string cmd = enabled ? $"/slow {seconds}" : "/slowoff";
-        bool sent = await SendChatMessageAsync(cmd, cancellationToken);
+        // Helix: slow_mode_wait_time musi mieścić się w zakresie 3-120 s (stary limit IRC 1-86400 s już nie obowiązuje).
+        seconds = Math.Clamp(seconds, 3, 120);
+        var slowBody = enabled
+            ? new Dictionary<string, object> { ["slow_mode"] = true, ["slow_mode_wait_time"] = seconds }
+            : new Dictionary<string, object> { ["slow_mode"] = false };
+        bool sent = await PatchChatSettingsAsync(slowBody, cancellationToken);
+
         if (sent)
         {
             _slowModeDurationSeconds = seconds;
@@ -371,7 +377,51 @@ public sealed class TwitchService : ITwitchService
     public async Task<bool> ClearChatAsync(CancellationToken cancellationToken = default)
     {
         if (!IsConnected || string.IsNullOrEmpty(ChannelName)) return false;
-        return await SendChatMessageAsync("/clear", cancellationToken);
+        return await DeleteChatMessagesAsync(cancellationToken);
+    }
+
+    /// <summary>
+    /// Zmienia ustawienia czatu przez Helix (PATCH /chat/settings). Komendy IRC (/emoteonly, /slow, /subscribers)
+    /// zostały przez Twitch usunięte 18.02.2023 i nie działają - wymagany scope: moderator:manage:chat_settings.
+    /// </summary>
+    private async Task<bool> PatchChatSettingsAsync(Dictionary<string, object> body, CancellationToken ct)
+    {
+        if (!await EnsureHelixCredentialsAsync(ct)) return false;
+        string moderatorId = _cachedUserId ?? _cachedBroadcasterId!;
+        string url = $"https://api.twitch.tv/helix/chat/settings?broadcaster_id={Uri.EscapeDataString(_cachedBroadcasterId!)}&moderator_id={Uri.EscapeDataString(moderatorId)}";
+        try
+        {
+            using var req = new HttpRequestMessage(new HttpMethod("PATCH"), url);
+            req.Headers.TryAddWithoutValidation("Client-Id", _cachedClientId);
+            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_cachedToken}");
+            req.Content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
+            using var resp = await _httpClient.SendAsync(req, ct);
+            return resp.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Czyści czat przez Helix (DELETE /moderation/chat bez message_id) - scope moderator:manage:chat_messages.</summary>
+    private async Task<bool> DeleteChatMessagesAsync(CancellationToken ct)
+    {
+        if (!await EnsureHelixCredentialsAsync(ct)) return false;
+        string moderatorId = _cachedUserId ?? _cachedBroadcasterId!;
+        string url = $"https://api.twitch.tv/helix/moderation/chat?broadcaster_id={Uri.EscapeDataString(_cachedBroadcasterId!)}&moderator_id={Uri.EscapeDataString(moderatorId)}";
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Delete, url);
+            req.Headers.TryAddWithoutValidation("Client-Id", _cachedClientId);
+            req.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_cachedToken}");
+            using var resp = await _httpClient.SendAsync(req, ct);
+            return resp.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <inheritdoc />
@@ -389,6 +439,7 @@ public sealed class TwitchService : ITwitchService
     {
         _cachedClientId = clientId;
         _cachedBroadcasterId = broadcasterId;
+        _cachedUserId ??= broadcasterId;
         if (!string.IsNullOrWhiteSpace(oauthToken))
         {
             _cachedToken = oauthToken.StartsWith("oauth:", StringComparison.OrdinalIgnoreCase)
@@ -825,26 +876,35 @@ public sealed class TwitchService : ITwitchService
                 }
                 if (root.TryGetProperty("user_id", out var userProp))
                 {
-                    _cachedBroadcasterId = userProp.GetString();
+                    _cachedUserId = userProp.GetString();
+                }
+                if (root.TryGetProperty("login", out var loginProp))
+                {
+                    _cachedLogin = loginProp.GetString();
                 }
             }
 
-            // 2. Jeśli mamy ChannelName i broadcaster ID nie jest ustawione lub pobieramy ID kanału docelowego:
-            if (!string.IsNullOrWhiteSpace(_cachedClientId) && !string.IsNullOrWhiteSpace(ChannelName) &&
-                string.IsNullOrWhiteSpace(_cachedBroadcasterId))
+            // 2. ID kanału (broadcaster_id) to ID kanału docelowego, a NIE właściciela tokena: przy koncie bota
+            //    (token != kanał) wcześniej klipy/markery/rajdy trafiały do kanału bota.
+            if (string.IsNullOrWhiteSpace(_cachedBroadcasterId) && !string.IsNullOrWhiteSpace(_cachedClientId))
             {
-                using var userReq = new HttpRequestMessage(HttpMethod.Get, $"https://api.twitch.tv/helix/users?login={ChannelName.ToLowerInvariant()}");
-                userReq.Headers.TryAddWithoutValidation("Client-Id", _cachedClientId);
-                userReq.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_cachedToken}");
-
-                using var userResp = await _httpClient.SendAsync(userReq, ct);
-                if (userResp.IsSuccessStatusCode)
+                if (string.IsNullOrWhiteSpace(ChannelName) ||
+                    string.Equals(ChannelName, _cachedLogin, StringComparison.OrdinalIgnoreCase))
                 {
-                    using var json = await JsonDocument.ParseAsync(await userResp.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
-                    if (json.RootElement.TryGetProperty("data", out var dataArr) && dataArr.GetArrayLength() > 0)
+                    _cachedBroadcasterId = _cachedUserId;
+                }
+                else
+                {
+                    using var userReq = new HttpRequestMessage(HttpMethod.Get, $"https://api.twitch.tv/helix/users?login={Uri.EscapeDataString(ChannelName.ToLowerInvariant())}");
+                    userReq.Headers.TryAddWithoutValidation("Client-Id", _cachedClientId);
+                    userReq.Headers.TryAddWithoutValidation("Authorization", $"Bearer {_cachedToken}");
+
+                    using var userResp = await _httpClient.SendAsync(userReq, ct);
+                    if (userResp.IsSuccessStatusCode)
                     {
-                        var firstUser = dataArr[0];
-                        if (firstUser.TryGetProperty("id", out var idProp))
+                        using var json = await JsonDocument.ParseAsync(await userResp.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+                        if (json.RootElement.TryGetProperty("data", out var dataArr) && dataArr.GetArrayLength() > 0 &&
+                            dataArr[0].TryGetProperty("id", out var idProp))
                         {
                             _cachedBroadcasterId = idProp.GetString();
                         }
@@ -926,29 +986,31 @@ public sealed class TwitchService : ITwitchService
                         continue;
                     }
 
-                    // Potwierdzenie JOIN lub dołączenia do kanału
-                    if (line.Contains("JOIN #", StringComparison.OrdinalIgnoreCase) ||
-                        line.Contains("353 ", StringComparison.OrdinalIgnoreCase) ||
-                        line.Contains("366 ", StringComparison.OrdinalIgnoreCase))
+                    // Komendę IRC wyznaczamy ze struktury linii ([@tagi] [:prefix] KOMENDA ...), a nie przez Contains():
+                    // inaczej widz mógłby wpisać na czacie tekst "NOTICE emote_only_on" i przestawić stan trybów.
+                    string command = GetIrcCommand(line);
+                    switch (command)
                     {
-                        tcsReady.TrySetResult(true);
-                    }
-
-                    // Tagi ROOMSTATE (zawierają stan czatu: emote-only, subs-only, slow)
-                    if (line.Contains("ROOMSTATE", StringComparison.OrdinalIgnoreCase))
-                    {
-                        ParseRoomState(line);
-                        tcsReady.TrySetResult(true);
-                    }
-                    // Wiadomości NOTICE (komunikaty o włączeniu / wyłączeniu trybów czatu)
-                    else if (line.Contains("NOTICE", StringComparison.OrdinalIgnoreCase))
-                    {
-                        ParseNotice(line);
-                    }
-                    // Zwykłe wiadomości PRIVMSG
-                    else if (line.Contains("PRIVMSG", StringComparison.OrdinalIgnoreCase))
-                    {
-                        ParsePrivmsg(line);
+                        case "JOIN":
+                        case "353":
+                        case "366":
+                            tcsReady.TrySetResult(true);
+                            break;
+                        case "ROOMSTATE":
+                            ParseRoomState(line);
+                            tcsReady.TrySetResult(true);
+                            break;
+                        case "NOTICE":
+                            if (line.Contains("Login authentication failed", StringComparison.OrdinalIgnoreCase) ||
+                                line.Contains("Improperly formatted auth", StringComparison.OrdinalIgnoreCase))
+                            {
+                                tcsReady.TrySetResult(false);
+                            }
+                            ParseNotice(line);
+                            break;
+                        case "PRIVMSG":
+                            ParsePrivmsg(line);
+                            break;
                     }
                 }
             }
@@ -962,6 +1024,26 @@ public sealed class TwitchService : ITwitchService
             tcsReady.TrySetResult(false);
             IsConnected = false;
         }
+    }
+
+    /// <summary>Zwraca komendę IRC z linii "[@tagi ][:prefix ]KOMENDA params" (np. "PRIVMSG", "ROOMSTATE", "353").</summary>
+    internal static string GetIrcCommand(string line)
+    {
+        int i = 0;
+        if (i < line.Length && line[i] == '@')
+        {
+            int sp = line.IndexOf(' ');
+            if (sp < 0) return string.Empty;
+            i = sp + 1;
+        }
+        if (i < line.Length && line[i] == ':')
+        {
+            int sp = line.IndexOf(' ', i);
+            if (sp < 0) return string.Empty;
+            i = sp + 1;
+        }
+        int end = line.IndexOf(' ', i);
+        return (end < 0 ? line[i..] : line[i..end]).ToUpperInvariant();
     }
 
     private void ParseRoomState(string line)

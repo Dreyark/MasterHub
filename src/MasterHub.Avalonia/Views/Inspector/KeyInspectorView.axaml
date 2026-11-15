@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="using:MasterHub.Avalonia.Views.Controls"
              xmlns:vm="using:MasterHub.Avalonia.ViewModels"
              xmlns:ins="using:MasterHub.Avalonia.Views.Inspector"
              xmlns:loc="using:MasterHub.Avalonia.Localization"
@@ -7,48 +8,123 @@
              x:DataType="vm:KeyItemViewModel">
 
     <StackPanel Spacing="8">
-        <!-- Nagłówek klawisza -->
+        <!-- Nagłówek klawisza: podgląd tego, co jest na ekranie klawisza, numer, nazwa akcji i znaczniki gestów -->
         <Border Classes="inspectorSection">
             <Grid ColumnDefinitions="Auto,*,Auto">
-                <Border Grid.Column="0" Width="36" Height="36" CornerRadius="8"
-                        Background="{StaticResource CardActiveBgBrush}" Margin="0,0,10,0">
-                    <TextBlock Classes="emoji" Text="{Binding ActionIcon}" FontSize="18"
-                               FontFamily="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji, sans-serif"
-                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <Border Grid.Column="0" Width="56" Height="56" CornerRadius="10" ClipToBounds="True"
+                        Background="{StaticResource CardActiveBgBrush}" Margin="0,0,12,0"
+                        BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1">
+                    <Grid>
+                        <PathIcon Data="{Binding AssignedAction, Converter={x:Static ctl:IconConverters.ByAction}}" Width="22" Height="22"
+                                  Foreground="{StaticResource AccentPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  IsVisible="{Binding !HasAnyImage}" />
+                        <Image Source="{Binding CurrentDisplayBitmap}" Stretch="UniformToFill" IsVisible="{Binding HasAnyImage}" />
+                    </Grid>
                 </Border>
-                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
                     <TextBlock Text="{Binding DisplayTitle}" Classes="h3" TextTrimming="CharacterEllipsis" />
-                    <TextBlock Text="{Binding KeyNumberDisplay}" Classes="dim" FontSize="10" />
+                    <TextBlock Text="{Binding KeyNumberDisplay}" Classes="dim" FontSize="10.5" />
+                    <StackPanel Orientation="Horizontal" Spacing="4" Margin="0,2,0,0" IsVisible="{Binding HasGestures}">
+                        <Border Background="{StaticResource CardActiveBgBrush}" CornerRadius="4" Padding="5,1">
+                            <TextBlock Text="{Binding GestureBadge}" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource AccentPrimaryBrush}" />
+                        </Border>
+                    </StackPanel>
                 </StackPanel>
                 <Button Grid.Column="2" Classes="iconBtn" Command="{Binding ClearActionCommand}"
-                        IsVisible="{Binding HasAction}"
+                        IsVisible="{Binding HasAction}" VerticalAlignment="Top"
                         ToolTip.Tip="{loc:Loc Key_ClearActionTip}" Padding="6">
-                    <TextBlock Text="🗑️" FontSize="13" />
+                    <PathIcon Data="{StaticResource IconTrash}" Width="13" Height="13" />
                 </Button>
             </Grid>
         </Border>
 
-        <!-- Zakładki konfiguracji klawisza -->
-        <TabControl>
+        <!-- Zakładki: każda zajmuje się jedną rzeczą (akcja, tekst, obraz, reguły, tapeta decka) -->
+        <TabControl Classes="keyTabs">
             <TabControl.ItemsPanel>
                 <ItemsPanelTemplate>
                     <UniformGrid Rows="1" />
                 </ItemsPanelTemplate>
             </TabControl.ItemsPanel>
             <TabControl.Styles>
-                <Style Selector="TabItem">
+                <Style Selector="TabControl.keyTabs TabItem">
                     <Setter Property="HorizontalAlignment" Value="Stretch" />
                     <Setter Property="HorizontalContentAlignment" Value="Center" />
+                    <Setter Property="Padding" Value="2,6" />
+                    <Setter Property="MinHeight" Value="0" />
+                </Style>
+                <!-- room under the text for the blue marker of the selected tab, so the line never touches the label -->
+                <Style Selector="TabControl.keyTabs TabItem > StackPanel">
+                    <Setter Property="Margin" Value="0,0,0,9" />
+                </Style>
+                <Style Selector="TabControl.keyTabs TabItem StackPanel > TextBlock">
+                    <Setter Property="FontSize" Value="10" />
+                    <Setter Property="FontWeight" Value="SemiBold" />
+                    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
                 </Style>
             </TabControl.Styles>
-            <TabItem Header="{loc:Loc Tab_Action}" FontSize="11" FontWeight="SemiBold">
+
+            <TabItem ToolTip.Tip="{loc:Loc Tab_Action}">
+                <TabItem.Header>
+                    <StackPanel Spacing="3" HorizontalAlignment="Center">
+                        <PathIcon Data="{StaticResource IconBolt}" Width="15" Height="15" HorizontalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc Tab_Action}" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </TabItem.Header>
                 <Border Padding="0,8">
-                    <ins:KeyActionSettingsView />
+                    <StackPanel Spacing="10">
+                        <ins:KeyGestureTabsView />
+                        <!-- Edytor głównej akcji = zakładka Press; Hold i Double mają własny prosty edytor powyżej -->
+                        <ins:KeyActionSettingsView IsVisible="{Binding IsPressTab}" />
+                    </StackPanel>
                 </Border>
             </TabItem>
-            <TabItem Header="{loc:Loc Tab_Appearance}" FontSize="11" FontWeight="SemiBold">
+
+            <TabItem ToolTip.Tip="{loc:Loc Tab_Text}">
+                <TabItem.Header>
+                    <StackPanel Spacing="3" HorizontalAlignment="Center">
+                        <PathIcon Data="{StaticResource IconChat}" Width="15" Height="15" HorizontalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc Tab_Text}" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </TabItem.Header>
+                <Border Padding="0,8">
+                    <ins:KeyTextTabView />
+                </Border>
+            </TabItem>
+
+            <TabItem ToolTip.Tip="{loc:Loc Tab_Image}">
+                <TabItem.Header>
+                    <StackPanel Spacing="3" HorizontalAlignment="Center">
+                        <PathIcon Data="{StaticResource IconImage}" Width="15" Height="15" HorizontalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc Tab_Image}" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </TabItem.Header>
                 <Border Padding="0,8">
                     <ins:KeyDisplaySettingsView />
+                </Border>
+            </TabItem>
+
+            <TabItem ToolTip.Tip="{loc:Loc Tab_Rules}">
+                <TabItem.Header>
+                    <StackPanel Spacing="3" HorizontalAlignment="Center">
+                        <PathIcon Data="{StaticResource IconTarget}" Width="15" Height="15" HorizontalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc Tab_Rules}" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </TabItem.Header>
+                <Border Padding="0,8">
+                    <ins:KeyLooksView />
+                </Border>
+            </TabItem>
+
+            <TabItem ToolTip.Tip="{loc:Loc Tab_Wallpaper}">
+                <TabItem.Header>
+                    <StackPanel Spacing="3" HorizontalAlignment="Center">
+                        <PathIcon Data="{StaticResource IconKeypad}" Width="15" Height="15" HorizontalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc Tab_Wallpaper}" HorizontalAlignment="Center" />
+                    </StackPanel>
+                </TabItem.Header>
+                <Border Padding="0,8">
+                    <!-- Tapeta dotyczy całego decka, nie tego jednego klawisza - dlatego ma własną zakładkę -->
+                    <ins:KeyPanoramicSettingsSectionView />
                 </Border>
             </TabItem>
         </TabControl>

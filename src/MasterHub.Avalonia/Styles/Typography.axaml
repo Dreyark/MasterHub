@@ -16,28 +16,28 @@
 
     <!-- Nagłówek sekcji H2 -->
     <Style Selector="TextBlock.h2">
-        <Setter Property="FontSize" Value="14" />
+        <Setter Property="FontSize" Value="15" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
     </Style>
 
     <!-- Nagłówek modułu H3 -->
     <Style Selector="TextBlock.h3">
-        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontSize" Value="13" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
     </Style>
 
     <!-- Etykieta pomocnicza (Muted Caption) -->
     <Style Selector="TextBlock.caption">
-        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontSize" Value="11.5" />
         <Setter Property="FontWeight" Value="Medium" />
         <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
     </Style>
 
     <!-- Etykieta przyciemniona (Dim) -->
     <Style Selector="TextBlock.dim">
-        <Setter Property="FontSize" Value="10.5" />
+        <Setter Property="FontSize" Value="11" />
         <Setter Property="Foreground" Value="{StaticResource TextDimBrush}" />
     </Style>
 
@@ -46,6 +46,28 @@
         <Setter Property="FontSize" Value="10" />
         <Setter Property="FontWeight" Value="Bold" />
         <Setter Property="Foreground" Value="{StaticResource AccentPrimaryBrush}" />
+    </Style>
+
+    <!-- Tytuł strony (wspólny nagłówek PageHeader) - ta sama nazwa co pozycja w nawigacji -->
+    <Style Selector="TextBlock.pageTitle">
+        <Setter Property="FontSize" Value="17" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+
+    <!-- Opis strony pod tytułem: czytelny (Muted, nie Dim), zawijany -->
+    <Style Selector="TextBlock.pageSubtitle">
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+    </Style>
+
+    <!-- Etykieta grupy (np. sekcje nawigacji) - tekst w zasobach jest już wersalikami -->
+    <Style Selector="TextBlock.overline">
+        <Setter Property="FontSize" Value="10.5" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="LetterSpacing" Value="1.2" />
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}" />
     </Style>
 
     <!-- Ikona Emoji (zawsze pełnokolorowa z Segoe UI Emoji) -->

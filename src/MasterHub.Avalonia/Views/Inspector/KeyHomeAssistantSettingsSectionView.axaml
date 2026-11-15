@@ -12,11 +12,11 @@
             <Grid ColumnDefinitions="*,Auto">
                 <StackPanel Grid.Column="0" VerticalAlignment="Center" Spacing="2">
                     <TextBlock Text="{Binding HomeAssistantConnectionStatusDisplay}" FontSize="12" FontWeight="SemiBold" />
-                    <TextBlock Text="{loc:Loc HA_WebSocketHint, FallbackValue='REST + WebSocket Event Stream'}" Classes="dim" FontSize="10" />
+                    <TextBlock Text="{loc:Loc HA_WebSocketHint, FallbackValue='REST + WebSocket Event Stream'}" Classes="dim" FontSize="10.5" />
                 </StackPanel>
                 <Button Grid.Column="1" Classes="pillBtn" Padding="8,4"
                         Command="{Binding OpenHomeAssistantSettingsCommand}"
-                        Content="{loc:Loc Key_HA_OpenSettingsBtn, FallbackValue='⚙️ Ustawienia połączenia'}" />
+                        Content="{loc:Loc Key_HA_OpenSettingsBtn, FallbackValue='Ustawienia połączenia'}" />
             </Grid>
         </Border>
 
@@ -30,9 +30,9 @@
                     <DataTemplate x:DataType="ha:HomeAssistantEntityModel">
                         <Grid ColumnDefinitions="Auto,*,Auto">
                             <TextBlock Grid.Column="0" Text="{Binding State, Mode=OneWay}"
-                                       FontWeight="Bold" FontSize="10" Foreground="#38BDF8" Margin="0,0,8,0" VerticalAlignment="Center" />
+                                       FontWeight="Bold" FontSize="10.5" Foreground="{StaticResource AccentInfoBrush}" Margin="0,0,8,0" VerticalAlignment="Center" />
                             <TextBlock Grid.Column="1" Text="{Binding FriendlyName}" VerticalAlignment="Center" />
-                            <TextBlock Grid.Column="2" Text="{Binding EntityId}" Classes="dim" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="2" Text="{Binding EntityId}" Classes="dim" FontSize="10.5" Margin="8,0,0,0" VerticalAlignment="Center" />
                         </Grid>
                     </DataTemplate>
                 </ComboBox.ItemTemplate>

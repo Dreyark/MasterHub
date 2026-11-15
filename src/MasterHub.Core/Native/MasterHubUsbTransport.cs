@@ -78,6 +78,11 @@ public sealed class MasterHubDeviceHandle : IDisposable
     private readonly CancellationTokenSource _cts = new();
     private readonly Thread _readThread;
     private readonly System.Threading.Lock _writeLock = new();
+    // Held for the whole of one picture (all its chunks back-to-back) so that a hand-back or any other
+    // report can never land in the middle of a picture transfer.
+    private readonly System.Threading.Lock _pictureLock = new();
+    private readonly ModuleSoftwareState _state;
+    private int _guardLogged;
     private readonly IntPtr _writeEvent;
     private IntPtr _readBuffer;
     private IntPtr _readOverlapped;
@@ -94,6 +99,17 @@ public sealed class MasterHubDeviceHandle : IDisposable
     public bool IsValid => !_disposed && !_isDisconnected && _handle != null && !_handle.IsInvalid && !_handle.IsClosed;
     public bool IsDisconnected => _isDisconnected;
 
+    /// <summary>Software-mode / hand-back state of this module (see <see cref="ModuleSoftwareState"/>).</summary>
+    public ModuleSoftwareState State => _state;
+    public bool IsSoftwareMode => _state.IsSoftwareMode;
+    public bool IsReleased => _state.IsReleased;
+
+    /// <summary>Result code returned for reports sent after the module has been handed back.</summary>
+    public const int ResultReleased = 8;
+
+    /// <summary>Result code returned by a feature read that was refused (keys/dial outside software mode).</summary>
+    public const int ResultReadRefused = 9;
+
     public event Action<byte[]>? ReportReceived;
 
     public MasterHubDeviceHandle(SafeFileHandle handle, ushort vendorId, ushort productId, string serialNumber, string devicePath)
@@ -103,6 +119,7 @@ public sealed class MasterHubDeviceHandle : IDisposable
         _productId = productId;
         _serialNumber = serialNumber;
         _devicePath = devicePath;
+        _state = new ModuleSoftwareState(productId);
 
         _readBuffer = Marshal.AllocHGlobal(64);
         _readOverlapped = Marshal.AllocHGlobal(Marshal.SizeOf<NativeOverlapped>());
@@ -262,6 +279,11 @@ public sealed class MasterHubDeviceHandle : IDisposable
             return 7;
         }
 
+        if (_state.IsReleased)
+        {
+            return ResultReleased;
+        }
+
         if (IsForbiddenReport(report))
         {
             Debug.WriteLine($"[SECURITY] Zablokowano niebezpieczny rozkaz HID Output Report: ID=0x{report[0]:X2}, CMD=0x{report[1]:X2}");
@@ -313,11 +335,18 @@ public sealed class MasterHubDeviceHandle : IDisposable
         }
     }
 
-    public int SetFeatureReport(byte[] report)
+    public int SetFeatureReport(byte[] report) => SetFeatureReportCore(report, allowWhenReleased: false);
+
+    private int SetFeatureReportCore(byte[] report, bool allowWhenReleased)
     {
         if (_disposed || _isDisconnected || _handle.IsInvalid || _handle.IsClosed)
         {
             return 7;
+        }
+
+        if (_state.IsReleased && !allowWhenReleased)
+        {
+            return ResultReleased;
         }
 
         if (IsForbiddenReport(report))
@@ -347,6 +376,16 @@ public sealed class MasterHubDeviceHandle : IDisposable
         if (_disposed || _isDisconnected || _handle.IsInvalid || _handle.IsClosed)
         {
             return 7;
+        }
+
+        if (!_state.MayReadFeatures)
+        {
+            // Reading a feature report from keys/dial in hardware mode wedges the module until its power is cycled.
+            if (Interlocked.Exchange(ref _guardLogged, 1) == 0)
+            {
+                Debug.WriteLine($"[SECURITY] Odmowa odczytu Feature Report z modułu 0x{_productId:X4} poza trybem Software (ryzyko zawieszenia firmware).");
+            }
+            return _state.IsReleased ? ResultReleased : ResultReadRefused;
         }
 
         lock (_writeLock)
@@ -404,186 +443,112 @@ public sealed class MasterHubDeviceHandle : IDisposable
     // High-Level Key Deck 15 (M4315) Protocol Helpers
     public int SetSwMode(bool isSoftwareMode)
     {
-        byte[] rep = new byte[32];
-        rep[0] = 0x03;
-        rep[1] = 0x3a;
-        rep[2] = (byte)(isSoftwareMode ? 0x01 : 0x00);
-        return SetFeatureReport(rep);
+        int res = SetFeatureReport(ReportBuilders.SetSoftwareMode(isSoftwareMode));
+        _state.OnSoftwareModeSent(isSoftwareMode, res);
+        return res;
     }
 
-    public int AdjustBacklight(byte brightness)
-    {
-        byte[] rep = new byte[32];
-        rep[0] = 0x03;
-        rep[1] = 0x34;
-        // Wartość 0 powoduje zawieszenie MCU klawiszy (I/O Timeout) wymagające fizycznego odłączenia USB.
-        // Bezpieczny zakres minimalny to 1 (wygaszenie realizuje się przez czarny obraz lub FillScreen).
-        rep[2] = Math.Clamp(brightness, (byte)1, (byte)100);
-        return SetFeatureReport(rep);
-    }
+    /// <summary>
+    /// Wartość 0 powoduje zawieszenie MCU klawiszy (I/O Timeout) wymagające fizycznego odłączenia USB.
+    /// Bezpieczny zakres minimalny to 1 (wygaszenie realizuje się przez czarny obraz lub FillScreen).
+    /// </summary>
+    public int AdjustBacklight(byte brightness) => SetFeatureReport(ReportBuilders.KeyBacklight(brightness));
 
     /// <summary>
     /// Błyskawiczne wypełnienie całego ekranu klawiszy (wszystkie 15 przycisków) jednym kolorem RGB w pojedynczym raporcie.
     /// </summary>
-    public int FillScreen(byte r, byte g, byte b)
-    {
-        byte[] rep = new byte[32];
-        rep[0] = 0x03;
-        rep[1] = 0x36;
-        rep[2] = r;
-        rep[3] = g;
-        rep[4] = b;
-        return SetFeatureReport(rep);
-    }
+    public int FillScreen(byte r, byte g, byte b) => SetFeatureReport(ReportBuilders.FillKeyScreen(r, g, b));
 
-    public int DisplayColorOnButton(byte buttonId, byte r, byte g, byte b)
-    {
-        byte[] rep = new byte[32];
-        rep[0] = 0x03;
-        rep[1] = 0x37;
-        rep[2] = buttonId;
-        rep[3] = r;
-        rep[4] = g;
-        rep[5] = b;
-        return SetFeatureReport(rep);
-    }
+    public int DisplayColorOnButton(byte buttonId, byte r, byte g, byte b) =>
+        SetFeatureReport(ReportBuilders.FillSingleKey(buttonId, r, g, b));
 
-    public int DisplayPictureOnButton(byte buttonId, byte[] jpegBuf, int bufLen)
-    {
-        const int ReportLen = 320;
-        const int ChunkMax = 312;
-
-        int total = Math.Min(jpegBuf.Length, bufLen);
-        int remaining = total;
-        ushort chunkIndex = 0;
-
-        byte[] report = new byte[ReportLen];
-        report[0] = 0x02;
-        report[1] = 0x36;
-        report[6] = buttonId;
-
-        while (remaining > 0)
-        {
-            int chunkLen = Math.Min(remaining, ChunkMax);
-            byte isLast = (byte)(remaining <= ChunkMax ? 1 : 0);
-
-            report[2] = (byte)(chunkIndex & 0xFF);
-            report[3] = (byte)((chunkIndex >> 8) & 0xFF);
-            report[4] = (byte)(chunkLen & 0xFF);
-            report[5] = (byte)((chunkLen >> 8) & 0xFF);
-            report[7] = isLast;
-
-            int srcOffset = total - remaining;
-            Buffer.BlockCopy(jpegBuf, srcOffset, report, 8, chunkLen);
-
-            if (chunkLen < ChunkMax)
-            {
-                Array.Clear(report, 8 + chunkLen, ReportLen - (8 + chunkLen));
-            }
-
-            int res = WriteOutputReport(report);
-            if (res != 0) return res;
-
-            chunkIndex++;
-            remaining -= chunkLen;
-        }
-
-        return 0;
-    }
+    public int DisplayPictureOnButton(byte buttonId, byte[] jpegBuf, int bufLen) =>
+        SendPicture(ReportBuilders.OpcodeKeyPicture, buttonId, jpegBuf, bufLen);
 
     /// <summary>
     /// Przesyła pełnopanelowy obraz panoramiczny 480x272 JPEG do wszystkich 15 ekranów LCD jednocześnie
     /// za pomocą sprzętowego rozkazu 0x35 (11 ms transfer bez tearingu).
     /// </summary>
-    public int DisplayPanoramicPicture(byte[] jpegBuf, int bufLen)
-    {
-        const int ReportLen = 320;
-        const int ChunkMax = 312;
+    public int DisplayPanoramicPicture(byte[] jpegBuf, int bufLen) =>
+        SendPicture(ReportBuilders.OpcodePanoramaPicture, 0, jpegBuf, bufLen);
 
+    /// <summary>
+    /// Sends one picture as 320-byte chunks. All chunks go back-to-back under <c>_pictureLock</c>, so a hand-back
+    /// (<see cref="Release"/>) waits for the picture instead of landing inside it, and nothing is sent once released.
+    /// </summary>
+    private int SendPicture(byte opcode, byte tag, byte[] jpegBuf, int bufLen)
+    {
         int total = Math.Min(jpegBuf.Length, bufLen);
         int remaining = total;
         ushort chunkIndex = 0;
+        byte[] report = ReportBuilders.NewPictureReport(opcode, tag);
 
-        byte[] report = new byte[ReportLen];
-        report[0] = 0x02; // Report ID
-        report[1] = 0x35; // Opcode: Full Panel 480x272 JPEG Stream
-        report[6] = 0x00; // Reserved / unused
-
-        while (remaining > 0)
+        lock (_pictureLock)
         {
-            int chunkLen = Math.Min(remaining, ChunkMax);
-            byte isLast = (byte)(remaining <= ChunkMax ? 1 : 0);
-
-            report[2] = (byte)(chunkIndex & 0xFF);
-            report[3] = (byte)((chunkIndex >> 8) & 0xFF);
-            report[4] = (byte)(chunkLen & 0xFF);
-            report[5] = (byte)((chunkLen >> 8) & 0xFF);
-            report[7] = isLast;
-
-            int srcOffset = total - remaining;
-            Buffer.BlockCopy(jpegBuf, srcOffset, report, 8, chunkLen);
-
-            if (chunkLen < ChunkMax)
+            while (remaining > 0)
             {
-                Array.Clear(report, 8 + chunkLen, ReportLen - (8 + chunkLen));
+                if (_state.IsReleased) return ResultReleased;
+
+                int chunkLen = Math.Min(remaining, ReportBuilders.PictureChunkMax);
+                bool isLast = remaining <= ReportBuilders.PictureChunkMax;
+                ReportBuilders.FillPictureChunk(report, chunkIndex, jpegBuf, total - remaining, chunkLen, isLast);
+
+                int res = WriteOutputReport(report);
+                if (res != 0) return res;
+
+                chunkIndex++;
+                remaining -= chunkLen;
             }
-
-            int res = WriteOutputReport(report);
-            if (res != 0) return res;
-
-            chunkIndex++;
-            remaining -= chunkLen;
         }
 
         return 0;
     }
 
+    /// <summary>
+    /// Hands the module back to its firmware and makes the handle inert: waits (bounded) for a picture that is being
+    /// sent, sets the <c>released</c> flag, then sends the hardware-mode command. <b>Nothing is sent afterwards.</b>
+    /// Reason (observed 2026-10-13/14): a picture sent after the hand-back, or an app that quit before the hand-back
+    /// finished, left the dial refusing commands at the next start.
+    /// </summary>
+    /// <returns>The result of the hand-back command (0 = success; also 0 for modules without a software mode).</returns>
+    public int Release(int waitForPictureMs = 1500)
+    {
+        if (_state.IsReleased) return 0;
+
+        bool locked = _pictureLock.TryEnter(TimeSpan.FromMilliseconds(Math.Max(0, waitForPictureMs)));
+        try
+        {
+            if (_state.IsReleased) return 0;
+
+            byte[]? handBack = _productId switch
+            {
+                0x01FE => ReportBuilders.SetSoftwareMode(false),
+                0x0206 => ReportBuilders.SetDialSoftwareMode(false),
+                _ => null
+            };
+
+            // Set the flag first so concurrent senders stop immediately; the hand-back itself bypasses it.
+            _state.MarkReleased();
+
+            return handBack == null ? 0 : SetFeatureReportCore(handBack, allowWhenReleased: true);
+        }
+        finally
+        {
+            if (locked) _pictureLock.Exit();
+        }
+    }
+
     // High-Level M0 (Base Station, Fader, Roller) Protocol Helpers
-    public int AdjustLedMode(byte deviceType, byte ledIndex, byte mode, bool saveFw)
-    {
-        byte[] rep = new byte[64];
-        rep[0] = 0x02;
-        rep[1] = 0x2c;
-        rep[2] = deviceType;
-        rep[3] = ledIndex;
-        rep[4] = mode;
-        rep[5] = (byte)(saveFw ? 1 : 0);
-        return WriteOutputReport(rep);
-    }
+    public int AdjustLedMode(byte deviceType, byte ledIndex, byte mode, bool saveFw) =>
+        WriteOutputReport(ReportBuilders.LedMode(deviceType, ledIndex, mode, saveFw));
 
-    public int AdjustLedColor(byte deviceType, byte ledIndex, byte r, byte g, byte b, bool saveFw)
-    {
-        byte[] rep = new byte[64];
-        rep[0] = 0x02;
-        rep[1] = 0x2d;
-        rep[2] = deviceType;
-        rep[3] = ledIndex;
-        rep[4] = r;
-        rep[5] = g;
-        rep[6] = b;
-        rep[7] = (byte)(saveFw ? 1 : 0);
-        return WriteOutputReport(rep);
-    }
+    public int AdjustLedColor(byte deviceType, byte ledIndex, byte r, byte g, byte b, bool saveFw) =>
+        WriteOutputReport(ReportBuilders.LedColor(deviceType, ledIndex, r, g, b, saveFw));
 
-    public int AdjustLedBrightness(byte deviceType, byte ledIndex, byte brightness)
-    {
-        byte[] rep = new byte[64];
-        rep[0] = 0x02;
-        rep[1] = 0x2e;
-        rep[2] = deviceType;
-        rep[3] = ledIndex;
-        rep[4] = Math.Clamp(brightness, (byte)0, (byte)100);
-        return WriteOutputReport(rep);
-    }
+    public int AdjustLedBrightness(byte deviceType, byte ledIndex, byte brightness) =>
+        WriteOutputReport(ReportBuilders.LedBrightness(deviceType, ledIndex, brightness));
 
-    public int AdjustLedSpeed(byte speed)
-    {
-        byte[] rep = new byte[64];
-        rep[0] = 0x02;
-        rep[1] = 0x30;
-        rep[2] = Math.Clamp(speed, (byte)0, (byte)100);
-        return WriteOutputReport(rep);
-    }
+    public int AdjustLedSpeed(byte speed) => WriteOutputReport(ReportBuilders.LedSpeed(speed));
 
     // High-Level 3 Knobs (M003K / 0x0202) Protocol Helpers
     public int SetKnobLedMode(byte knobIndex, byte mode, bool persist = false)
@@ -613,85 +578,27 @@ public sealed class MasterHubDeviceHandle : IDisposable
     /// </summary>
     public int SetDialSwMode(bool isSoftwareMode)
     {
-        byte[] rep = new byte[32];
-        rep[0] = 0x03;
-        rep[1] = 0x49;
-        rep[2] = (byte)(isSoftwareMode ? 0x01 : 0x00);
-        return SetFeatureReport(rep);
+        int res = SetFeatureReport(ReportBuilders.SetDialSoftwareMode(isSoftwareMode));
+        _state.OnSoftwareModeSent(isSoftwareMode, res);
+        return res;
     }
 
     /// <summary>
     /// Regulacja jasności podświetlenia ekranu IPS 240x240 (0..100%).
+    /// Wartość 0 powoduje zablokowanie kontrolera Dial IPS (I/O Timeout). Bezpieczna minimalna wartość to 1.
     /// </summary>
-    public int AdjustDialBacklight(byte brightness)
-    {
-        byte[] rep = new byte[32];
-        rep[0] = 0x03;
-        rep[1] = 0x44;
-        // Wartość 0 powoduje zablokowanie kontrolera Dial IPS (I/O Timeout). Bezpieczna minimalna wartość to 1.
-        rep[2] = Math.Clamp(brightness, (byte)1, (byte)100);
-        return SetFeatureReport(rep);
-    }
+    public int AdjustDialBacklight(byte brightness) => SetFeatureReport(ReportBuilders.DialBacklight(brightness));
 
     /// <summary>
     /// Wypełnienie ekranu IPS jednolitym kolorem RGB.
     /// </summary>
-    public int FillDialColor(byte r, byte g, byte b)
-    {
-        byte[] rep = new byte[32];
-        rep[0] = 0x03;
-        rep[1] = 0x46;
-        rep[2] = r;
-        rep[3] = g;
-        rep[4] = b;
-        return SetFeatureReport(rep);
-    }
+    public int FillDialColor(byte r, byte g, byte b) => SetFeatureReport(ReportBuilders.FillDialScreen(r, g, b));
 
     /// <summary>
     /// Przesyła obraz 240x240 JPEG do okrągłego ekranu IPS za pomocą rozkazu 0x45 (pakiety 320 B, 312 B payloadu).
     /// </summary>
-    public int DisplayPictureOnDial(byte[] jpegBuf, int bufLen)
-    {
-        const int ReportLen = 320;
-        const int ChunkMax = 312;
-
-        int total = Math.Min(jpegBuf.Length, bufLen);
-        int remaining = total;
-        ushort chunkIndex = 0;
-
-        byte[] report = new byte[ReportLen];
-        report[0] = 0x02; // Report ID
-        report[1] = 0x45; // Opcode: Dial 240x240 JPEG stream
-        report[6] = 0x00; // Reserved
-
-        while (remaining > 0)
-        {
-            int chunkLen = Math.Min(remaining, ChunkMax);
-            byte isLast = (byte)(remaining <= ChunkMax ? 1 : 0);
-
-            report[2] = (byte)(chunkIndex & 0xFF);
-            report[3] = (byte)((chunkIndex >> 8) & 0xFF);
-            report[4] = (byte)(chunkLen & 0xFF);
-            report[5] = (byte)((chunkLen >> 8) & 0xFF);
-            report[7] = isLast;
-
-            int srcOffset = total - remaining;
-            Buffer.BlockCopy(jpegBuf, srcOffset, report, 8, chunkLen);
-
-            if (chunkLen < ChunkMax)
-            {
-                Array.Clear(report, 8 + chunkLen, ReportLen - (8 + chunkLen));
-            }
-
-            int res = WriteOutputReport(report);
-            if (res != 0) return res;
-
-            chunkIndex++;
-            remaining -= chunkLen;
-        }
-
-        return 0;
-    }
+    public int DisplayPictureOnDial(byte[] jpegBuf, int bufLen) =>
+        SendPicture(ReportBuilders.OpcodeDialPicture, 0, jpegBuf, bufLen);
 
     public int GetSliderValues(byte[] buf)
     {
@@ -1022,5 +929,88 @@ public static class MasterHubUsbTransport
         }
 
         return list;
+    }
+
+    /// <summary>
+    /// Awaryjne/natychmiastowe wygaszenie wszystkich podłączonych modułów MasterHub
+    /// (wypełnienie ekranów czernią, minimalne podświetlenie, wygaszenie diod LED).
+    /// Zwraca true jeśli wszystkie wykryte urządzenia zostały pomyślnie otwarte i wygaszone.
+    /// </summary>
+    public static bool ExtinguishAllConnectedDevices()
+    {
+        var devices = ScanDevices();
+        if (devices.Count == 0) return true;
+
+        bool allSucceeded = true;
+        foreach (var dev in devices)
+        {
+            try
+            {
+                using var handle = ConnectDevice(dev.VendorId, dev.ProductId, dev.SerialNumber);
+                if (handle == null || !handle.IsValid)
+                {
+                    allSucceeded = false;
+                    continue;
+                }
+
+                switch (dev.ModuleType)
+                {
+                    case MasterHubModuleType.KeyDeck15:
+                        handle.SetSwMode(true);
+                        handle.FillScreen(0, 0, 0);
+                        handle.AdjustBacklight(1);
+                        break;
+
+                    case MasterHubModuleType.BaseStation:
+                        handle.AdjustLedBrightness(0, 0, 0);
+                        handle.AdjustLedBrightness(0, 0xFF, 0);
+                        handle.AdjustLedMode(0, 0, 0, false);
+                        handle.AdjustLedColor(0, 0, 0, 0, 0, false);
+                        handle.AdjustLedColor(0, 0xFF, 0, 0, 0, false);
+                        break;
+
+                    case MasterHubModuleType.Fader5:
+                        handle.AdjustLedBrightness(1, 0, 0);
+                        handle.AdjustLedBrightness(1, 0xFF, 0);
+                        handle.AdjustLedBrightness(0, 0xFF, 0);
+                        handle.AdjustLedMode(1, 0xFF, 0, false);
+                        handle.AdjustLedColor(1, 0xFF, 0, 0, 0, false);
+                        for (byte s = 0; s < 5; s++)
+                        {
+                            handle.AdjustLedBrightness(1, s, 0);
+                            handle.AdjustLedColor(1, s, 0, 0, 0, false);
+                        }
+                        break;
+
+                    case MasterHubModuleType.RollerDial:
+                        handle.AdjustLedBrightness(2, 0, 0);
+                        handle.AdjustLedBrightness(2, 0xFF, 0);
+                        handle.AdjustLedBrightness(0, 0xFF, 0);
+                        handle.AdjustLedMode(2, 0xFF, 0, false);
+                        handle.AdjustLedColor(2, 0xFF, 0, 0, 0, false);
+                        for (byte r = 0; r < 2; r++)
+                        {
+                            handle.AdjustLedBrightness(2, r, 0);
+                            handle.AdjustLedColor(2, r, 0, 0, 0, false);
+                        }
+                        break;
+
+                    case MasterHubModuleType.Knob3:
+                        handle.SetKnobLedBrightness(0xFF, 0);
+                        break;
+
+                    case MasterHubModuleType.DialDisplay:
+                        handle.SetDialSwMode(true);
+                        handle.FillDialColor(0, 0, 0);
+                        handle.AdjustDialBacklight(1);
+                        break;
+                }
+            }
+            catch
+            {
+                allSucceeded = false;
+            }
+        }
+        return allSucceeded;
     }
 }

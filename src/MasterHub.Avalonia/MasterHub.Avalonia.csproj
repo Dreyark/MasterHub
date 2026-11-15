@@ -5,10 +5,32 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <!-- Mały stos (~50 MB): blokujący GC trwa kilka ms, a nie utrzymujemy dodatkowego wątku GC w tle. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <RetainVM>false</RetainVM>
+    <!-- PGO dokłada instrumentację JIT (CPU + pamięć) - dla aplikacji głównie bezczynnej to koszt bez zysku. -->
+    <TieredPGO>false</TieredPGO>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\MasterHub.Core\MasterHub.Core.csproj" />
+    <!-- masterhub-cli.exe (T-24) is built together with the app and placed next to it, so it shares the app's DLLs. -->
+    <ProjectReference Include="..\MasterHub.Cli\MasterHub.Cli.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Target Name="CopyCliNextToTheApp" AfterTargets="Build">
+    <PropertyGroup>
+      <CliOut>$(MSBuildThisFileDirectory)..\MasterHub.Cli\bin\$(Configuration)\$(TargetFramework)\</CliOut>
+    </PropertyGroup>
+    <ItemGroup>
+      <CliFiles Include="$(CliOut)masterhub-cli.exe;$(CliOut)masterhub-cli.dll;$(CliOut)masterhub-cli.pdb;$(CliOut)masterhub-cli.runtimeconfig.json;$(CliOut)masterhub-cli.deps.json" />
+    </ItemGroup>
+    <Copy SourceFiles="@(CliFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('$(CliOut)masterhub-cli.dll')" />
+  </Target>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="MasterHub.Avalonia.Tests" />
   </ItemGroup>
 
   <ItemGroup>
@@ -18,6 +40,6 @@
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
     <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.4" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0-preview.1.25080.5" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
   </ItemGroup>
 </Project>

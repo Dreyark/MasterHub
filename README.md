@@ -7,9 +7,9 @@
 [![Security](https://img.shields.io/badge/Security-Windows_DPAPI-00C853?style=for-the-badge)](docs/ARCHITECTURE.md#47-security--dpapi-encryption-secretprotectionservice)
 [![License](https://img.shields.io/badge/License-MIT-7928CA?style=for-the-badge)](LICENSE)
 
-An ultra-fast, native **C# (.NET 10 & Avalonia 12)** control deck and hardware driver interface for the **Cooler Master MasterHub** modular stream deck and productivity workstation.
+An independent, native **C# (.NET 10 & Avalonia 12)** control deck and hardware driver interface for the **Cooler Master MasterHub** modular stream deck and productivity workstation. This is an unofficial community project (see [Disclaimer](#-disclaimer)).
 
-Engineered from the ground up to replace the official Electron-based software with a lightning-quick native desktop application that consumes **<38 MB of RAM**, delivers **sub-millisecond input responsiveness**, and includes a comprehensive **stream deck action engine**, **WASAPI audio mixer**, and **deep hardware/software integrations**.
+A native desktop application written from the ground up (no Electron, no web view): a single process with a small memory footprint, a hardware driver layer talking USB HID directly, a **stream deck action engine**, a **WASAPI audio mixer** and **deep hardware/software integrations**.
 
 ---
 
@@ -21,15 +21,11 @@ Engineered from the ground up to replace the official Electron-based software wi
 
 ## ⚡ Why MasterHub .NET?
 
-| Metric | Official MasterHUB (Electron) | MasterHub .NET (Native Avalonia 12) | Improvement |
-| :--- | :---: | :---: | :---: |
-| **RAM Usage** | ~480 – 550 MB | **~32 – 38 MB** | **~93% Less RAM** |
-| **Input Latency** | 30 – 80 ms | **< 15 ms (~66Hz)** | **Zero noticeable lag** |
-| **Startup Time** | 4 – 8 seconds | **< 0.8 seconds** | **~85% Faster** |
-| **Process Count** | 5 – 7 Chrome/Node processes | **1 Single Native Process** | Clean task manager |
-| **Audio Mixing** | High CPU overhead | **Native WASAPI / CoreAudio** | Instant per-process volume |
-| **Hot-Plug Handling**| Often loses track of modules | **Instant seamless recovery** | Magnetic re-docking |
-| **Privacy & Security**| Cloud telemetry & plain configs | **100% Local & DPAPI Encrypted** | Zero telemetry |
+- **One native process**: no bundled browser engine (helper processes exist only for Stream Deck plugins you run). On the development PC it idles at roughly 30–40 MB of RAM and under 1 % CPU (figures are indicative and not part of an automated test).
+- **Direct USB HID**: pure Win32 HID transport with a dedicated ~15 ms polling thread; no vendor DLLs and no C++ runtimes.
+- **Per-app audio**: native WASAPI / CoreAudio session control for the faders.
+- **Robust hot-plugging**: modules can be docked and removed while the app runs.
+- **Private by design**: 100 % local, no telemetry, no account; secrets are encrypted with Windows DPAPI. Every outbound connection is listed in [PRIVACY.md](PRIVACY.md).
 
 ---
 
@@ -116,6 +112,19 @@ All modules connect magnetically to the MasterHub Base Dock and communicate via 
 ### 🎯 Smart Profiles & Workspace Management
 - **App-Aware Auto-Switching**: MasterHub detects the active foreground application and automatically activates matching profiles (e.g., automatically switches to Premiere profile when video editing, CS2 profile when gaming, or OBS profile when streaming).
 - **Unlimited Custom Profiles**: Create, clone, rename, and export profiles with ease.
+- **Automatic Backups & Safe Loading**: daily snapshots plus one before every delete, import or restore (Settings → Backups, newest 30 kept, optional OneDrive/Dropbox mirror folder). Unreadable profile files are set aside as `*.corrupt-<time>` instead of being overwritten.
+- **Command line (`masterhub-cli.exe`)**: built next to `MasterHub.exe`; talks to the *running* app over the local API (never to the deck directly). `status`, `profiles` (`*` active, `^` Home), `profile <name or id>` (a name that fits two profiles is refused, never guessed), `key <1-15> --label … --color #rrggbb [--action NAME --param …] [--clear] [--page N] [--profile NAME]` (a key without `--action` keeps what it does; keys are numbered left to right, top to bottom), `lights <rainbow | color #rrggbb | profile | off>` (until another profile is applied), `doctor`, and `--json` for `status` / `profiles`. Exit code 0 = done, 1 = not done with the reason printed; "MasterHub is not running" is exit 1 too. Example: a scheduled task that runs `masterhub-cli profile "Focus"`, or a build script that ends with `masterhub-cli key 15 --label "Build OK" --color #00aa00`.
+- **AI assistants (MCP)**: `masterhub-cli --mcp` is a Model Context Protocol server: an assistant can read profiles, change keys and set the lights. The limits (no arbitrary service calls, no scripts, closing things only on a hold) are enforced by the app, not by a prompt. See [docs/MCP.md](docs/MCP.md).
+- **Claude Code on the deck**: `masterhub-cli --claude-hook` (called by Claude Code hooks) shows whether a session is working, waiting for you or done: a key can change colour/label with a "When" rule or the `{status}` token, and the edge light pulses orange when something waits for you. Only the session id, the project folder name, the event and the tool name of a permission are sent, never prompts or paths. Other apps can push the same six states with `POST /api/state`. See [docs/CLAUDE_CODE_HOOKS.md](docs/CLAUDE_CODE_HOOKS.md).
+- **Local API**: a loopback-only HTTP API (`127.0.0.1`, per-install bearer token) lets scripts read state, activate profiles and edit keys; every write is validated all-or-nothing and snapshotted first.
+- **Setup Tour & Safe Previews**: on a new install the app offers a one-minute guided setup (one question, a look at your programs, a deck built from a ready-made profile). The result is a *draft*: it is shown on the deck and in the window without being saved, **the keys run nothing** (a press only says what it would do), and your own profile is never touched. Keep or drop each key, then *Keep* it as a profile or *Throw away*. A ready-made profile can also be tried for 20 seconds. A draft left by a crash is offered back at the next start. The tour can be run again from Settings.
+- **Assistant (opt-in)**: asked once, and **off until you say yes** (one switch in Settings turns all of it off). It makes *switched-off* profiles for programs it finds on this PC (OBS, Discord, Teams…) and for a game the first time it comes to the front, listed under "Ready for your apps" with a *Switch on* button; a profile you delete is never made again. It also counts how long each program is in front (one stretch counts at most 15 minutes) to suggest a profile for a program you use a lot, suggests a sketch when a new kind of module is connected for the first time and – only if you turn on press counting – points out a key that is never pressed. A suggestion only opens a preview you can keep or throw away, and each one is shown once. The numbers are kept in `usage.json` / `presses.json` next to your profiles, never sent anywhere, and can be deleted in Settings.
+- **Soundboard Keys**: a key plays a WAV, MP3, M4A, AAC, WMA or FLAC file on the Windows default device or on any playback device, including a virtual audio cable that feeds Discord or OBS. Choose per key how a second press behaves (play/stop, restart, overlap) and the volume (up to 200 %). The audio output is opened by the first sound and closed again after 30 s of silence. Sound file paths are never exported with a profile.
+- **Timer, Pomodoro & Stopwatch Keys**: a key can count down, run Pomodoro work/break phases with colour shifts, or time with splits. Press starts or pauses, hold resets, double-press adds a minute (a split on a stopwatch). A finished timer blinks red, timers keep running on other pages and profiles, and a small panel lists them with a Stop button.
+- **Conditional Looks**: a key can change colours or label while a condition holds (CPU/RAM/GPU load or temperature, music playing, microphone or speakers muted, a program in front, time of day). Rules are layers, metric rules do not flicker around their limit, and labels accept tokens such as `{cpu}`, `{time}` or `{song}`. Nothing is sampled unless a key on screen uses it.
+- **Icon Library**: 2 359 searchable [Lucide](https://lucide.dev) icons in any colour become the key picture; pictures fill the whole LCD key.
+- **Small Actions**: type text without the clipboard, seek with the player's own keys, volume and mute of the program in front, push-to-talk / push-to-mute, "Call a URL", knob and dial modes, deck brightness on a knob.
+- **Stream Deck plugin extras**: compatibility badge with plain reasons, CPU flag for busy plugins, Node.js resolved by the version a plugin needs (downloaded only after you agree, checksum verified), multi-state actions ([docs/STREAMDECK_COMPAT.md](docs/STREAMDECK_COMPAT.md)).
 
 ### 🔒 Security, Privacy & DPAPI Encryption
 - **100% Local & Private**: Zero cloud telemetry, zero remote tracking, zero analytics beacons.
@@ -178,6 +187,9 @@ flowchart TD
 
 ## 🚀 Getting Started
 
+### Download
+A ready-to-run Windows build (self-contained, no .NET needed) is attached to every [release](https://github.com/Dreyark/MasterHub/releases): unzip it and start `MasterHub.Avalonia.exe`. The zip comes with a SHA-256 file. Releases below 1.0 are pre-releases.
+
 ### Prerequisites
 - **Windows 10 / 11 (x64)**
 - [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
@@ -187,7 +199,7 @@ flowchart TD
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-username/MasterHub.git
+   git clone https://github.com/Dreyark/MasterHub.git
    cd MasterHub
    ```
 
@@ -196,7 +208,12 @@ flowchart TD
    dotnet build MasterHub.slnx --nologo
    ```
 
-3. Run the application:
+3. Run the unit tests (no hardware required):
+   ```bash
+   dotnet test MasterHub.slnx --nologo
+   ```
+
+4. Run the application:
    ```bash
    dotnet run --project src/MasterHub.Avalonia
    ```
@@ -208,7 +225,9 @@ flowchart TD
 - [AI Context & Technical Guidelines](AI_CONTEXT.md) — Single source of truth for AI agents and developers: constraints, coding rules (<150 lines per UI file), and architectural map.
 - [Architecture & Design Details](docs/ARCHITECTURE.md) — Multi-threaded hardware polling, MVVM design, Stream Deck plugin runtime, audio subsystem, DPAPI encryption, and hot-plug handling.
 - [Hardware Protocol Reference](docs/HARDWARE_PROTOCOL.md) — Reverse-engineered USB HID protocol specifications, device IDs, buffer layouts, dynamic acceleration, and display packet structures.
-- [Product Roadmap](docs/ROADMAP.md) — Completed milestones, architecture overview, and future feature blueprints.
+- [Changelog](CHANGELOG.md), [Privacy](PRIVACY.md) (every outbound connection), [Security](SECURITY.md), [Third-party notices](NOTICE.md), [Contributing](CONTRIBUTING.md).
+- [Claude Code hooks & status contract](docs/CLAUDE_CODE_HOOKS.md)
+- [Product Roadmap](docs/ROADMAP.md) — Completed milestones, architecture overview, feature backlog and future blueprints.
 
 ---
 
@@ -233,6 +252,7 @@ flowchart TD
 - [x] Direct Multi-Engine Telemetry (DXGI, NVML, AMD ADL2, PDH, and RTSS 3D gaming FPS counter)
 - [x] Windows native high-resolution app icon extraction (`PrivateExtractIconsW` / `SHDefExtractIconW`)
 - [x] Windows Virtual Desktops (Next, Prev, Create, Close) & Desktop Tools (Win+Tab, Win+D, Win+V)
+- [x] Mouse & keyboard macros (record, edit, bind to mouse side buttons / keys / deck keys; Synapse-style software macros)
 - [x] Rotational dial control for Volume, Wheel scroll, and Track skip
 - [x] Universal Razer mouse hardware driver (DPI stages, Polling Rate, Profiles, Battery)
 - [x] Native Wooting analog keyboard driver (ARM V3 HID, Profiles 0..3 switching)
@@ -252,6 +272,12 @@ flowchart TD
 - [x] Windows DPAPI hardware-backed encryption for all stored secrets (`enc:v1:`)
 - [x] Full runtime multilanguage support (PL, EN, DE, ES, FR, JA)
 - [x] Modern Avalonia 12 desktop presentation layer
+
+---
+
+## 📌 Disclaimer
+
+MasterHub .NET is an independent project. It is **not affiliated with, endorsed by or supported by** Cooler Master, Elgato / Corsair, Razer, Wooting or any other company named in this repository. Product and company names are trademarks™ or registered® trademarks of their respective owners and are used only to say which hardware and services the software works with. The USB protocol notes in [docs/HARDWARE_PROTOCOL.md](docs/HARDWARE_PROTOCOL.md) come from observing the hardware's behaviour; the software is provided "as is" (see the licence) and you use it with your own devices at your own risk.
 
 ---
 

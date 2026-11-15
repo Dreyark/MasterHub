@@ -1,0 +1,88 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Controls.TourView"
+             x:DataType="vm:TourViewModel"
+             IsVisible="{Binding IsOpen}">
+    <!-- Kreator pierwszego uruchomienia (T-08): pokaż, potem zapytaj, potem zbuduj. Karta nie zasłania decka – widać szkic. -->
+    <Border Classes="callout floating" Padding="16" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="16" Width="430">
+        <StackPanel Spacing="10">
+
+            <!-- 0: powitanie -->
+            <StackPanel Spacing="8" IsVisible="{Binding IsWelcome}">
+                <TextBlock Text="{loc:Loc Tour_WelcomeTitle}" Classes="h3" TextWrapping="Wrap" />
+                <TextBlock Text="{loc:Loc Tour_WelcomeText}" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="accentBtn" Content="{loc:Loc Tour_Start}" Command="{Binding StartCommand}" />
+                    <Button Classes="actionBtn" Content="{loc:Loc Tour_NotNow}" Command="{Binding SkipCommand}" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- 1: pytanie -->
+            <StackPanel Spacing="8" IsVisible="{Binding IsFocus}">
+                <TextBlock Text="{loc:Loc Tour_QuestionTitle}" Classes="h3" TextWrapping="Wrap" />
+                <ListBox ItemsSource="{Binding Foci}" SelectedItem="{Binding SelectedFocus, Mode=TwoWay}" MaxHeight="260">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:TourFocusOption">
+                            <StackPanel Spacing="1" Margin="0,2">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                    <TextBlock Text="{loc:Loc Tour_Suggested}" IsVisible="{Binding IsSuggested}" Classes="dim" FontSize="10.5" VerticalAlignment="Center"
+                                               Foreground="{StaticResource AccentSuccessBrush}" />
+                                </StackPanel>
+                                <TextBlock Text="{Binding Description}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="accentBtn" Content="{loc:Loc Tour_Next}" Command="{Binding NextCommand}" />
+                    <Button Classes="actionBtn" Content="{loc:Loc Tour_Skip}" Command="{Binding SkipCommand}" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- 2: co aplikacja widzi -->
+            <StackPanel Spacing="8" IsVisible="{Binding IsLooking}">
+                <TextBlock Text="{loc:Loc Tour_LookingTitle}" Classes="h3" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding DetectionText}" TextWrapping="Wrap" />
+                <StackPanel IsVisible="{Binding HasNoticed}" Spacing="2">
+                    <TextBlock Text="{loc:Loc Tour_Noticed}" Classes="caption" />
+                    <TextBlock Text="{Binding NoticedText}" TextWrapping="Wrap" />
+                </StackPanel>
+                <TextBlock Text="{loc:Loc Tour_LookingHint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="accentBtn" Content="{loc:Loc Tour_Build}" Command="{Binding BuildCommand}" />
+                    <Button Classes="actionBtn" Content="{loc:Loc Tour_Back}" Command="{Binding BackCommand}" />
+                </StackPanel>
+            </StackPanel>
+
+            <!-- 3: szkic na decku – zostaw / odrzuć każdą część -->
+            <StackPanel Spacing="8" IsVisible="{Binding IsCompose}">
+                <TextBlock Text="{loc:Loc Tour_ComposeTitle}" Classes="h3" TextWrapping="Wrap" />
+                <TextBlock Text="{loc:Loc Tour_ComposeText}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+                <ScrollViewer MaxHeight="230">
+                    <ItemsControl ItemsSource="{Binding Parts}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:TourPartViewModel">
+                                <CheckBox IsChecked="{Binding Included, Mode=TwoWay}" Margin="0,1">
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <TextBlock Text="{Binding KeyText}" Classes="dim" Width="18" />
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding Action}" Classes="dim" FontSize="10.5" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </CheckBox>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+                <CheckBox IsChecked="{Binding LinkApps, Mode=TwoWay}" Content="{loc:Loc Tour_LinkApps}" FontSize="12" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="accentBtn" Content="{loc:Loc Draft_Keep}" Command="{Binding KeepCommand}" />
+                    <Button Classes="actionBtn" Content="{loc:Loc Tour_Back}" Command="{Binding BackCommand}" />
+                    <Button Classes="actionBtn" Content="{loc:Loc Draft_Discard}" Command="{Binding CancelCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

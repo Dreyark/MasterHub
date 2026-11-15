@@ -16,6 +16,7 @@ public enum DeckActionType
     TaskManager = 11,   // 📊 Menedżer zadań
     Calculator = 12,    // 🧮 Kalkulator
     Browser = 13,       // 🌐 Przeglądarka
+    AudioOutputSwitch = 14, // 🎧 Przełącz urządzenie audio (wyjście lub mikrofon) A ⇄ B
 
     // --- ETAP 1: URUCHAMIANIE APLIKACJI I PLIKÓW ---
     OpenApplication = 20,   // 🚀 Uruchom aplikację (.exe / .lnk / ścieżka)
@@ -226,11 +227,45 @@ public enum DeckActionType
     // --- INTEGRACJA WTYCZEK ELGATO STREAM DECK (.streamDeckPlugin) ---
     StreamDeckPluginAction = 240,     // 🧩 Oficjalna wtyczka Elgato Stream Deck
 
+    // --- MAKRA MYSZY / KLAWIATURY (jak w Razer Synapse, programowo) ---
+    MacroPlay = 260,                  // 🎬 Uruchom makro (ActionParameter = Id makra)
+
     // --- INTEGRACJA SMART HOME: HOME ASSISTANT (CMD-07) ---
     HomeAssistantToggle = 250,        // 🏠 Home Assistant: Przełącz stan encji (Toggle light/switch)
     HomeAssistantTurnOn = 251,        // 💡 Home Assistant: Włącz encję (Turn On)
     HomeAssistantTurnOff = 252,       // 🔌 Home Assistant: Wyłącz encję (Turn Off)
-    HomeAssistantCallService = 253    // ⚙️ Home Assistant: Wywołaj usługę (Call Service domain.service)
+    HomeAssistantCallService = 253,   // ⚙️ Home Assistant: Wywołaj usługę (Call Service domain.service)
+
+    // --- WARTOŚĆ NA ŻYWO (T-11): web / pogoda / kalendarz / Home Assistant / polecenie ---
+    LiveValue = 270,                  // 📈 Wartość na żywo (źródło w LiveValueSettings klucza)
+
+    // --- TIMERY (T-13): odliczanie / Pomodoro / stoper; ustawienia w TimerSettings klucza ---
+    TimerCountdown = 280,             // ⏱ Odliczanie
+    TimerPomodoro = 281,              // 🍅 Pomodoro (praca / przerwa)
+    TimerStopwatch = 282,             // ⏲ Stoper
+    // Polecenia timera tego samego klawisza – do przypięcia pod Hold / Double (T-05)
+    TimerStartPause = 283,            // ⏯ Start / pauza timera klawisza
+    TimerReset = 284,                 // ⏮ Reset timera klawisza
+    TimerAddMinute = 285,             // ➕ +1 minuta (drzemka po dzwonku)
+    TimerSplit = 286,                 // 🏁 Międzyczas stopera
+
+    // --- SOUNDBOARD (T-14): plik dźwiękowy odtwarzany przez aplikację na wybranym urządzeniu ---
+    SoundPlay = 290,                  // 🔊 Odtwórz dźwięk (SoundSettings klucza)
+    SoundStopAll = 291,               // 🔇 Zatrzymaj wszystkie dźwięki soundboardu
+
+    // --- JASNOŚĆ DECKA (T-17): ten sam suwak co w Ustawieniach, nigdy poniżej 1 ---
+    DeckBrightnessUp = 295,           // 🔆 Jaśniej (ActionParameter = krok w %, domyślnie 10)
+    DeckBrightnessDown = 296,         // 🔅 Ciemniej
+    DeckBrightnessCycle = 297,        // 🌓 Kolejne poziomy 100 → 75 → 50 → 25 → 10 → 100
+
+    // --- MAŁE AKCJE (T-17 c–j) ---
+    MediaSeekForward = 300,           // ⏩ Przewiń do przodu skrótem odtwarzacza na wierzchu (VLC, YouTube, Spotify…)
+    MediaSeekBackward = 301,          // ⏪ Przewiń do tyłu
+    TypeText = 302,                   // ⌨️ Wpisz tekst bez użycia schowka (znak po znaku, Unicode)
+    ForegroundAppVolumeUp = 303,      // 🔊 Głośniej: program na wierzchu (ActionParameter = krok w %, domyślnie 5)
+    ForegroundAppVolumeDown = 304,    // 🔉 Ciszej: program na wierzchu
+    ForegroundAppMute = 305,          // 🔇 Wycisz / odcisz program na wierzchu
+    HttpRequest = 306                 // 🌐 Wywołaj adres URL (GET/POST… URL | treść)
 }
 
 public enum RollerActionType
@@ -245,5 +280,9 @@ public enum RollerActionType
     RazerPollingRateCycle = 7, // ⚡ Rolka: Zmiana częstotliwości Hz myszki (▲ Wyższa / ▼ Niższa)
     WootingProfileCycle = 8,   // ⌨️ Rolka: Przełączanie profili klawiatury Wooting (▲ Następny / ▼ Poprzedni)
     HomeAssistantLightBrightness = 10, // 💡 Rolka: Regulacja jasności oświetlenia Home Assistant (0..255)
+    DeckBrightness = 11,       // 🔆 Jasność decka (T-17 a; nigdy poniżej 1)
+    ForegroundAppVolume = 12,  // 🔊 Głośność programu na wierzchu (T-17 d)
+    MediaSeek = 13,            // ⏩ Przewijanie skrótami odtwarzacza na wierzchu (T-17 e)
+    Modes = 14,                // 🔁 Tryby: 2–4 zadania obrotu, naciśnięcie przełącza (T-17 i)
     WindowsSensitivity = 99    // Zachowane dla kompatybilności wstecznej
 }

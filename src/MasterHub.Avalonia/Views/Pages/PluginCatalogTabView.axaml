@@ -16,8 +16,8 @@
                       SelectedItem="{Binding SelectedCategory, Mode=TwoWay}"
                       Width="160" VerticalAlignment="Center" Margin="0,0,12,0" />
 
-            <Button Grid.Column="2" Command="{Binding LoadCatalogCommand}" CommandParameter="{x:True}"
-                    Content="🔄 Odśwież" VerticalAlignment="Center" />
+            <Button Classes="actionBtn" Grid.Column="2" Command="{Binding LoadCatalogCommand}" CommandParameter="{x:True}"
+                    Content="{loc:Loc SD_Refresh}" VerticalAlignment="Center" />
         </Grid>
 
         <!-- Pasek stanu i postępu -->
@@ -34,13 +34,12 @@
                         <Border Classes="glassCard" Margin="0,0,0,10" Padding="14">
                             <Grid ColumnDefinitions="Auto,*,Auto">
                                 <!-- Ikona wtyczki -->
-                                <Border Grid.Column="0" Width="44" Height="44" CornerRadius="8" Background="#1C2030" Margin="0,0,14,0" ClipToBounds="True">
+                                <Border Grid.Column="0" Width="44" Height="44" CornerRadius="8" Background="{StaticResource InsetBgBrush}" Margin="0,0,14,0" ClipToBounds="True">
                                     <Panel>
                                         <Image Source="{Binding IconBitmap}" Width="36" Height="36"
                                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                                IsVisible="{Binding IconBitmap, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                                        <TextBlock Text="🔌" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                                   IsVisible="{Binding IconBitmap, Converter={x:Static ObjectConverters.IsNull}}" />
+                                        <PathIcon Data="{StaticResource IconPlug}" Width="22" Height="22" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding IconBitmap, Converter={x:Static ObjectConverters.IsNull}}" />
                                     </Panel>
                                 </Border>
 
@@ -48,25 +47,27 @@
                                 <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
                                     <StackPanel Orientation="Horizontal" Spacing="8">
                                         <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" />
-                                        <Border Background="#252A40" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Category}" FontSize="9" Foreground="{StaticResource AccentPrimaryBrush}" FontWeight="SemiBold" />
+                                        <Border Background="{StaticResource InsetBgBrush}" CornerRadius="4" Padding="6,2" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Category}" FontSize="10.5" Foreground="{StaticResource AccentPrimaryBrush}" FontWeight="SemiBold" />
                                         </Border>
-                                        <TextBlock Text="{Binding StarsDisplay}" FontSize="10" Foreground="#F6AD55" VerticalAlignment="Center" />
-                                        <TextBlock Text="🎛️ Dials" FontSize="10" Foreground="#68D391" VerticalAlignment="Center" IsVisible="{Binding HasDial}" />
+                                        <TextBlock Text="{Binding StarsDisplay}" FontSize="10.5" Foreground="{StaticResource AccentCautionBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{loc:Loc SD_DialsBadge}" FontSize="10.5" Foreground="{StaticResource AccentSuccessBrush}" VerticalAlignment="Center" IsVisible="{Binding HasDial}" />
                                     </StackPanel>
                                     <TextBlock Text="{Binding Description}" Classes="dim" FontSize="11" TextWrapping="Wrap" MaxLines="2" />
-                                    <TextBlock Text="{Binding Author, StringFormat='Autor: {0}'}" Classes="dim" FontSize="10" />
+                                    <StackPanel Orientation="Horizontal" Spacing="4"><TextBlock Text="{loc:Loc SD_AuthorLabel}" Classes="dim" FontSize="10.5" /><TextBlock Text="{Binding Author}" Classes="dim" FontSize="10.5" /></StackPanel>
+                                    <Border Classes="statusBadgeCard" Padding="7,1" HorizontalAlignment="Left" IsVisible="{Binding HasCompatBadge}">
+                                        <TextBlock Text="{Binding CompatBadge}" Classes="badge" />
+                                    </Border>
                                 </StackPanel>
 
                                 <!-- Przycisk instalacji -->
-                                <Button Grid.Column="2" VerticalAlignment="Center" Margin="14,0,0,0"
-                                        Command="{Binding $parent[UserControl].((vm:PluginCatalogViewModel)DataContext).InstallPluginCommand}"
-                                        CommandParameter="{Binding}"
+                                <Button Classes="actionBtn" Grid.Column="2" VerticalAlignment="Center" Margin="14,0,0,0"
+                                        Command="{Binding InstallCommand}"
                                         IsEnabled="{Binding !IsInstalled}">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <TextBlock Text="{Binding IsInstalled, Converter={x:Static ObjectConverters.IsNotNull}}" IsVisible="False" />
-                                        <TextBlock Text="📥" IsVisible="{Binding !IsInstalled}" />
-                                        <TextBlock Text="✔️" IsVisible="{Binding IsInstalled}" />
+                                        <PathIcon Data="{StaticResource IconDownload}" Width="14" Height="14" IsVisible="{Binding !IsInstalled}" />
+                                        <PathIcon Data="{StaticResource IconCheck}" Width="14" Height="14" IsVisible="{Binding IsInstalled}" />
                                         <TextBlock Text="{Binding ButtonText}" FontWeight="SemiBold" />
                                     </StackPanel>
                                 </Button>

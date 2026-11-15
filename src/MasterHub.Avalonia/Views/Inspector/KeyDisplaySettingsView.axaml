@@ -7,26 +7,7 @@
              x:DataType="vm:KeyItemViewModel">
 
     <StackPanel Spacing="10">
-        <!-- Przełącznik Stanu: Stan 1 (Wyłączony/Domyślny) vs Stan 2 (Włączony/Aktywny) -->
-        <Grid ColumnDefinitions="*,*">
-            <Button Grid.Column="0" Classes="pillBtn" Classes.active="{Binding IsEditStateDefault}"
-                    Command="{Binding SetEditStateCommand}" CommandParameter="0"
-                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="0,0,3,0"
-                    Content="{loc:Loc Key_StateDefault}" ToolTip.Tip="{loc:Loc Key_StateTip}" />
-            <Button Grid.Column="1" Classes="pillBtn" Classes.active="{Binding IsEditStateActive}"
-                    Command="{Binding SetEditStateCommand}" CommandParameter="1"
-                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center" Margin="3,0,0,0"
-                    Content="{loc:Loc Key_StateActive}" ToolTip.Tip="{loc:Loc Key_StateTip}" />
-        </Grid>
-
-        <!-- Tytuł kafelka z wyborem koloru tekstu -->
-        <StackPanel Spacing="4">
-            <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Grid.Column="0" Text="{loc:Loc Key_TitleMain}" Classes="caption" VerticalAlignment="Center" />
-                <ColorPicker Grid.Column="1" Color="{Binding CurrentEditTitleColor, Mode=TwoWay}" IsAlphaEnabled="False" ToolTip.Tip="{loc:Loc Key_TitleColorTip}" />
-            </Grid>
-            <TextBox Text="{Binding CurrentEditTitle}" PlaceholderText="{loc:Loc Key_TitlePlaceholder}" />
-        </StackPanel>
+        <ins:KeyStateSwitchView />
 
         <!-- Galeria ikon / symboli na LCD -->
         <StackPanel Spacing="5">
@@ -48,10 +29,8 @@
                                                         </ItemsControl.ItemsPanel>
                                                         <ItemsControl.ItemTemplate>
                                                             <DataTemplate x:DataType="vm:KeyItemViewModel+IconPreset">
-                                                                <Button Width="30" Height="30" Margin="2" CornerRadius="6" Padding="0"
-                                                                        Background="{StaticResource CardActiveBgBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
-                                                                        Command="{Binding $parent[UserControl].((vm:KeyItemViewModel)DataContext).SetPresetIconCommand}"
-                                                                        CommandParameter="{Binding Glyph}" ToolTip.Tip="{Binding Label}" Cursor="Hand">
+                                                                <Button Classes="glyphBtn" Width="30" Height="30" Margin="2"
+                                                                        Tag="{Binding Glyph}" Click="OnPresetIconClick" ToolTip.Tip="{Binding Label}" Cursor="Hand">
                                                                     <TextBlock Text="{Binding Glyph}" FontSize="13" HorizontalAlignment="Center" VerticalAlignment="Center" />
                                                                 </Button>
                                                             </DataTemplate>
@@ -74,28 +53,14 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate x:DataType="vm:KeyItemViewModel+IconPreset">
-                        <Button Width="28" Height="28" Margin="2" CornerRadius="6" Padding="0"
-                                Background="{StaticResource CardActiveBgBrush}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
-                                Command="{Binding $parent[UserControl].((vm:KeyItemViewModel)DataContext).SetPresetIconCommand}"
-                                CommandParameter="{Binding Glyph}" ToolTip.Tip="{Binding Label}" Cursor="Hand">
+                        <Button Classes="glyphBtn" Width="28" Height="28" Margin="2"
+                                Tag="{Binding Glyph}" Click="OnPresetIconClick" ToolTip.Tip="{Binding Label}" Cursor="Hand">
                             <TextBlock Text="{Binding Glyph}" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Button>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </StackPanel>
-
-        <!-- Podtytuł kafelka z wyborem koloru podtytułu -->
-        <StackPanel Spacing="4">
-            <Grid ColumnDefinitions="*,Auto">
-                <TextBlock Grid.Column="0" Text="{loc:Loc Key_SubtitleMain}" Classes="caption" VerticalAlignment="Center" />
-                <ColorPicker Grid.Column="1" Color="{Binding CurrentEditSubtitleColor, Mode=TwoWay}" IsAlphaEnabled="False" ToolTip.Tip="{loc:Loc Key_SubtitleColorTip}" />
-            </Grid>
-            <TextBox Text="{Binding CurrentEditSubtitle}" PlaceholderText="{Binding SubtitleWatermark, FallbackValue='Wpisz podtytuł...'}" />
-        </StackPanel>
-
-        <!-- Typografia klawisza: Font, Rozmiar, Bold, Italic, Strikethrough -->
-        <ins:KeyTypographySettingsView />
 
         <!-- Paleta koloru tła kafelka -->
         <StackPanel Spacing="5" Margin="0,2,0,0">
@@ -109,7 +74,7 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Button Width="22" Height="22" Margin="2" CornerRadius="11" Padding="0"
+                        <Button Classes="swatchBtn" Width="22" Height="22" Margin="2" CornerRadius="11" Padding="0"
                                 Background="{Binding Hex}" Tag="{Binding Hex}" Click="OnPresetBgColorClick"
                                 BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
                                 ToolTip.Tip="{Binding Name}" Cursor="Hand" />
@@ -121,19 +86,28 @@
         <!-- Własna grafika / Obrazek z dysku -->
         <StackPanel Spacing="4" Margin="0,2,0,0">
             <TextBlock Text="{loc:Loc Key_CustomImageLabel}" Classes="caption" />
-            <Grid ColumnDefinitions="*,Auto,Auto">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                 <TextBlock Grid.Column="0" Text="{Binding CurrentEditImageFileName}" TextTrimming="CharacterEllipsis" Classes="dim" VerticalAlignment="Center" />
-                <Button Grid.Column="1" Classes="pillBtn" Content="{loc:Loc Key_UploadImage}" Click="OnBrowseImageClick" Margin="0,0,4,0" />
-                <Button Grid.Column="2" Classes="pillBtn" Content="{loc:Loc Key_RemoveImage}" Click="OnClearImageClick" IsVisible="{Binding HasCurrentEditImage}" />
+                <!-- Biblioteka ikon (T-21a): ikona w wybranym kolorze staje się obrazem klawisza -->
+                <Button Grid.Column="1" Classes="pillBtn" Content="{loc:Loc IconLib_Open}" Margin="0,0,4,0"
+                        ToolTip.Tip="{loc:Loc IconLib_OpenTip}">
+                    <Button.Flyout>
+                        <Flyout Placement="LeftEdgeAlignedTop" Opening="OnIconLibraryOpening">
+                            <Border Background="{StaticResource PanelBgBrush}" CornerRadius="12" Padding="12">
+                                <ins:IconLibraryPickerView DataContext="{x:Null}" />
+                            </Border>
+                        </Flyout>
+                    </Button.Flyout>
+                </Button>
+                <Button Grid.Column="2" Classes="pillBtn" Content="{loc:Loc Key_UploadImage}" Click="OnBrowseImageClick" Margin="0,0,4,0" />
+                <Button Grid.Column="3" Classes="pillBtn" Content="{loc:Loc Key_RemoveImage}" Click="OnClearImageClick" IsVisible="{Binding HasCurrentEditImage}" />
             </Grid>
-            <TextBlock Text="{Binding MediaValidationMessage}" Foreground="#EF4444" FontSize="11" TextWrapping="Wrap"
+            <TextBlock Text="{Binding MediaValidationMessage}" Foreground="{StaticResource AccentWarningBrush}" FontSize="11" TextWrapping="Wrap"
                        IsVisible="{Binding HasMediaValidationMessage}" Margin="0,2,0,0" />
         </StackPanel>
 
         <!-- Dopasowanie i kadrowanie mediów (Zoom, Pan, Fit Mode) -->
         <ins:KeyMediaTransformView IsVisible="{Binding HasCurrentEditImage}" />
 
-        <!-- Tapeta panoramiczna rozciągnięta na wszystkie 15 klawiszy LCD (480x272) -->
-        <ins:KeyPanoramicSettingsSectionView />
     </StackPanel>
 </UserControl>

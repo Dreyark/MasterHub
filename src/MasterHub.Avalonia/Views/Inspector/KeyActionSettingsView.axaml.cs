@@ -37,42 +37,50 @@ public partial class KeyActionSettingsView : UserControl
 
     private async void OnBrowseFileClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
     {
-        if (DataContext is MasterHub.Avalonia.ViewModels.KeyItemViewModel vm)
+        try
         {
-            var topLevel = TopLevel.GetTopLevel(this);
-            if (topLevel != null)
+            if (DataContext is MasterHub.Avalonia.ViewModels.KeyItemViewModel vm)
             {
-                var files = await topLevel.StorageProvider.OpenFilePickerAsync(new global::Avalonia.Platform.Storage.FilePickerOpenOptions
+                var topLevel = TopLevel.GetTopLevel(this);
+                if (topLevel != null)
                 {
-                    Title = "Wybierz plik lub aplikację",
-                    AllowMultiple = false
-                });
-                if (files.Count > 0)
-                {
-                    vm.ActionParameter = files[0].Path.LocalPath;
-                    vm.AutoExtractIconIfApplicable();
+                    var files = await topLevel.StorageProvider.OpenFilePickerAsync(new global::Avalonia.Platform.Storage.FilePickerOpenOptions
+                    {
+                        Title = "Wybierz plik lub aplikację",
+                        AllowMultiple = false
+                    });
+                    if (files.Count > 0)
+                    {
+                        vm.ActionParameter = files[0].Path.LocalPath;
+                        vm.AutoExtractIconIfApplicable();
+                    }
                 }
             }
         }
+        catch { }
     }
 
     private async void OnBrowseFolderClick(object? sender, global::Avalonia.Interactivity.RoutedEventArgs e)
     {
-        if (DataContext is MasterHub.Avalonia.ViewModels.KeyItemViewModel vm)
+        try
         {
-            var topLevel = TopLevel.GetTopLevel(this);
-            if (topLevel != null)
+            if (DataContext is MasterHub.Avalonia.ViewModels.KeyItemViewModel vm)
             {
-                var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new global::Avalonia.Platform.Storage.FolderPickerOpenOptions
+                var topLevel = TopLevel.GetTopLevel(this);
+                if (topLevel != null)
                 {
-                    Title = "Wybierz folder z dysku",
-                    AllowMultiple = false
-                });
-                if (folders.Count > 0)
-                {
-                    vm.ActionParameter = folders[0].Path.LocalPath;
+                    var folders = await topLevel.StorageProvider.OpenFolderPickerAsync(new global::Avalonia.Platform.Storage.FolderPickerOpenOptions
+                    {
+                        Title = "Wybierz folder z dysku",
+                        AllowMultiple = false
+                    });
+                    if (folders.Count > 0)
+                    {
+                        vm.ActionParameter = folders[0].Path.LocalPath;
+                    }
                 }
             }
         }
+        catch { }
     }
 }

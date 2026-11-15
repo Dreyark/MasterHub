@@ -1,0 +1,112 @@
+{
+  "id": "obs-streaming",
+  "version": 1,
+  "ledColor": "#38BDF8",
+  "exes": [
+    "obs64"
+  ],
+  "name": {
+    "en": "OBS streaming",
+    "pl": "Streaming w OBS",
+    "de": "OBS-Streaming"
+  },
+  "description": {
+    "en": "Go live, record, switch scenes, replay buffer, studio mode and Twitch clips. Rename the three scene keys to your own scenes.",
+    "pl": "Start transmisji, nagrywanie, sceny, bufor powtórek, tryb studia i klipy Twitch. Zmień nazwy trzech klawiszy scen na własne sceny."
+  },
+  "keys": [
+    {
+      "index": 0,
+      "action": "ObsToggleStream",
+      "title": "STREAM",
+      "background": "#2E2538"
+    },
+    {
+      "index": 1,
+      "action": "ObsToggleRecord",
+      "title": "RECORD",
+      "background": "#2E2538"
+    },
+    {
+      "index": 2,
+      "action": "ObsToggleVirtualCam",
+      "title": "VCAM",
+      "background": "#2E2538"
+    },
+    {
+      "index": 3,
+      "action": "ObsSaveReplayBuffer",
+      "title": "REPLAY",
+      "background": "#2E2538"
+    },
+    {
+      "index": 4,
+      "action": "ObsStudioModeToggle",
+      "title": "STUDIO",
+      "background": "#262A40"
+    },
+    {
+      "index": 5,
+      "action": "ObsTriggerTransition",
+      "title": "CUT",
+      "background": "#262A40"
+    },
+    {
+      "index": 6,
+      "action": "ObsSceneSwitch",
+      "title": "SCENE 1",
+      "background": "#1B2A3D",
+      "parameter": "Scene 1"
+    },
+    {
+      "index": 7,
+      "action": "ObsSceneSwitch",
+      "title": "SCENE 2",
+      "background": "#1B2A3D",
+      "parameter": "Scene 2"
+    },
+    {
+      "index": 8,
+      "action": "ObsSceneSwitch",
+      "title": "SCENE 3",
+      "background": "#1B2A3D",
+      "parameter": "Scene 3"
+    },
+    {
+      "index": 9,
+      "action": "MicMute",
+      "title": "MIC",
+      "background": "#1F3A2E"
+    },
+    {
+      "index": 10,
+      "action": "MasterMute",
+      "title": "MUTE",
+      "background": "#1F3A2E"
+    },
+    {
+      "index": 11,
+      "action": "TwitchCreateClip",
+      "title": "CLIP",
+      "background": "#3A2D1E"
+    },
+    {
+      "index": 12,
+      "action": "TwitchCreateMarker",
+      "title": "MARKER",
+      "background": "#3A2D1E"
+    },
+    {
+      "index": 13,
+      "action": "VolumeDown",
+      "title": "VOL -",
+      "background": "#2A2A3A"
+    },
+    {
+      "index": 14,
+      "action": "VolumeUp",
+      "title": "VOL +",
+      "background": "#2A2A3A"
+    }
+  ]
+}

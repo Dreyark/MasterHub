@@ -16,6 +16,7 @@ namespace MasterHub.Core.Integrations.StreamDeck;
 /// </summary>
 public sealed class StreamDeckWebSocketServer : IDisposable
 {
+    private const long MaxMessageBytes = 32L * 1024 * 1024;
     private readonly HttpListener _listener = new();
     private readonly ConcurrentDictionary<string, WebSocket> _pluginSockets = new();
     private readonly ConcurrentDictionary<string, WebSocket> _piSockets = new();
@@ -142,6 +143,18 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                 }
                 if (context.Request.IsWebSocketRequest)
                 {
+                    // Ochrona przed Cross-Site WebSocket Hijacking: zewnętrzna strona WWW otwarta w przeglądarce
+                    // użytkownika nie może podszyć się pod wtyczkę ani Property Inspector.
+                    if (!IsTrustedOrigin(context.Request.Headers["Origin"]))
+                    {
+                        try
+                        {
+                            context.Response.StatusCode = 403;
+                            context.Response.Close();
+                        }
+                        catch { }
+                        continue;
+                    }
                     _ = ProcessWebSocketRequestAsync(context);
                 }
                 else
@@ -153,6 +166,17 @@ public sealed class StreamDeckWebSocketServer : IDisposable
             catch (ObjectDisposedException) { break; }
             catch { }
         }
+    }
+
+    /// <summary>
+    /// Klienci natywni (Node.js "ws", binarki) nie wysyłają nagłówka Origin. Runnery HTML i Property Inspectory są
+    /// serwowane przez ten serwer po http://127.0.0.1, więc ich Origin to loopback. Origin "null" (piaskownica iframe,
+    /// data: URL) wysyła obca strona WWW, więc jak każdy inny Origin jest odrzucany.
+    /// </summary>
+    internal static bool IsTrustedOrigin(string? origin)
+    {
+        if (string.IsNullOrWhiteSpace(origin)) return true;
+        return Uri.TryCreate(origin, UriKind.Absolute, out var uri) && uri.IsLoopback;
     }
 
     private async Task ProcessHttpRequestAsync(HttpListenerContext httpContext)
@@ -187,8 +211,9 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                     if (!string.IsNullOrEmpty(pluginFolder) && Directory.Exists(pluginFolder))
                     {
                         string fullPath = Path.GetFullPath(Path.Combine(pluginFolder, relPath));
-                        string fullPluginFolder = Path.GetFullPath(pluginFolder);
+                        string fullPluginFolder = Path.GetFullPath(pluginFolder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
 
+                        // Separator na końcu zapobiega dopasowaniu sąsiedniego katalogu o tym samym prefiksie nazwy.
                         if (fullPath.StartsWith(fullPluginFolder, StringComparison.OrdinalIgnoreCase) && File.Exists(fullPath))
                         {
                             string ext = Path.GetExtension(fullPath).ToLowerInvariant();
@@ -387,6 +412,12 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                         return;
                     }
                     ms.Write(buffer, 0, result.Count);
+                    if (ms.Length > MaxMessageBytes)
+                    {
+                        // Ochrona pamięci przed nieskończenie długą wiadomością.
+                        await webSocket.CloseAsync(WebSocketCloseStatus.MessageTooBig, "Message too large", CancellationToken.None).ConfigureAwait(false);
+                        return;
+                    }
                 }
                 while (!result.EndOfMessage);
 
@@ -455,7 +486,7 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                                 try
                                 {
                                     if (oldPi.State == WebSocketState.Open)
-                                        oldPi.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Replaced", CancellationToken.None).GetAwaiter().GetResult();
+                                        _ = oldPi.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Replaced", CancellationToken.None);
                                 }
                                 catch { }
                                 try { oldPi.Dispose(); } catch { }
@@ -480,7 +511,7 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                                 try
                                 {
                                     if (oldPl.State == WebSocketState.Open)
-                                        oldPl.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Replaced", CancellationToken.None).GetAwaiter().GetResult();
+                                        _ = oldPl.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Replaced", CancellationToken.None);
                                 }
                                 catch { }
                                 try { oldPl.Dispose(); } catch { }
@@ -585,6 +616,14 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                                     }
                                 };
                                 _ = SendEventAsync(plUuid, didRecv);
+
+                                foreach (var (ctxKey, piSocket) in _piSockets)
+                                {
+                                    if (ctxKey == context && piSocket.State == WebSocketState.Open && piSocket != socket)
+                                    {
+                                        _ = SendRawJsonAsync(piSocket, JsonSerializer.Serialize(didRecv));
+                                    }
+                                }
                             }
                         }
                         break;
@@ -771,7 +810,25 @@ public sealed class StreamDeckWebSocketServer : IDisposable
 
     public async Task SendSettingsAsync(string context, string? pluginUuid)
     {
-        if (string.IsNullOrEmpty(pluginUuid) && !_contextToPluginMap.TryGetValue(context, out pluginUuid))
+        string? targetPlugin = null;
+        if (!string.IsNullOrEmpty(pluginUuid) && _pluginSockets.ContainsKey(pluginUuid))
+        {
+            targetPlugin = pluginUuid;
+        }
+        else if (!string.IsNullOrEmpty(context) && _contextToPluginMap.TryGetValue(context, out var mapped))
+        {
+            targetPlugin = mapped;
+        }
+        else if (!string.IsNullOrEmpty(pluginUuid) && _contextToPluginMap.TryGetValue(pluginUuid, out var mappedFromUuid))
+        {
+            targetPlugin = mappedFromUuid;
+        }
+        else
+        {
+            targetPlugin = pluginUuid;
+        }
+
+        if (string.IsNullOrEmpty(targetPlugin))
             return;
 
         _keySettings.TryGetValue(context, out var settings);
@@ -800,11 +857,11 @@ public sealed class StreamDeckWebSocketServer : IDisposable
             }
         };
 
-        await SendEventAsync(pluginUuid, msg);
+        await SendEventAsync(targetPlugin, msg);
 
         foreach (var (ctx, sock) in _piSockets)
         {
-            if (_contextToPluginMap.TryGetValue(ctx, out var assoc) && assoc == pluginUuid && sock.State == WebSocketState.Open)
+            if ((ctx == context || (_contextToPluginMap.TryGetValue(ctx, out var assoc) && assoc == targetPlugin)) && sock.State == WebSocketState.Open)
             {
                 await SendRawJsonAsync(sock, JsonSerializer.Serialize(msg));
             }
@@ -841,21 +898,24 @@ public sealed class StreamDeckWebSocketServer : IDisposable
     {
         if (socket.State != WebSocketState.Open) return;
 
-        var sendLock = _socketSendLocks.GetOrAdd(socket, _ => new SemaphoreSlim(1, 1));
-        await sendLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            if (socket.State == WebSocketState.Open)
+            var sendLock = _socketSendLocks.GetOrAdd(socket, _ => new SemaphoreSlim(1, 1));
+            await sendLock.WaitAsync().ConfigureAwait(false);
+            try
             {
-                byte[] bytes = Encoding.UTF8.GetBytes(json);
-                await socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None).ConfigureAwait(false);
+                if (socket.State == WebSocketState.Open)
+                {
+                    byte[] bytes = Encoding.UTF8.GetBytes(json);
+                    await socket.SendAsync(new ArraySegment<byte>(bytes), WebSocketMessageType.Text, true, CancellationToken.None).ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                try { sendLock.Release(); } catch { }
             }
         }
         catch { }
-        finally
-        {
-            sendLock.Release();
-        }
     }
 
     public async Task SendRawJsonToPluginAsync(string pluginUuid, string json)
@@ -1217,13 +1277,14 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                         {
                             try
                             {
+                                // Bounded wait: the close frame must leave before ws.Dispose() below (and before the send lock goes).
                                 using var closeCts = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
-                                ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Host shutdown", closeCts.Token).GetAwaiter().GetResult();
+                                ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Host shutdown", closeCts.Token).Wait(200);
                             }
                             catch { }
                             finally
                             {
-                                sendLock.Release();
+                                try { sendLock.Release(); } catch { }
                             }
                         }
                     }
@@ -1231,6 +1292,12 @@ public sealed class StreamDeckWebSocketServer : IDisposable
                 catch { }
                 try { ws.Dispose(); } catch { }
             }
+
+            foreach (var kvp in _socketSendLocks)
+            {
+                try { kvp.Value.Dispose(); } catch { }
+            }
+            _socketSendLocks.Clear();
 
             // 2. Anuluj pętlę roboczą i zamknij listener
             _cts?.Cancel();

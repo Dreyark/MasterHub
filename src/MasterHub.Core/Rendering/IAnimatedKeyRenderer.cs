@@ -37,6 +37,9 @@ public interface IAnimatedKeyRenderer : IDisposable
     /// </summary>
     void StopAllAnimations();
 
+    /// <summary>Wstrzymuje (true) lub wznawia (false) timery wszystkich aktywnych animacji.</summary>
+    void SetPaused(bool paused);
+
     /// <summary>
     /// Sprawdza, czy na danym klawiszu trwa aktywne odtwarzanie animacji.
     /// </summary>

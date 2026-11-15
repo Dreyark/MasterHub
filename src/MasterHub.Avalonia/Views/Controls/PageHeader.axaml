@@ -1,0 +1,13 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="MasterHub.Avalonia.Views.Controls.PageHeader">
+    <!-- Minimalny nagłówek strony w jednej linii: ikona + tytuł + (przycięty) opis + akcje po prawej -->
+    <Grid ColumnDefinitions="Auto,Auto,*,Auto" Margin="0,0,0,14" MinHeight="32">
+        <PathIcon x:Name="IconPart" Grid.Column="0" Width="16" Height="16" Margin="0,0,10,0"
+                  VerticalAlignment="Center" Foreground="{StaticResource AccentPrimaryBrush}" />
+        <TextBlock x:Name="TitlePart" Grid.Column="1" Classes="pageTitle" VerticalAlignment="Center" />
+        <TextBlock x:Name="SubtitlePart" Grid.Column="2" Classes="pageSubtitle" Margin="14,2,0,0"
+                   VerticalAlignment="Center" />
+        <ContentControl x:Name="ActionsPart" Grid.Column="3" VerticalAlignment="Center" Margin="16,0,0,0" />
+    </Grid>
+</UserControl>

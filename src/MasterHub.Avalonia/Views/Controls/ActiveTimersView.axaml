@@ -1,0 +1,32 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Controls.ActiveTimersView"
+             x:DataType="vm:ActiveTimersViewModel"
+             IsVisible="{Binding HasItems}">
+    <!-- Lista timerów, które chodzą, czekają w połowie albo zadzwoniły – także tych z innych stron i profili. -->
+    <Border Classes="callout floating" Padding="12,8" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,16,16" MaxWidth="420">
+        <StackPanel Spacing="6">
+            <TextBlock Text="{loc:Loc Timer_PanelTitle}" Classes="caption" />
+            <ItemsControl ItemsSource="{Binding Items}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ActiveTimerItemViewModel">
+                        <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10" Margin="0,2">
+                            <!-- zadzwonił = czerwony tekst -->
+                            <Panel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Text}" FontWeight="Bold" FontSize="15" IsVisible="{Binding !IsAlert}" />
+                                <TextBlock Text="{Binding Text}" FontWeight="Bold" FontSize="15" IsVisible="{Binding IsAlert}" Foreground="{StaticResource AccentCautionBrush}" />
+                            </Panel>
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Caption}" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding StateText}" Classes="dim" FontSize="10.5" />
+                            </StackPanel>
+                            <Button Grid.Column="2" Classes="actionBtn" Content="{loc:Loc Timer_Stop}" Command="{Binding StopCommand}" />
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </StackPanel>
+    </Border>
+</UserControl>

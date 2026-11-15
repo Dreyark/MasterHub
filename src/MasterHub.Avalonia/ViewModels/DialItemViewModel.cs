@@ -8,7 +8,7 @@ using MasterHub.Core.Localization;
 
 namespace MasterHub.Avalonia.ViewModels;
 
-public partial class DialItemViewModel : ObservableObject
+public partial class DialItemViewModel : ObservableObject, IDisposable
 {
     protected bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
@@ -27,6 +27,7 @@ public partial class DialItemViewModel : ObservableObject
     private string _colorHex = "#00E5A3";
     private string? _imagePath;
     private string _displayWidget = "Image";
+    private readonly Action<string> _onLanguageChanged;
 
     public string Name => LocalizationService.Instance.GetString("Dial_Title", "Pokrętło Dial IPS");
     public string LastDirectionDisplay => string.Format(LocalizationService.Instance.GetString("Roller_LastDirection", "Ostatni ruch: {0}"), LastDirection);
@@ -38,7 +39,13 @@ public partial class DialItemViewModel : ObservableObject
 
     public DialItemViewModel()
     {
-        LocalizationService.Instance.LanguageChanged += _ => NotifyLanguageChanged();
+        _onLanguageChanged = _ => NotifyLanguageChanged();
+        LocalizationService.Instance.LanguageChanged += _onLanguageChanged;
+    }
+
+    public void Dispose()
+    {
+        LocalizationService.Instance.LanguageChanged -= _onLanguageChanged;
     }
 
     public bool IsSelected
@@ -85,6 +92,28 @@ public partial class DialItemViewModel : ObservableObject
         set => SetField(ref _isActivityActive, value);
     }
 
+    private string _rotateModes = "";
+
+    /// <summary>T-17 i: the turn jobs when RotateAction is Modes ("MasterVolume, ScrollVertical, MediaTrack").</summary>
+    public string RotateModes
+    {
+        get => _rotateModes;
+        set
+        {
+            if (SetField(ref _rotateModes, value ?? ""))
+            {
+                ModeIndex = 0;
+                ActionChangedCallback?.Invoke(this);
+            }
+        }
+    }
+
+    /// <summary>T-17 i: the inspector shows the modes field only for a "Modes" control.</summary>
+    public bool IsModesAction => RotateAction == RollerActionType.Modes;
+
+    /// <summary>The mode in use (not saved: a restart begins with the first mode).</summary>
+    public int ModeIndex { get; set; }
+
     public RollerActionType RotateAction
     {
         get => _rotateAction;
@@ -94,6 +123,7 @@ public partial class DialItemViewModel : ObservableObject
             {
                 OnPropertyChanged(nameof(RotateActionDisplayName));
                 OnPropertyChanged(nameof(HasAction));
+                OnPropertyChanged(nameof(IsModesAction));
                 ActionChangedCallback?.Invoke(this);
             }
         }
@@ -227,6 +257,10 @@ public partial class DialItemViewModel : ObservableObject
                 RollerActionType.RazerProfileCycle => loc.GetString("Roller_RazerProfiles"),
                 RollerActionType.RazerPollingRateCycle => loc.GetString("Roller_RazerPolling"),
                 RollerActionType.WootingProfileCycle => loc.GetString("Roller_WootingProfiles"),
+                RollerActionType.DeckBrightness => loc.GetString("Roller_DeckBrightness", "Deck brightness"),
+                RollerActionType.ForegroundAppVolume => loc.GetString("Roller_ForegroundApp", "Volume of the program on top"),
+                RollerActionType.MediaSeek => loc.GetString("Roller_MediaSeek", "Seek (player on top)"),
+                RollerActionType.Modes => loc.GetString("Roller_Modes", "Modes (press switches)"),
                 _ => RotateAction.ToString()
             };
         }

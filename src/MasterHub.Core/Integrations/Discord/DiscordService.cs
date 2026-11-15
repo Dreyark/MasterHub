@@ -180,9 +180,7 @@ public sealed class DiscordService : IDiscordService
         // Sprawdź czy Discord jest w ogóle uruchomiony w systemie przed odpytywaniem potoków
         try
         {
-            if (Process.GetProcessesByName("Discord").Length == 0 &&
-                Process.GetProcessesByName("DiscordCanary").Length == 0 &&
-                Process.GetProcessesByName("DiscordPTB").Length == 0)
+            if (!MasterHub.Core.SystemControl.ProcessHelper.IsAnyProcessRunning("Discord", "DiscordCanary", "DiscordPTB"))
             {
                 SetConnectedState(false);
                 return false;
@@ -488,45 +486,13 @@ public sealed class DiscordService : IDiscordService
         return SetDeafenAsync(!_isDeafened, cancellationToken);
     }
 
-    public async Task<bool> SetCameraAsync(bool enabled, CancellationToken cancellationToken = default)
+    public Task<bool> SetCameraAsync(bool enabled, CancellationToken cancellationToken = default)
     {
-        if (!_isConnected || _disposed) return false;
+        if (!_isConnected || _disposed) return Task.FromResult(false);
 
-        try
-        {
-            var dataElement = await SendRpcCommandAsync("TOGGLE_VIDEO", new { enabled }, null, cancellationToken).ConfigureAwait(false);
-            if (!dataElement.HasValue || dataElement.Value.ValueKind != JsonValueKind.Object)
-            {
-                return false;
-            }
-
-            bool resolvedEnabled = enabled;
-            var data = dataElement.Value;
-            if (data.TryGetProperty("enabled", out var enabledProp) &&
-                (enabledProp.ValueKind == JsonValueKind.True || enabledProp.ValueKind == JsonValueKind.False))
-            {
-                resolvedEnabled = enabledProp.GetBoolean();
-            }
-            else if (data.TryGetProperty("video", out var videoProp) &&
-                     (videoProp.ValueKind == JsonValueKind.True || videoProp.ValueKind == JsonValueKind.False))
-            {
-                resolvedEnabled = videoProp.GetBoolean();
-            }
-            else if (data.TryGetProperty("camera_enabled", out var camProp) &&
-                     (camProp.ValueKind == JsonValueKind.True || camProp.ValueKind == JsonValueKind.False))
-            {
-                resolvedEnabled = camProp.GetBoolean();
-            }
-
-            UpdateVideoState(resolvedEnabled, _isScreenSharing);
-            LogMessage?.Invoke($"[Discord] Kamera: {(_isCameraEnabled ? "WŁĄCZONA (Camera ON)" : "WYŁĄCZONA (Camera OFF)")}");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LogMessage?.Invoke($"[Discord] Błąd zmiany stanu kamery (TOGGLE_VIDEO): {ex.Message}");
-            return false;
-        }
+        // Discord RPC has no TOGGLE_VIDEO command: the caller falls back to the configured hotkey.
+        LogMessage?.Invoke("[Discord] RPC nie obsługuje przełączania kamery (brak komendy TOGGLE_VIDEO) - użyj skrótu klawiszowego.");
+        return Task.FromResult(false);
     }
 
     public Task<bool> ToggleCameraAsync(CancellationToken cancellationToken = default)
@@ -535,45 +501,13 @@ public sealed class DiscordService : IDiscordService
         return SetCameraAsync(!_isCameraEnabled, cancellationToken);
     }
 
-    public async Task<bool> SetScreenShareAsync(bool active, CancellationToken cancellationToken = default)
+    public Task<bool> SetScreenShareAsync(bool active, CancellationToken cancellationToken = default)
     {
-        if (!_isConnected || _disposed) return false;
+        if (!_isConnected || _disposed) return Task.FromResult(false);
 
-        try
-        {
-            var dataElement = await SendRpcCommandAsync("TOGGLE_SCREENSHARE", new { active }, null, cancellationToken).ConfigureAwait(false);
-            if (!dataElement.HasValue || dataElement.Value.ValueKind != JsonValueKind.Object)
-            {
-                return false;
-            }
-
-            bool resolvedActive = active;
-            var data = dataElement.Value;
-            if (data.TryGetProperty("active", out var activeProp) &&
-                (activeProp.ValueKind == JsonValueKind.True || activeProp.ValueKind == JsonValueKind.False))
-            {
-                resolvedActive = activeProp.GetBoolean();
-            }
-            else if (data.TryGetProperty("screenshare", out var screenProp) &&
-                     (screenProp.ValueKind == JsonValueKind.True || screenProp.ValueKind == JsonValueKind.False))
-            {
-                resolvedActive = screenProp.GetBoolean();
-            }
-            else if (data.TryGetProperty("screen_share", out var ssProp) &&
-                     (ssProp.ValueKind == JsonValueKind.True || ssProp.ValueKind == JsonValueKind.False))
-            {
-                resolvedActive = ssProp.GetBoolean();
-            }
-
-            UpdateVideoState(_isCameraEnabled, resolvedActive);
-            LogMessage?.Invoke($"[Discord] Udostępnianie ekranu: {(_isScreenSharing ? "AKTYWNE (Go Live ON)" : "ZATRZYMANE (Go Live OFF)")}");
-            return true;
-        }
-        catch (Exception ex)
-        {
-            LogMessage?.Invoke($"[Discord] Błąd zmiany stanu udostępniania ekranu (TOGGLE_SCREENSHARE): {ex.Message}");
-            return false;
-        }
+        // Discord RPC has no TOGGLE_SCREENSHARE command: the caller falls back to the configured hotkey.
+        LogMessage?.Invoke("[Discord] RPC nie obsługuje udostępniania ekranu (brak komendy TOGGLE_SCREENSHARE) - użyj skrótu klawiszowego.");
+        return Task.FromResult(false);
     }
 
     public Task<bool> ToggleScreenShareAsync(CancellationToken cancellationToken = default)

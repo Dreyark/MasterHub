@@ -1,0 +1,36 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Controls.DraftBannerView"
+             x:DataType="vm:DraftSessionViewModel"
+             IsVisible="{Binding IsVisible}">
+    <!-- Wersja robocza na decku (T-08): nic nie jest zapisane ani uruchamiane, dopóki użytkownik nie zdecyduje. -->
+    <Border Classes="callout floating" Padding="14,10" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,0" MaxWidth="720">
+        <StackPanel Spacing="6">
+            <StackPanel Orientation="Horizontal" Spacing="12" HorizontalAlignment="Center">
+                <TextBlock Text="{Binding Title}" VerticalAlignment="Center" FontWeight="SemiBold" TextWrapping="Wrap" MaxWidth="380" />
+                <TextBlock Text="{Binding CountdownText}" IsVisible="{Binding HasCountdown}" VerticalAlignment="Center"
+                           FontWeight="Bold" Foreground="{StaticResource AccentCautionBrush}" />
+
+                <!-- zwykły podgląd / próba -->
+                <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding !IsPendingOffer}">
+                    <Button Classes="accentBtn" Content="{loc:Loc Draft_Keep}" Command="{Binding KeepItCommand}" />
+                    <Button Classes="actionBtn" Content="{loc:Loc Draft_Discard}" Command="{Binding DiscardCommand}" />
+                </StackPanel>
+
+                <!-- wersja robocza zostawiona po awarii -->
+                <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding IsPendingOffer}">
+                    <Button Classes="accentBtn" Content="{loc:Loc Draft_PutBack}" Command="{Binding PutBackCommand}" />
+                    <Button Classes="actionBtn" Content="{loc:Loc Draft_UseThis}" Command="{Binding UseThisCommand}" />
+                    <Button Classes="actionBtn" Content="{loc:Loc Draft_NotNow}" Command="{Binding NotNowCommand}" />
+                </StackPanel>
+            </StackPanel>
+
+            <TextBlock Text="{loc:Loc Draft_Hint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" HorizontalAlignment="Center"
+                       IsVisible="{Binding !IsPendingOffer}" />
+            <TextBlock Text="{Binding BlockedText}" IsVisible="{Binding HasBlocked}" FontSize="11" TextWrapping="Wrap" HorizontalAlignment="Center"
+                       Foreground="{StaticResource AccentCautionBrush}" />
+        </StackPanel>
+    </Border>
+</UserControl>

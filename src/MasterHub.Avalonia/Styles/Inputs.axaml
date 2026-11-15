@@ -22,6 +22,42 @@
         <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
     </Style>
 
+    <!-- Pole liczbowe (NumericUpDown): tło i obramowanie jak TextBox, spinner bez czarnych przycisków Fluent -->
+    <Style Selector="NumericUpDown">
+        <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="NumericUpDown /template/ ButtonSpinner">
+        <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+    </Style>
+    <Style Selector="ButtonSpinner /template/ RepeatButton">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+    </Style>
+    <Style Selector="ButtonSpinner /template/ RepeatButton /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="ButtonSpinner /template/ RepeatButton:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource CardHoverBgBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource AccentPrimaryBrush}" />
+    </Style>
+    <Style Selector="ButtonSpinner /template/ RepeatButton:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}" />
+        <Setter Property="Opacity" Value="0.5" />
+    </Style>
+    <Style Selector="ButtonSpinner /template/ RepeatButton:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource CardActiveBgBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource AccentPrimaryBrush}" />
+    </Style>
+
     <!-- Styl listy rozwijanej (ComboBox) -->
     <Style Selector="ComboBox">
         <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
@@ -50,6 +86,51 @@
     <Style Selector="ComboBoxItem:selected /template/ ContentPresenter">
         <Setter Property="Background" Value="{StaticResource CardActiveBgBrush}" />
         <Setter Property="Foreground" Value="{StaticResource AccentPrimaryBrush}" />
+    </Style>
+
+    <!-- Lista (ListBox): przezroczyste tło, pozycje w kolorach motywu (Fluent daje szare #2C2C2C) -->
+    <Style Selector="ListBox">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBoxItem">
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector="ListBoxItem /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource CardHoverBgBrush}" />
+    </Style>
+    <Style Selector="ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter, ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource CardActiveBgBrush}" />
+    </Style>
+
+    <!-- Zakładki (TabControl): rozmiar nagłówka spójny z resztą UI (Fluent domyślnie ~24 px) -->
+    <Style Selector="TabItem">
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- Zwijana sekcja wewnątrz karty (np. czcionka i pozycja tekstu): bez własnego tła, żeby nie tworzyć ramki w ramce -->
+    <Style Selector="Expander.subtle">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="FontSize" Value="11" />
+    </Style>
+    <Style Selector="Expander.subtle /template/ ToggleButton#ExpanderHeader">
+        <Setter Property="Background" Value="{StaticResource CardActiveBgBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="10,6" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Expander.subtle /template/ ToggleButton#ExpanderHeader:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource CardHoverBgBrush}" />
+    </Style>
+    <Style Selector="Expander.subtle /template/ Border#ExpanderContent">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
     </Style>
 
     <!-- Styl suwaka poziomego / pionowego (Slider) -->

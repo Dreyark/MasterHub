@@ -36,7 +36,7 @@ public class VlcService : IVlcService
         s_lastVlcProcessCheck = DateTime.UtcNow;
         try
         {
-            s_cachedVlcRunning = Process.GetProcessesByName("vlc").Length > 0;
+            s_cachedVlcRunning = MasterHub.Core.SystemControl.ProcessHelper.IsProcessRunning("vlc");
         }
         catch
         {
@@ -398,6 +398,15 @@ public class VlcService : IVlcService
             host = string.IsNullOrWhiteSpace(_settings.Host) ? "127.0.0.1" : _settings.Host.Trim();
             port = _settings.Port <= 0 ? 8080 : _settings.Port;
             password = _settings.Password ?? string.Empty;
+        }
+
+        bool isLocal = host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+                       host.Equals("localhost", StringComparison.OrdinalIgnoreCase);
+
+        if (isLocal && !IsVlcProcessRunning())
+        {
+            if (IsConnected) SetConnected(false);
+            return false;
         }
 
         string requestUri = $"http://{host}:{port}/requests/status.json?command={command}";

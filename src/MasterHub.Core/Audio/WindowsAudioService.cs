@@ -9,9 +9,10 @@ namespace MasterHub.Core.Audio;
 /// <summary>
 /// Controls Windows Master Volume, Microphone input levels, and per-process audio sessions using WASAPI / CoreAudio.
 /// </summary>
-public class WindowsAudioService : IAudioService
+public class WindowsAudioService : IAudioService, IDisposable
 {
     private readonly MMDeviceEnumerator _deviceEnumerator = new();
+    private bool _disposed;
 
     public float GetMasterPlaybackVolume()
     {
@@ -137,7 +138,7 @@ public class WindowsAudioService : IAudioService
 
                 try
                 {
-                    var proc = Process.GetProcessById(pid);
+                    using var proc = Process.GetProcessById(pid);
                     procName = proc.ProcessName;
                     if (string.IsNullOrWhiteSpace(dispName))
                     {
@@ -186,7 +187,7 @@ public class WindowsAudioService : IAudioService
 
                 try
                 {
-                    var proc = Process.GetProcessById(pid);
+                    using var proc = Process.GetProcessById(pid);
                     if (string.Equals(proc.ProcessName, processName, StringComparison.OrdinalIgnoreCase))
                     {
                         s.SimpleAudioVolume.Volume = Math.Clamp(volume, 0f, 1f);
@@ -204,6 +205,8 @@ public class WindowsAudioService : IAudioService
 
         try
         {
+            bool anyMatched = false;
+            bool newMuteState = false;
             using var dev = _deviceEnumerator.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
             var sessionManager = dev.AudioSessionManager;
             sessionManager.RefreshSessions();
@@ -217,16 +220,24 @@ public class WindowsAudioService : IAudioService
 
                 try
                 {
-                    var proc = Process.GetProcessById(pid);
+                    using var proc = Process.GetProcessById(pid);
                     if (string.Equals(proc.ProcessName, processName, StringComparison.OrdinalIgnoreCase))
                     {
-                        bool isMuted = !s.SimpleAudioVolume.Mute;
-                        s.SimpleAudioVolume.Mute = isMuted;
-                        return isMuted;
+                        // Aplikacje wieloprocesowe/wielosesyjne (np. przeglądarki) mają kilka sesji audio.
+                        // Nowy stan wyznacza pierwsza sesja, a następnie jest stosowany do WSZYSTKICH sesji procesu
+                        // (wcześniej wyciszana była tylko pierwsza, więc dźwięk z pozostałych nadal grał).
+                        if (!anyMatched)
+                        {
+                            newMuteState = !s.SimpleAudioVolume.Mute;
+                            anyMatched = true;
+                        }
+                        s.SimpleAudioVolume.Mute = newMuteState;
                     }
                 }
                 catch { }
             }
+
+            return anyMatched && newMuteState;
         }
         catch { }
 
@@ -252,7 +263,7 @@ public class WindowsAudioService : IAudioService
 
                 try
                 {
-                    var proc = Process.GetProcessById(pid);
+                    using var proc = Process.GetProcessById(pid);
                     if (string.Equals(proc.ProcessName, processName, StringComparison.OrdinalIgnoreCase))
                     {
                         return s.SimpleAudioVolume.Mute;
@@ -264,5 +275,12 @@ public class WindowsAudioService : IAudioService
         catch { }
 
         return false;
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _deviceEnumerator.Dispose();
     }
 }

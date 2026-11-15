@@ -31,6 +31,7 @@ public sealed class KickService : IKickService
 
     private string? _cachedAuthToken;
     private string? _chatroomId;
+    private long? _broadcasterUserId;
 
     public KickService(HttpClient? httpClient = null)
     {
@@ -173,6 +174,7 @@ public sealed class KickService : IKickService
             var ct = linked.Token;
 
             // Spróbuj pobrać ID pokoju czatu (chatroom.id) z API Kick
+            _broadcasterUserId = null;
             _chatroomId = await ResolveChatroomIdAsync(cleanChannel, ct);
 
             try
@@ -334,6 +336,34 @@ public sealed class KickService : IKickService
         }
     }
 
+    /// <summary>Odczytuje tryby czatu ze zdarzenia ChatroomUpdatedEvent (slow_mode, subscribers_mode, emotes_mode).</summary>
+    internal void ApplyChatroomUpdate(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (root.TryGetProperty("emotes_mode", out var emotes) && emotes.TryGetProperty("enabled", out var eEn))
+            {
+                IsEmoteOnly = eEn.ValueKind == JsonValueKind.True;
+            }
+            if (root.TryGetProperty("subscribers_mode", out var subs) && subs.TryGetProperty("enabled", out var sEn))
+            {
+                IsSubOnly = sEn.ValueKind == JsonValueKind.True;
+            }
+            if (root.TryGetProperty("slow_mode", out var slow) && slow.TryGetProperty("enabled", out var slEn))
+            {
+                if (slow.TryGetProperty("message_interval", out var interval) && interval.TryGetInt32(out int secs) && secs > 0)
+                {
+                    SlowModeDurationSeconds = secs;
+                }
+                IsSlowMode = slEn.ValueKind == JsonValueKind.True;
+            }
+        }
+        catch { }
+    }
+
     private void ProcessPusherMessage(string rawJson)
     {
         try
@@ -347,6 +377,10 @@ public sealed class KickService : IKickService
                 if (ev == "pusher:ping")
                 {
                     _ = SendRawWsAsync("{\"event\":\"pusher:pong\",\"data\":{}}", CancellationToken.None);
+                }
+                else if (ev == "App\\Events\\ChatroomUpdatedEvent" && root.TryGetProperty("data", out var roomData))
+                {
+                    ApplyChatroomUpdate(roomData.ValueKind == JsonValueKind.String ? roomData.GetString() ?? "{}" : roomData.GetRawText());
                 }
                 else if (ev == "App\\Events\\ChatMessageEvent" && root.TryGetProperty("data", out var dataProp))
                 {
@@ -421,33 +455,28 @@ public sealed class KickService : IKickService
             return false;
         }
 
+        // Oficjalne publiczne API Kick wymaga tokenu OAuth (scope chat:write). Bez tokenu NIE wysyłamy nic -
+        // wcześniej metoda zwracała true mimo że wiadomość nigdy nie trafiała na czat.
+        if (string.IsNullOrWhiteSpace(_cachedAuthToken))
+        {
+            return false;
+        }
+
         try
         {
-            // Jeśli mamy token autoryzacji Kick, wyślij wiadomość przez Kick API
-            if (!string.IsNullOrWhiteSpace(_cachedAuthToken))
-            {
-                string endpoint = !string.IsNullOrWhiteSpace(_chatroomId)
-                    ? $"https://kick.com/api/v2/messages/send/{_chatroomId}"
-                    : "https://api.kick.com/public/v1/chat";
+            long? broadcasterId = await EnsureBroadcasterUserIdAsync(cancellationToken);
 
-                using var req = new HttpRequestMessage(HttpMethod.Post, endpoint);
-                req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _cachedAuthToken);
-                string payload = JsonSerializer.Serialize(new
-                {
-                    content = message.Trim(),
-                    type = "bot",
-                    chatroom_id = _chatroomId
-                });
-                req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+            using var req = new HttpRequestMessage(HttpMethod.Post, "https://api.kick.com/public/v1/chat");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _cachedAuthToken);
 
-                using var resp = await _httpClient.SendAsync(req, cancellationToken);
-                if (resp.IsSuccessStatusCode)
-                {
-                    return true;
-                }
-            }
+            // type "user" wysyła jako autoryzowany użytkownik na wskazany kanał; bez ID kanału zostaje "bot".
+            object payload = broadcasterId.HasValue
+                ? new { broadcaster_user_id = broadcasterId.Value, content = message.Trim(), type = "user" }
+                : new { content = message.Trim(), type = "bot" };
+            req.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
-            return true;
+            using var resp = await _httpClient.SendAsync(req, cancellationToken);
+            return resp.IsSuccessStatusCode;
         }
         catch
         {
@@ -455,89 +484,71 @@ public sealed class KickService : IKickService
         }
     }
 
-    /// <inheritdoc />
-    public async Task<bool> ClearChatAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// ID użytkownika-nadawcy kanału z oficjalnego API (GET /public/v1/channels?slug=...), wymagane przez POST /chat.
+    /// </summary>
+    private async Task<long?> EnsureBroadcasterUserIdAsync(CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(ChannelName)) return false;
-        return await SendChatMessageAsync("/clear", cancellationToken);
-    }
-
-    /// <inheritdoc />
-    public Task<bool> ToggleSubOnlyAsync(CancellationToken cancellationToken = default)
-    {
-        return SetSubOnlyAsync(!IsSubOnly, cancellationToken);
-    }
-
-    /// <inheritdoc />
-    public async Task<bool> SetSubOnlyAsync(bool enabled, CancellationToken cancellationToken = default)
-    {
-        IsSubOnly = enabled;
-        if (!string.IsNullOrWhiteSpace(_cachedAuthToken))
-        {
-            _ = SendChatMessageAsync(enabled ? "/subonly" : "/subonlyoff", cancellationToken);
-        }
-        return true;
-    }
-
-    /// <inheritdoc />
-    public Task<bool> ToggleSlowModeAsync(int seconds = 30, CancellationToken cancellationToken = default)
-    {
-        return SetSlowModeAsync(!IsSlowMode, seconds, cancellationToken);
-    }
-
-    /// <inheritdoc />
-    public async Task<bool> SetSlowModeAsync(bool enabled, int seconds = 30, CancellationToken cancellationToken = default)
-    {
-        SlowModeDurationSeconds = seconds;
-        IsSlowMode = enabled;
-        if (!string.IsNullOrWhiteSpace(_cachedAuthToken))
-        {
-            _ = SendChatMessageAsync(enabled ? $"/slow {seconds}" : "/slowoff", cancellationToken);
-        }
-        return true;
-    }
-
-    /// <inheritdoc />
-    public Task<bool> ToggleEmoteOnlyAsync(CancellationToken cancellationToken = default)
-    {
-        return SetEmoteOnlyAsync(!IsEmoteOnly, cancellationToken);
-    }
-
-    /// <inheritdoc />
-    public async Task<bool> SetEmoteOnlyAsync(bool enabled, CancellationToken cancellationToken = default)
-    {
-        IsEmoteOnly = enabled;
-        if (!string.IsNullOrWhiteSpace(_cachedAuthToken))
-        {
-            _ = SendChatMessageAsync(enabled ? "/emoteonly" : "/emoteonlyoff", cancellationToken);
-        }
-        return true;
-    }
-
-    /// <inheritdoc />
-    public async Task<KickClipResult?> CreateClipAsync(CancellationToken cancellationToken = default)
-    {
-        if (string.IsNullOrWhiteSpace(ChannelName))
-        {
-            var resFail = new KickClipResult(false, null, null, "Brak połączonego kanału Kick");
-            ClipCreated?.Invoke(resFail);
-            return resFail;
-        }
+        if (_broadcasterUserId.HasValue) return _broadcasterUserId;
+        if (string.IsNullOrWhiteSpace(_cachedAuthToken) || string.IsNullOrWhiteSpace(ChannelName)) return null;
 
         try
         {
-            string url = $"https://kick.com/{ChannelName}/clips";
-            LastClipUrl = url;
-            var res = new KickClipResult(true, Guid.NewGuid().ToString("N")[..8], url, null);
-            ClipCreated?.Invoke(res);
-            return res;
+            using var req = new HttpRequestMessage(HttpMethod.Get, $"https://api.kick.com/public/v1/channels?slug={Uri.EscapeDataString(ChannelName)}");
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _cachedAuthToken);
+            using var resp = await _httpClient.SendAsync(req, ct);
+            if (!resp.IsSuccessStatusCode) return null;
+
+            using var doc = await JsonDocument.ParseAsync(await resp.Content.ReadAsStreamAsync(ct), cancellationToken: ct);
+            if (doc.RootElement.TryGetProperty("data", out var data) &&
+                data.ValueKind == JsonValueKind.Array && data.GetArrayLength() > 0 &&
+                data[0].TryGetProperty("broadcaster_user_id", out var idProp) &&
+                idProp.TryGetInt64(out long id))
+            {
+                _broadcasterUserId = id;
+                return id;
+            }
         }
-        catch (Exception ex)
-        {
-            var resErr = new KickClipResult(false, null, null, ex.Message);
-            ClipCreated?.Invoke(resErr);
-            return resErr;
-        }
+        catch { }
+
+        return null;
+    }
+
+    // Publiczne API Kick nie udostępnia (jeszcze) żadnego endpointu zmiany ustawień czatu ani czyszczenia czatu.
+    // Wcześniej metody tylko przestawiały stan lokalnie, zwracały true i wysyłały na czat dosłowny tekst "/slow 30" itp.
+    // Teraz zwracają false (akcja nieobsługiwana), a stan trybów jest odczytywany ze zdarzeń czatu (ChatroomUpdatedEvent).
+
+    /// <inheritdoc />
+    public Task<bool> ClearChatAsync(CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+    /// <inheritdoc />
+    public Task<bool> ToggleSubOnlyAsync(CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+    /// <inheritdoc />
+    public Task<bool> SetSubOnlyAsync(bool enabled, CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+    /// <inheritdoc />
+    public Task<bool> ToggleSlowModeAsync(int seconds = 30, CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+    /// <inheritdoc />
+    public Task<bool> SetSlowModeAsync(bool enabled, int seconds = 30, CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+    /// <inheritdoc />
+    public Task<bool> ToggleEmoteOnlyAsync(CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+    /// <inheritdoc />
+    public Task<bool> SetEmoteOnlyAsync(bool enabled, CancellationToken cancellationToken = default) => Task.FromResult(false);
+
+    /// <inheritdoc />
+    public Task<KickClipResult?> CreateClipAsync(CancellationToken cancellationToken = default)
+    {
+        // Kick nie ma publicznego API tworzenia klipów. Wcześniej zwracany był "sukces" z wymyślonym ID i linkiem do listy klipów.
+        string message = string.IsNullOrWhiteSpace(ChannelName)
+            ? "Brak połączonego kanału Kick"
+            : $"Kick nie udostępnia API tworzenia klipów - utwórz klip ręcznie na https://kick.com/{ChannelName}";
+        var res = new KickClipResult(false, null, null, message);
+        ClipCreated?.Invoke(res);
+        return Task.FromResult<KickClipResult?>(res);
     }
 
     public void Dispose()

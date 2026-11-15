@@ -5,105 +5,100 @@
              xmlns:loc="using:MasterHub.Avalonia.Localization"
              x:Class="MasterHub.Avalonia.Views.Navigation.NavigationSidebarView"
              x:DataType="vm:NavigationViewModel"
-             Width="72"
-             Background="{StaticResource MainBgBrush}">
+             Classes="sidebar" Classes.collapsed="{Binding IsSidebarNarrow}">
 
-    <Border BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,1,0">
-        <Grid RowDefinitions="Auto,*,Auto" Margin="0,16,0,16">
-            <!-- Logo / Brand Header -->
-            <Border Grid.Row="0" Width="44" Height="44" CornerRadius="12"
-                    Background="{StaticResource CardBgBrush}"
-                    BorderBrush="{StaticResource BorderAccentBrush}"
-                    BorderThickness="1" HorizontalAlignment="Center">
-                <TextBlock Text="MH" FontSize="16" FontWeight="ExtraBold"
-                           Foreground="{StaticResource AccentPrimaryBrush}"
+    <!-- Style pozycji i zwijania: Styles/Shell.axaml (navItem, sidebar.collapsed, navDivider) -->
+    <Border Classes="sideCard" Margin="16,0,16,16">
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="14,18,14,16">
+        <!-- Marka: logo + nazwa aplikacji -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*" Margin="2,0,0,0">
+            <Border Width="40" Height="40" CornerRadius="12" Background="{StaticResource CyberGlowBrush}"
+                    BoxShadow="0 6 18 0 #405E81F4">
+                <TextBlock Text="MH" FontSize="15" FontWeight="ExtraBold"
                            HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
-
-            <!-- Główne przyciski nawigacyjne (Rail ze stylowymi wektorami SVG) -->
-            <StackPanel Grid.Row="1" Spacing="10" VerticalAlignment="Center" HorizontalAlignment="Center">
-                <!-- Studio / Kanwa -->
-                <Grid>
-                    <Button Classes="navRailBtn"
-                            Classes.active="{Binding IsStudioSelected}"
-                            Command="{Binding SelectPageCommand}"
-                            CommandParameter="{x:Static services:NavigationPage.Studio}"
-                            ToolTip.Tip="{loc:Loc Nav_Studio}">
-                        <PathIcon Data="{StaticResource IconStudio}" Width="18" Height="18" />
-                    </Button>
-                    <Border Width="3" Height="24" CornerRadius="2"
-                            Background="{StaticResource AccentPrimaryBrush}"
-                            IsVisible="{Binding IsStudioSelected}"
-                            HorizontalAlignment="Right" Margin="0,0,-14,0" />
-                </Grid>
-
-                <!-- Profile -->
-                <Grid>
-                    <Button Classes="navRailBtn"
-                            Classes.active="{Binding IsProfilesSelected}"
-                            Command="{Binding SelectPageCommand}"
-                            CommandParameter="{x:Static services:NavigationPage.Profiles}"
-                            ToolTip.Tip="{loc:Loc Nav_Profiles}">
-                        <PathIcon Data="{StaticResource IconProfiles}" Width="18" Height="18" />
-                    </Button>
-                    <Border Width="3" Height="24" CornerRadius="2"
-                            Background="{StaticResource AccentPrimaryBrush}"
-                            IsVisible="{Binding IsProfilesSelected}"
-                            HorizontalAlignment="Right" Margin="0,0,-14,0" />
-                </Grid>
-
-                <!-- Sklep / Biblioteka Akcji -->
-                <Grid>
-                    <Button Classes="navRailBtn"
-                            Classes.active="{Binding IsActionStoreSelected}"
-                            Command="{Binding SelectPageCommand}"
-                            CommandParameter="{x:Static services:NavigationPage.ActionStore}"
-                            ToolTip.Tip="{loc:Loc Nav_Store}">
-                        <PathIcon Data="{StaticResource IconStore}" Width="18" Height="18" />
-                    </Button>
-                    <Border Width="3" Height="24" CornerRadius="2"
-                            Background="{StaticResource AccentPrimaryBrush}"
-                            IsVisible="{Binding IsActionStoreSelected}"
-                            HorizontalAlignment="Right" Margin="0,0,-14,0" />
-                </Grid>
-
-                <!-- Logi -->
-                <Grid>
-                    <Button Classes="navRailBtn"
-                            Classes.active="{Binding IsLogsSelected}"
-                            Command="{Binding SelectPageCommand}"
-                            CommandParameter="{x:Static services:NavigationPage.Logs}"
-                            ToolTip.Tip="{loc:Loc Nav_Logs}">
-                        <PathIcon Data="{StaticResource IconLogs}" Width="18" Height="18" />
-                    </Button>
-                    <Border Width="3" Height="24" CornerRadius="2"
-                            Background="{StaticResource AccentPrimaryBrush}"
-                            IsVisible="{Binding IsLogsSelected}"
-                            HorizontalAlignment="Right" Margin="0,0,-14,0" />
-                </Grid>
-            </StackPanel>
-
-            <!-- Dolna sekcja: Uśpienie i Ustawienia -->
-            <StackPanel Grid.Row="2" Spacing="8" HorizontalAlignment="Center">
-                <Button Classes="navRailBtn"
-                        Command="{Binding ToggleStandbyCommand}"
-                        ToolTip.Tip="{loc:Loc Nav_Standby}">
-                    <PathIcon Data="{StaticResource IconStandby}" Width="17" Height="17" />
-                </Button>
-                <Grid>
-                    <Button Classes="navRailBtn"
-                            Classes.active="{Binding IsSettingsSelected}"
-                            Command="{Binding SelectPageCommand}"
-                            CommandParameter="{x:Static services:NavigationPage.Settings}"
-                            ToolTip.Tip="{loc:Loc Nav_Settings}">
-                        <PathIcon Data="{StaticResource IconSettings}" Width="17" Height="17" />
-                    </Button>
-                    <Border Width="3" Height="24" CornerRadius="2"
-                            Background="{StaticResource AccentPrimaryBrush}"
-                            IsVisible="{Binding IsSettingsSelected}"
-                            HorizontalAlignment="Right" Margin="0,0,-14,0" />
-                </Grid>
+            <StackPanel Grid.Column="1" Classes="brandText" Margin="12,0,0,0" VerticalAlignment="Center" Spacing="1">
+                <TextBlock Text="MasterHub" FontSize="15" FontWeight="Bold" />
+                <TextBlock Text="{loc:Loc Nav_BrandSubtitle}" Classes="caption" />
             </StackPanel>
         </Grid>
+
+        <!-- Główne strony, pogrupowane -->
+        <StackPanel Grid.Row="1" Spacing="4" Margin="0,30,0,0">
+            <TextBlock Classes="overline" Text="{loc:Loc Nav_SectionWorkspace}" Margin="12,0,0,6" />
+            <Border Classes="navDivider" />
+            <Button Classes="navItem" Classes.active="{Binding IsStudioSelected}" ToolTip.Tip="{loc:Loc Nav_Studio}"
+                    Command="{Binding SelectPageCommand}" CommandParameter="{x:Static services:NavigationPage.Studio}">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <PathIcon Data="{StaticResource IconStudio}" />
+                    <TextBlock Classes="navLabel" Text="{loc:Loc NavLabel_Studio}" />
+                </StackPanel>
+            </Button>
+            <Button Classes="navItem" Classes.active="{Binding IsProfilesSelected}" ToolTip.Tip="{loc:Loc Nav_Profiles}"
+                    Command="{Binding SelectPageCommand}" CommandParameter="{x:Static services:NavigationPage.Profiles}">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <PathIcon Data="{StaticResource IconProfiles}" />
+                    <TextBlock Classes="navLabel" Text="{loc:Loc NavLabel_Profiles}" />
+                    <!-- są nowe profile przygotowane przez asystenta (T-37) -->
+                    <Border Classes="statusBadgeCard" Padding="6,0" VerticalAlignment="Center" IsVisible="{Binding HasProfilesBadge}">
+                        <TextBlock Text="{Binding ProfilesBadge}" Classes="badge" Foreground="{StaticResource AccentSuccessBrush}" />
+                    </Border>
+                </StackPanel>
+            </Button>
+            <Button Classes="navItem" Classes.active="{Binding IsMacrosSelected}" ToolTip.Tip="{loc:Loc Nav_Macros}"
+                    Command="{Binding SelectPageCommand}" CommandParameter="{x:Static services:NavigationPage.Macros}">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <PathIcon Data="{StaticResource IconMacro}" />
+                    <TextBlock Classes="navLabel" Text="{loc:Loc NavLabel_Macros}" />
+                </StackPanel>
+            </Button>
+            <Button Classes="navItem" Classes.active="{Binding IsActionStoreSelected}" ToolTip.Tip="{loc:Loc Nav_Store}"
+                    Command="{Binding SelectPageCommand}" CommandParameter="{x:Static services:NavigationPage.ActionStore}">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <PathIcon Data="{StaticResource IconStore}" />
+                    <TextBlock Classes="navLabel" Text="{loc:Loc NavLabel_Store}" />
+                </StackPanel>
+            </Button>
+
+            <TextBlock Classes="overline" Text="{loc:Loc Nav_SectionSystem}" Margin="12,20,0,6" />
+            <Border Classes="navDivider" />
+            <Button Classes="navItem" Classes.active="{Binding IsLogsSelected}" ToolTip.Tip="{loc:Loc Nav_Logs}"
+                    Command="{Binding SelectPageCommand}" CommandParameter="{x:Static services:NavigationPage.Logs}">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <PathIcon Data="{StaticResource IconLogs}" />
+                    <TextBlock Classes="navLabel" Text="{loc:Loc NavLabel_Logs}" />
+                </StackPanel>
+            </Button>
+            <Button Classes="navItem" Classes.active="{Binding IsSettingsSelected}" ToolTip.Tip="{loc:Loc Nav_Settings}"
+                    Command="{Binding SelectPageCommand}" CommandParameter="{x:Static services:NavigationPage.Settings}">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <PathIcon Data="{StaticResource IconSettings}" />
+                    <TextBlock Classes="navLabel" Text="{loc:Loc NavLabel_Settings}" />
+                </StackPanel>
+            </Button>
+        </StackPanel>
+
+        <!-- Stopka: uśpienie sprzętu (podświetlone, gdy aktywne) + zwijanie paska -->
+        <StackPanel Grid.Row="3" Spacing="4">
+            <Border Height="1" Background="{StaticResource BorderSubtleBrush}" Margin="4,0,4,8" />
+            <Button Classes="navItem" Classes.active="{Binding IsStandby}" ToolTip.Tip="{loc:Loc Nav_Standby}"
+                    Command="{Binding ToggleStandbyCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <PathIcon Data="{StaticResource IconStandby}" />
+                    <TextBlock Classes="navLabel" Text="{loc:Loc NavLabel_Standby}" />
+                </StackPanel>
+            </Button>
+            <Button Classes="navItem" Command="{Binding ToggleSidebarCommand}" IsVisible="{Binding !IsAutoCollapsed}"
+                    ToolTip.Tip="{Binding SidebarToggleTip}">
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <Panel>
+                        <PathIcon Data="{StaticResource IconChevronLeft}" IsVisible="{Binding !IsSidebarCollapsed}" />
+                        <PathIcon Data="{StaticResource IconChevronRight}" IsVisible="{Binding IsSidebarCollapsed}" />
+                    </Panel>
+                    <TextBlock Classes="navLabel" Text="{loc:Loc Nav_Collapse}" />
+                </StackPanel>
+            </Button>
+        </StackPanel>
+    </Grid>
     </Border>
 </UserControl>

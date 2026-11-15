@@ -17,7 +17,7 @@
                 </StackPanel>
 
                 <Border Grid.Column="2" Background="{Binding VoicemodConnectionStatusColor}" CornerRadius="10" Padding="8,3" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding VoicemodConnectionStatusText}" FontSize="11" FontWeight="Bold" Foreground="#0F1117" />
+                    <TextBlock Text="{Binding VoicemodConnectionStatusText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource OnAccentBrush}" />
                 </Border>
             </Grid>
 
@@ -53,12 +53,12 @@
             <!-- Status bieżącej modulacji i odsłuchu -->
             <Border Classes="statusBadgeCard" Padding="12,10">
                 <StackPanel Spacing="6">
-                    <TextBlock Text="{Binding VoicemodActiveVoiceText}" FontWeight="Bold" FontSize="12" Foreground="#38BDF8" />
+                    <TextBlock Text="{Binding VoicemodActiveVoiceText}" FontWeight="Bold" FontSize="12" Foreground="{StaticResource AccentInfoBrush}" />
                     <WrapPanel Orientation="Horizontal">
-                        <TextBlock Text="{Binding VoicemodVoiceChangerStatusText}" FontSize="11" Foreground="#94A3B8" Margin="0,0,12,0" />
-                        <TextBlock Text="{Binding VoicemodHearStatusText}" FontSize="11" Foreground="#94A3B8" Margin="0,0,12,0" />
-                        <TextBlock Text="{Binding VoicemodMicStatusText}" FontSize="11" Foreground="#94A3B8" Margin="0,0,12,0" />
-                        <TextBlock Text="{Binding VoicemodBgStatusText}" FontSize="11" Foreground="#94A3B8" />
+                        <TextBlock Text="{Binding VoicemodVoiceChangerStatusText}" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,12,0" />
+                        <TextBlock Text="{Binding VoicemodHearStatusText}" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,12,0" />
+                        <TextBlock Text="{Binding VoicemodMicStatusText}" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,12,0" />
+                        <TextBlock Text="{Binding VoicemodBgStatusText}" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" />
                     </WrapPanel>
                 </StackPanel>
             </Border>
@@ -69,7 +69,7 @@
                     <Button Classes="pillBtn" Command="{Binding ConnectVoicemodCommand}"
                             IsEnabled="{Binding !IsVoicemodConnected}" Margin="0,0,8,8">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="🔗" FontSize="12" />
+                            <PathIcon Data="{StaticResource IconLink}" Width="12" Height="12" />
                             <TextBlock Text="{loc:Loc Voicemod_ConnectBtn}" />
                         </StackPanel>
                     </Button>
@@ -84,7 +84,7 @@
                     <Button Classes="pillBtn" Command="{Binding TestVoicemodToggleMuteCommand}"
                             Content="{loc:Loc Voicemod_TestToggleMuteBtn}" Margin="0,0,8,8" />
                     <Button Classes="pillBtn" Command="{Binding TestVoicemodToggleBgCommand}"
-                            Content="{loc:Loc Voicemod_TestToggleBgBtn, FallbackValue='🎧 Przełącz tło'}" Margin="0,0,8,8" />
+                            Content="{loc:Loc Voicemod_TestToggleBgBtn, FallbackValue='Przełącz tło'}" Margin="0,0,8,8" />
                     <Button Classes="pillBtn" Command="{Binding SaveVoicemodSettingsCommand}"
                             Content="{loc:Loc Voicemod_SaveBtn}" Margin="0,0,8,8" />
                 </WrapPanel>
@@ -92,7 +92,7 @@
                 <!-- Komunikat statusu i wskazówka -->
                 <TextBlock Text="{Binding VoicemodStatusMessage}" Foreground="{Binding VoicemodStatusMessageColor}"
                            FontWeight="SemiBold" FontSize="11" TextWrapping="Wrap" />
-                <TextBlock Text="{loc:Loc Voicemod_ConfigTip}" Classes="dim" FontSize="10" TextWrapping="Wrap" />
+                <TextBlock Text="{loc:Loc Voicemod_ConfigTip}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
             </StackPanel>
         </StackPanel>
     </Border>

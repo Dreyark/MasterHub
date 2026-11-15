@@ -10,7 +10,7 @@
             <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Grid.Column="0" Text="{loc:Loc Panoramic_SectionTitle}" Classes="caption" FontWeight="SemiBold" VerticalAlignment="Center" />
                 <Border Grid.Column="1" Background="{StaticResource CardActiveBgBrush}" CornerRadius="4" Padding="6,2">
-                    <TextBlock Text="480×272 (15 LCD)" Classes="dim" FontSize="10" />
+                    <TextBlock Text="480×272 (15 LCD)" Classes="dim" FontSize="10.5" />
                 </Border>
             </Grid>
 
@@ -38,6 +38,35 @@
                             HorizontalAlignment="Stretch" Padding="4,5" Margin="2,0,0,0"
                             Content="{loc:Loc Key_FitStretch}" ToolTip.Tip="{loc:Loc Key_FitStretchTip}" />
                 </Grid>
+            </StackPanel>
+
+            <!-- Zoom i przesunięcie całej tapety jako jednej całości -->
+            <StackPanel Spacing="6" IsVisible="{Binding IsPanoramicWallpaperActive}">
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0" Text="{loc:Loc Panoramic_Zoom}" Classes="caption" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{Binding PanoramicScaleLabel}" Classes="dim" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </Grid>
+                <Slider Minimum="20" Maximum="400" Value="{Binding PanoramicWallpaperScale}" />
+
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0" Text="{loc:Loc Panoramic_MoveX}" Classes="caption" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{Binding PanoramicOffsetXLabel}" Classes="dim" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </Grid>
+                <Slider Minimum="-100" Maximum="100" Value="{Binding PanoramicWallpaperOffsetX}" />
+
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBlock Grid.Column="0" Text="{loc:Loc Panoramic_MoveY}" Classes="caption" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{Binding PanoramicOffsetYLabel}" Classes="dim" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </Grid>
+                <Slider Minimum="-100" Maximum="100" Value="{Binding PanoramicWallpaperOffsetY}" />
+
+                <Button Classes="actionBtn" HorizontalAlignment="Stretch" Padding="6,4" Command="{Binding ResetPanoramicTransformCommand}">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="5">
+                        <PathIcon Data="{StaticResource IconRotate}" Width="10" Height="10" VerticalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc Panoramic_ResetBtn}" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <TextBlock Text="{loc:Loc Panoramic_MovingHint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
             </StackPanel>
         </StackPanel>
     </Border>

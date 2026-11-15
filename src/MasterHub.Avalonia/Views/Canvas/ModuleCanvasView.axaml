@@ -3,50 +3,44 @@
              xmlns:vm="using:MasterHub.Avalonia.ViewModels.Canvas"
              xmlns:canvas="using:MasterHub.Avalonia.Views.Canvas"
              xmlns:loc="using:MasterHub.Avalonia.Localization"
+             xmlns:ctl="using:MasterHub.Avalonia.Views.Controls"
              x:Class="MasterHub.Avalonia.Views.Canvas.ModuleCanvasView"
              x:DataType="vm:CanvasViewModel">
 
-    <Grid RowDefinitions="Auto,*" Margin="16">
-        <!-- Pasek narzędziowy kanwy -->
-        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,16">
-            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10">
-                <PathIcon Data="{StaticResource IconStudio}" Width="18" Height="18"
-                          Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
-                <TextBlock Text="{loc:Loc Canvas_ConfiguratorTitle}" Classes="h2" VerticalAlignment="Center" />
-                <Border Classes="statusBadgeCard">
-                    <TextBlock Text="{loc:Loc Canvas_ModularLayout}" Classes="badge" />
-                </Border>
-                <Button Classes="pillBtn" Command="{Binding CycleRotationCommand}"
+    <Grid RowDefinitions="Auto,Auto,*" Margin="24,24,24,8">
+        <!-- Nagłówek strony z przełącznikiem obrotu podstawki -->
+        <ctl:PageHeader Grid.Row="0" Icon="{StaticResource IconStudio}"
+                        Title="{loc:Loc NavLabel_Studio}" Subtitle="{loc:Loc Canvas_Subtitle}">
+            <ctl:PageHeader.Actions>
+                <Button Classes="actionBtn" Command="{Binding CycleRotationCommand}" Padding="14,8"
                         ToolTip.Tip="{loc:Loc Canvas_RotationTooltip}">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <PathIcon Data="{StaticResource IconRotate}" Width="13" Height="13"
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <PathIcon Data="{StaticResource IconRotate}" Width="14" Height="14"
                                   Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
                         <TextBlock Text="{Binding OrientationStatusText}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
                     </StackPanel>
                 </Button>
-            </StackPanel>
+            </ctl:PageHeader.Actions>
+        </ctl:PageHeader>
 
-            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+        <!-- Filtr widocznych modułów (przełącznik segmentowy) -->
+        <Border Grid.Row="1" Classes="segmented" Margin="0,0,0,18">
+            <StackPanel Orientation="Horizontal" Spacing="2">
                 <Button Classes="pillBtn" Classes.active="{Binding IsFilterAll}"
-                        Command="{Binding SetFilterCommand}" CommandParameter="Wszystko"
-                        Content="{loc:Loc Canvas_FilterAll}" />
+                        Command="{Binding SetFilterCommand}" CommandParameter="Wszystko" Content="{loc:Loc Canvas_FilterAll}" />
                 <Button Classes="pillBtn" Classes.active="{Binding IsFilterKeys}"
-                        Command="{Binding SetFilterCommand}" CommandParameter="Przyciski"
-                        Content="{loc:Loc Canvas_FilterKeys}" />
+                        Command="{Binding SetFilterCommand}" CommandParameter="Przyciski" Content="{loc:Loc Canvas_FilterKeys}" />
                 <Button Classes="pillBtn" Classes.active="{Binding IsFilterSliders}"
-                        Command="{Binding SetFilterCommand}" CommandParameter="Suwaki"
-                        Content="{loc:Loc Canvas_FilterSliders}" />
+                        Command="{Binding SetFilterCommand}" CommandParameter="Suwaki" Content="{loc:Loc Canvas_FilterSliders}" />
                 <Button Classes="pillBtn" Classes.active="{Binding IsFilterRollers}"
-                        Command="{Binding SetFilterCommand}" CommandParameter="Pokrętła"
-                        Content="{loc:Loc Canvas_FilterRollers}" />
+                        Command="{Binding SetFilterCommand}" CommandParameter="Pokrętła" Content="{loc:Loc Canvas_FilterRollers}" />
                 <Button Classes="pillBtn" Classes.active="{Binding IsFilterBase}"
-                        Command="{Binding SetFilterCommand}" CommandParameter="Podstawka"
-                        Content="{loc:Loc Canvas_FilterBase}" />
+                        Command="{Binding SetFilterCommand}" CommandParameter="Podstawka" Content="{loc:Loc Canvas_FilterBase}" />
             </StackPanel>
-        </Grid>
+        </Border>
 
         <!-- Obszar przewijany modułów z obsługą odznaczania po kliknięciu w tło -->
-        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
+        <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"
                       Background="Transparent"
                       PointerPressed="OnCanvasBackgroundPointerPressed">
             <StackPanel HorizontalAlignment="Center" Spacing="16" Margin="0,0,0,24">

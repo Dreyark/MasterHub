@@ -1,0 +1,31 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:macros="using:MasterHub.Core.Macros"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyMacroSettingsSectionView"
+             x:DataType="vm:KeyItemViewModel">
+
+    <StackPanel Spacing="8">
+        <StackPanel Spacing="4">
+            <TextBlock Text="{loc:Loc Macro_ParamLabel}" Classes="caption" />
+            <ComboBox ItemsSource="{Binding AvailableMacros}"
+                      SelectedItem="{Binding SelectedMacro, Mode=TwoWay}"
+                      PlaceholderText="{loc:Loc Macro_PickPlaceholder}"
+                      HorizontalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="macros:MacroDefinition">
+                        <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Grid.Column="0" Text="{Binding Name}" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" Text="{Binding Mode}" Classes="dim" FontSize="10.5" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </Grid>
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+        </StackPanel>
+        <Button Classes="pillBtn" Padding="8,4" HorizontalAlignment="Left"
+                Command="{Binding OpenMacrosPageCommand}"
+                Content="{loc:Loc Macro_OpenEditor}" />
+        <TextBlock Text="{loc:Loc Macro_DeckLoopHint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+    </StackPanel>
+</UserControl>

@@ -29,6 +29,10 @@ public partial class LogsPageViewModel : ObservableObject, IDisposable
         AddLog(() => string.Format(LocalizationService.Instance.GetString("Log_RollerConnection", "Połączenie rolek obrotowych: {0}"), _deviceService.IsRollerConnected ? "ONLINE" : "OFFLINE"));
         AddLog(() => string.Format(LocalizationService.Instance.GetString("Log_BaseConnection", "Połączenie stacji dokującej: {0}"), _deviceService.IsBaseConnected ? "ONLINE" : "OFFLINE"));
 
+        // the app's own lines (autostart, outbound calls …), including those written before this page existed
+        foreach (var (at, text) in MasterHub.Core.Diagnostics.AppLog.Recent()) AddLog(at, text);
+        MasterHub.Core.Diagnostics.AppLog.Written += OnAppLogWritten;
+
         _deviceService.KeyStateChanged += OnKeyStateChanged;
         _deviceService.SliderValueChanged += OnSliderValueChanged;
         _deviceService.RollerRotated += OnRollerRotated;
@@ -52,6 +56,17 @@ public partial class LogsPageViewModel : ObservableObject, IDisposable
             {
                 entry.Refresh();
             }
+        });
+    }
+
+    private void OnAppLogWritten(DateTime at, string text) => AddLog(at, text);
+
+    private void AddLog(DateTime at, string text)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            LogEntries.Insert(0, new LogEntryItemViewModel(at, () => text));
+            if (LogEntries.Count > 150) LogEntries.RemoveAt(LogEntries.Count - 1);
         });
     }
 
@@ -159,6 +174,7 @@ public partial class LogsPageViewModel : ObservableObject, IDisposable
         _disposed = true;
 
         LocalizationService.Instance.LanguageChanged -= OnLanguageChanged;
+        MasterHub.Core.Diagnostics.AppLog.Written -= OnAppLogWritten;
         _deviceService.KeyStateChanged -= OnKeyStateChanged;
         _deviceService.SliderValueChanged -= OnSliderValueChanged;
         _deviceService.RollerRotated -= OnRollerRotated;

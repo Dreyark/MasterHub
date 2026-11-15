@@ -1,0 +1,74 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Przycisk pastylkowy (Pill Button / Chip) -->
+    <Style Selector="Button.pillBtn">
+        <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="Padding" Value="12,5" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.pillBtn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource CardHoverBgBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
+    </Style>
+    <Style Selector="Button.pillBtn.active /template/ ContentPresenter#PART_ContentPresenter, Button.pillBtn.active:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.pillBtn:checked /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.pillBtn:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource AccentPrimaryBrush}" />
+        <Setter Property="Foreground" Value="#FFFFFF" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
+    </Style>
+    <Style Selector="Button.pillBtn:disabled">
+        <Setter Property="Opacity" Value="0.4" />
+        <Setter Property="Cursor" Value="Arrow" />
+    </Style>
+    <Style Selector="Button.pillBtn:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+    </Style>
+
+    <!-- Kafelek ikony / symbolu (galeria ikon klawisza) -->
+    <Style Selector="Button.glyphBtn">
+        <Setter Property="Background" Value="{StaticResource CardActiveBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.glyphBtn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource CardHoverBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
+    </Style>
+
+    <!--
+        Próbka koloru: tło pochodzi z bindingu (Background="{Binding Hex}"), więc szablon jest uproszczony do samego
+        Border – inaczej Fluent podmieniałby kolor próbki na szary przy najechaniu myszą.
+    -->
+    <Style Selector="Button.swatchBtn">
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="PART_Swatch"
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="{TemplateBinding CornerRadius}" />
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="Button.swatchBtn:pointerover /template/ Border#PART_Swatch">
+        <Setter Property="BorderBrush" Value="{StaticResource TextPrimaryBrush}" />
+        <Setter Property="BorderThickness" Value="2" />
+    </Style>
+</Styles>

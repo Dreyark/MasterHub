@@ -10,7 +10,7 @@
             <!-- Nagłówek modułu -->
             <StackPanel Spacing="2" HorizontalAlignment="Center">
                 <TextBlock Text="{loc:Loc Canvas_BaseStation_Title}" Classes="caption" FontWeight="Bold" HorizontalAlignment="Center" />
-                <TextBlock Text="LED RGB" Classes="dim" FontSize="9" HorizontalAlignment="Center" />
+                <TextBlock Text="LED RGB" Classes="dim" FontSize="10.5" HorizontalAlignment="Center" />
             </StackPanel>
 
             <!-- Karta podstawki dokującej w układzie pionowym (zajmuje mało miejsca obok klawiatury) -->
@@ -29,7 +29,7 @@
 
                     <!-- Wskaźnik jasności pod listwą -->
                     <StackPanel Spacing="2" HorizontalAlignment="Center">
-                        <TextBlock Text="{loc:Loc Canvas_Brightness}" Classes="dim" FontSize="9" HorizontalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc Canvas_Brightness}" Classes="dim" FontSize="10.5" HorizontalAlignment="Center" />
                         <TextBlock Text="{Binding BaseStation.BrightnessDisplay, FallbackValue='100%'}"
                                    FontSize="12" FontWeight="Bold"
                                    Foreground="{StaticResource AccentPrimaryBrush}" HorizontalAlignment="Center" />

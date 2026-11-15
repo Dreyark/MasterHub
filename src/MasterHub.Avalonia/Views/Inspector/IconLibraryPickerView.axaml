@@ -1,0 +1,45 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ivm="using:MasterHub.Avalonia.ViewModels.Inspector"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.IconLibraryPickerView"
+             x:DataType="ivm:IconPickerViewModel">
+
+    <!-- Biblioteka ikon (Lucide): wyszukiwarka, kolor ikony, siatka wyników; kliknięcie kładzie ikonę na klawisz -->
+    <StackPanel Spacing="8" Width="320">
+        <TextBox x:Name="SearchBox" Text="{Binding Query}" PlaceholderText="{loc:Loc IconLib_Search}" />
+
+        <ItemsControl ItemsSource="{x:Static ivm:IconPickerViewModel.TintOptions}">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="x:String">
+                    <Button Classes="swatchBtn" Width="20" Height="20" Margin="2" CornerRadius="10" Padding="0"
+                            Background="{Binding}" BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
+                            Tag="{Binding}" Click="OnTintClick" Cursor="Hand" />
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <ScrollViewer MaxHeight="260" VerticalScrollBarVisibility="Auto">
+            <ItemsControl ItemsSource="{Binding Results}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="ivm:IconChoice">
+                        <Button Classes="glyphBtn" Width="38" Height="38" Margin="2" Padding="4"
+                                Background="#18181B" Tag="{Binding Name}" Click="OnIconClick"
+                                ToolTip.Tip="{Binding Label}" Cursor="Hand">
+                            <Image Source="{Binding Preview}" Width="26" Height="26" />
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <TextBlock Text="{loc:Loc IconLib_NoResults}" Classes="dim" FontSize="11" IsVisible="{Binding HasNoResults}" />
+        <TextBlock Text="{loc:Loc IconLib_Credit}" Classes="dim" FontSize="10" TextWrapping="Wrap" />
+    </StackPanel>
+</UserControl>

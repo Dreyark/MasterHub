@@ -6,6 +6,7 @@
         xmlns:canvas="using:MasterHub.Avalonia.Views.Canvas"
         xmlns:inspector="using:MasterHub.Avalonia.Views.Inspector"
         xmlns:pages="using:MasterHub.Avalonia.Views.Pages"
+        xmlns:controls="using:MasterHub.Avalonia.Views.Controls"
         x:Class="MasterHub.Avalonia.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="Cooler Master MasterHub"
@@ -14,8 +15,8 @@
         WindowStartupLocation="CenterScreen"
         WindowDecorations="BorderOnly"
         ExtendClientAreaToDecorationsHint="True"
-        ExtendClientAreaTitleBarHeightHint="44"
-        Background="{StaticResource MainBgBrush}">
+        ExtendClientAreaTitleBarHeightHint="52"
+        Background="{StaticResource WindowBgBrush}">
 
     <Window.Styles>
         <Style Selector="TextBlock#PART_Title">
@@ -26,53 +27,52 @@
         </Style>
     </Window.Styles>
 
-    <Grid RowDefinitions="44,*">
-        <!-- Zintegrowany TitleBar -->
-        <win:TitleBarView Grid.Row="0" />
+    <!-- Rama okna (MainBg): pasek boczny na całą wysokość + pasek tytułu nad treścią.
+         Strony leżą na niej jako pływające panele (Border.pagePanel, Styles/Shell.axaml). -->
+    <!-- Jeden rytm odstępów: 16 px między paskiem bocznym, panelami i krawędziami okna; górne krawędzie wyrównane. -->
+    <Grid ColumnDefinitions="Auto,*" RowDefinitions="52,*">
+        <win:TitleBarView Grid.Row="0" Grid.ColumnSpan="2" />
+        <nav:NavigationSidebarView Grid.Row="1" Grid.Column="0" DataContext="{Binding Navigation}" />
 
-        <!-- Główny układ: Lewa Nawigacja (72px) + Dynamiczna Treść -->
-        <Grid Grid.Row="1" ColumnDefinitions="72,*" Margin="0,8,12,12">
-            <!-- Kolumna 1: Lewa Nawigacja (72px) -->
-            <nav:NavigationSidebarView Grid.Column="0" DataContext="{Binding Navigation}" />
-
-            <!-- Kolumna 2: Główny obszar stron -->
-            <Panel Grid.Column="1" Margin="8,0,0,0">
-                <!-- Strona 1: Studio Konfiguracji (Układ 2-kolumnowy: Środek + Prawy Inspektor) -->
-                <Grid ColumnDefinitions="*,390" IsVisible="{Binding Navigation.IsStudioSelected}">
-                    <Border Grid.Column="0" Background="{StaticResource PanelBgBrush}"
-                            CornerRadius="12" Margin="0,0,8,0" ClipToBounds="True">
+        <Grid Grid.Row="1" Grid.Column="1">
+            <Panel Margin="0,0,16,16">
+                <!-- Studio: kanwa modułów + inspektor po prawej -->
+                <Grid ColumnDefinitions="*,380" IsVisible="{Binding Navigation.IsStudioSelected}">
+                    <Border Grid.Column="0" Classes="pagePanel" Margin="0,0,16,0">
                         <canvas:ModuleCanvasView DataContext="{Binding Canvas}" />
                     </Border>
-                    <Border Grid.Column="1" Background="{StaticResource PanelBgBrush}"
-                            CornerRadius="12" ClipToBounds="True">
+                    <Border Grid.Column="1" Classes="pagePanel">
                         <inspector:InspectorPanelView DataContext="{Binding Inspector}" />
                     </Border>
                 </Grid>
 
-                <!-- Strona 2: Zarządzanie Profilami -->
-                <Border Background="{StaticResource PanelBgBrush}" CornerRadius="12" ClipToBounds="True"
-                        IsVisible="{Binding Navigation.IsProfilesSelected}">
+                <Border Classes="pagePanel" IsVisible="{Binding Navigation.IsProfilesSelected}">
                     <pages:ProfilesPageView DataContext="{Binding Profiles}" />
                 </Border>
-
-                <!-- Strona 3: Biblioteka Akcji i Integracji (Action Store) -->
-                <Border Background="{StaticResource PanelBgBrush}" CornerRadius="12" ClipToBounds="True"
-                        IsVisible="{Binding Navigation.IsActionStoreSelected}">
+                <Border Classes="pagePanel" IsVisible="{Binding Navigation.IsActionStoreSelected}">
                     <pages:ActionStorePageView DataContext="{Binding ActionStore}" />
                 </Border>
-
-                <!-- Strona 4: Konsola Logów Zdarzeń -->
-                <Border Background="{StaticResource PanelBgBrush}" CornerRadius="12" ClipToBounds="True"
-                        IsVisible="{Binding Navigation.IsLogsSelected}">
+                <Border Classes="pagePanel" IsVisible="{Binding Navigation.IsMacrosSelected}">
+                    <pages:MacrosPageView DataContext="{Binding Macros}" />
+                </Border>
+                <Border Classes="pagePanel" IsVisible="{Binding Navigation.IsLogsSelected}">
                     <pages:LogsPageView DataContext="{Binding Logs}" />
                 </Border>
-
-                <!-- Strona 5: Ustawienia -->
-                <Border Background="{StaticResource PanelBgBrush}" CornerRadius="12" ClipToBounds="True"
-                        IsVisible="{Binding Navigation.IsSettingsSelected}">
+                <Border Classes="pagePanel" IsVisible="{Binding Navigation.IsSettingsSelected}">
                     <pages:SettingsPageView DataContext="{Binding Settings}" />
                 </Border>
+                <controls:QuarantineBannerView DataContext="{Binding Quarantine}" VerticalAlignment="Top" />
+                <controls:ActiveTimersView DataContext="{Binding Canvas.ActiveTimers}" />
+                <controls:DraftBannerView DataContext="{Binding Draft}" VerticalAlignment="Top" />
+                <controls:TourView DataContext="{Binding Tour}" />
+                <controls:AssistCardView DataContext="{Binding Assist}" />
             </Panel>
         </Grid>
+
+        <!-- Banery błędów i ostrzeżeń (T-34 #8) – nad stronami, pod nakładką potwierdzeń -->
+        <controls:NoticeBannerView Grid.Row="1" Grid.Column="1" DataContext="{Binding Notices}" />
+
+        <!-- Nakładka potwierdzeń (nad całą zawartością okna, w tym paskiem tytułu) -->
+        <controls:ConfirmOverlayView Grid.Row="0" Grid.RowSpan="2" Grid.ColumnSpan="2" DataContext="{Binding ConfirmOverlay}" />
     </Grid>
 </Window>

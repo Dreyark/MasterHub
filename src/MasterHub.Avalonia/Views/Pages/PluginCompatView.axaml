@@ -1,0 +1,28 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Pages.PluginCompatView"
+             x:DataType="vm:StreamDeckPluginItemViewModel">
+
+    <!-- T-31: odznaka zgodności, powody "dlaczego nie działa", flaga CPU i pobranie Node.js za zgodą -->
+    <StackPanel Spacing="4" Margin="0,4,0,0">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+            <Border Classes="statusBadgeCard" Padding="7,1" IsVisible="{Binding CanRun}">
+                <TextBlock Text="{Binding VerdictText}" Classes="badge" Foreground="{StaticResource AccentSuccessBrush}" />
+            </Border>
+            <Border Classes="statusBadgeCard" Padding="7,1" IsVisible="{Binding IsPartial}">
+                <TextBlock Text="{Binding VerdictText}" Classes="badge" Foreground="{StaticResource AccentCautionBrush}" />
+            </Border>
+            <Border Classes="statusBadgeCard" Padding="7,1" IsVisible="{Binding !Compat.CanRun}">
+                <TextBlock Text="{Binding VerdictText}" Classes="badge" Foreground="{StaticResource AccentWarningBrush}" />
+            </Border>
+            <Border Classes="statusBadgeCard" Padding="7,1" IsVisible="{Binding IsCpuHeavy}">
+                <TextBlock Text="{Binding CpuText}" Classes="badge" Foreground="{StaticResource AccentCautionBrush}" />
+            </Border>
+        </StackPanel>
+        <TextBlock Text="{Binding IssuesText}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" IsVisible="{Binding HasIssues}" />
+        <Button Classes="pillBtn" HorizontalAlignment="Left" Content="{loc:Loc Plugin_DownloadNode}" Click="OnDownloadNodeClick"
+                IsVisible="{Binding NeedsNode}" ToolTip.Tip="{loc:Loc Plugin_DownloadNodeTip}" />
+    </StackPanel>
+</UserControl>

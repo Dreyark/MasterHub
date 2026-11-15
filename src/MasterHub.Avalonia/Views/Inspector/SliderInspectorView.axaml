@@ -9,7 +9,7 @@
         <!-- Nagłówek suwaka -->
         <Border Classes="inspectorSection">
             <Grid ColumnDefinitions="Auto,*,Auto">
-                <TextBlock Grid.Column="0" Text="🎚️" FontSize="20" Margin="0,0,10,0" VerticalAlignment="Center" />
+                <PathIcon Data="{StaticResource IconFaders}" Width="20" Height="20" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center" />
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock Text="{Binding Name}" Classes="h3" />
                     <TextBlock Text="{Binding SelectedTarget}" Classes="caption" TextTrimming="CharacterEllipsis" />
@@ -17,7 +17,7 @@
                 <Button Grid.Column="2" Classes="iconBtn" Command="{Binding ClearCommand}"
                         IsVisible="{Binding HasTarget}"
                         ToolTip.Tip="{loc:Loc Slider_ClearTargetTip}" Padding="6">
-                    <TextBlock Text="🗑️" FontSize="13" />
+                    <PathIcon Data="{StaticResource IconTrash}" Width="13" Height="13" />
                 </Button>
             </Grid>
         </Border>
@@ -52,7 +52,7 @@
                 </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Button Width="26" Height="26" Margin="3" CornerRadius="13" Padding="0"
+                        <Button Classes="swatchBtn" Width="26" Height="26" Margin="3" CornerRadius="13" Padding="0"
                                 Background="{Binding Hex}"
                                 Tag="{Binding Hex}"
                                 Click="OnPresetColorClick"

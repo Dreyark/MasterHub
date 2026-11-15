@@ -1,6 +1,6 @@
 # ==============================================================================
 # MasterHub - Comprehensive .gitignore
-# Designed for .NET 10, C# 13, Avalonia 11, Visual Studio, VS Code, and Rider
+# Designed for .NET 10, C# 14, Avalonia 12, Visual Studio, VS Code, and Rider
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
@@ -121,7 +121,18 @@ Icon
 # ------------------------------------------------------------------------------
 *.nupkg
 *.snupkg
-**/packages/*
-!**/packages/build/
+# only the NuGet restore folder at the repository root: a broad `**/packages/` rule also hid the source folder
+# src/MasterHub.Core/Profiles/Packages/ (Windows paths are not case-sensitive)
+/packages/
 project.lock.json
 project.assets.json
+*.binlog
+BenchmarkDotNet.Artifacts/
+
+# ------------------------------------------------------------------------------
+# Local tooling and private notes (stay on the developer's PC, never published)
+# ------------------------------------------------------------------------------
+.claude/
+CLAUDE.md
+graphify-out/
+docs/internal/

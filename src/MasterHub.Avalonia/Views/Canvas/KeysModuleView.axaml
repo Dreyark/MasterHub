@@ -14,13 +14,19 @@
 
                 <!-- Pasek nawigacji stron (widoczny poza folderem) -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" IsVisible="{Binding !IsInsideFolder}">
-                    <Button Content="◀" Command="{Binding PreviousPageCommand}" IsEnabled="{Binding CanGoPreviousPage}" Classes="pillBtn" Padding="8,4" ToolTip.Tip="{loc:Loc Action_PreviousPage}" />
+                    <Button Command="{Binding PreviousPageCommand}" IsEnabled="{Binding CanGoPreviousPage}" Classes="pillBtn" Padding="8,4" ToolTip.Tip="{loc:Loc Action_PreviousPage}" >
+    <PathIcon Data="{StaticResource IconChevronLeft}" Width="12" Height="12" />
+</Button>
                     <Border Background="{StaticResource CardActiveBgBrush}" CornerRadius="6" Padding="10,4" VerticalAlignment="Center">
                         <TextBlock Text="{Binding CurrentPageDisplayName}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
                     </Border>
-                    <Button Content="▶" Command="{Binding NextPageCommand}" IsEnabled="{Binding CanGoNextPage}" Classes="pillBtn" Padding="8,4" ToolTip.Tip="{loc:Loc Action_NextPage}" />
+                    <Button Command="{Binding NextPageCommand}" IsEnabled="{Binding CanGoNextPage}" Classes="pillBtn" Padding="8,4" ToolTip.Tip="{loc:Loc Action_NextPage}" >
+    <PathIcon Data="{StaticResource IconChevronRight}" Width="12" Height="12" />
+</Button>
                     <Button Content="+" Command="{Binding AddNewPageCommand}" Classes="pillBtn" Padding="8,4" FontWeight="Bold" ToolTip.Tip="{loc:Loc Nav_AddPage}" />
-                    <Button Content="✕" Command="{Binding DeleteCurrentPageCommand}" IsEnabled="{Binding CanDeleteCurrentPage}" Classes="pillBtn" Padding="8,4" ToolTip.Tip="{loc:Loc Nav_DeletePage}" />
+                    <Button Command="{Binding DeleteCurrentPageCommand}" IsEnabled="{Binding CanDeleteCurrentPage}" Classes="pillBtn" Padding="8,4" ToolTip.Tip="{loc:Loc Nav_DeletePage}" >
+    <PathIcon Data="{StaticResource IconClose}" Width="12" Height="12" />
+</Button>
                 </StackPanel>
 
                 <!-- Pasek nawigacji folderu (widoczny wewnątrz folderu / podmenu) -->

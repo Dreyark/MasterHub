@@ -1,0 +1,37 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.BaseEdgeEffectView"
+             x:DataType="vm:BaseStationItemViewModel">
+    <!-- Efekt świetlny krawędzi podstawy (per profil) oraz reakcje diody na sytuacje (mikrofon, OBS, Discord). -->
+    <StackPanel Spacing="8">
+        <StackPanel Spacing="4">
+            <TextBlock Text="{loc:Loc Base_EdgeEffect}" Classes="caption" />
+            <ComboBox ItemsSource="{x:Static vm:BaseStationItemViewModel.EffectOptions}" SelectedItem="{Binding SelectedEdgeEffect, Mode=TwoWay}"
+                      HorizontalAlignment="Stretch" />
+        </StackPanel>
+
+        <StackPanel Spacing="4" IsVisible="{Binding ShowsEdgeSpeed}">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="{loc:Loc Base_EdgeSpeed}" Classes="caption" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="{Binding EdgeSpeedDisplay}" FontSize="12" FontWeight="Bold"
+                           Foreground="{StaticResource AccentPrimaryBrush}" />
+            </Grid>
+            <Slider Minimum="0" Maximum="100" Value="{Binding EdgeSpeed}" />
+        </StackPanel>
+
+        <Border Classes="callout" Padding="12,10">
+            <StackPanel Spacing="6">
+                <TextBlock Text="{loc:Loc Base_StatusTitle}" FontWeight="SemiBold" FontSize="12" />
+                <TextBlock Text="{loc:Loc Base_StatusHint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+                <CheckBox IsChecked="{Binding StatusLightsEnabled, Mode=TwoWay}" Content="{loc:Loc Base_StatusEnable}" />
+                <StackPanel Spacing="4" Margin="18,0,0,0" IsVisible="{Binding StatusLightsEnabled}">
+                    <CheckBox IsChecked="{Binding StatusMicMuted, Mode=TwoWay}" Content="{loc:Loc Base_StatusMic}" />
+                    <CheckBox IsChecked="{Binding StatusObsLive, Mode=TwoWay}" Content="{loc:Loc Base_StatusObs}" />
+                    <CheckBox IsChecked="{Binding StatusDiscordMuted, Mode=TwoWay}" Content="{loc:Loc Base_StatusDiscord}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

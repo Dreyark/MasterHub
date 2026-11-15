@@ -47,9 +47,7 @@ public class WindowsStartupService : IStartupService
                 string exePath = GetStartupExecutablePath();
                 if (string.IsNullOrWhiteSpace(exePath)) return false;
 
-                string args = startMinimized ? " --autostart --minimized" : " --autostart";
-                string command = $"\"{exePath}\"{args}";
-                key.SetValue(AppName, command);
+                key.SetValue(AppName, AutostartEntry.BuildCommand(exePath, startMinimized));
             }
             else
             {
@@ -60,6 +58,23 @@ public class WindowsStartupService : IStartupService
         catch
         {
             return false;
+        }
+    }
+
+    /// <inheritdoc />
+    public AutostartRenewal RenewOnStart()
+    {
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) return default;
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(RunRegistryKey, writable: true);
+            if (key == null) return default;
+            string? current = key.GetValue(AppName) as string;
+            return AutostartEntry.Renew(current, GetStartupExecutablePath(), command => key.SetValue(AppName, command));
+        }
+        catch
+        {
+            return new AutostartRenewal(IsRunAtStartupEnabled(), false, null);
         }
     }
 
@@ -80,9 +95,16 @@ public class WindowsStartupService : IStartupService
             }
         }
 
+        string? procPath = Environment.ProcessPath;
+        if (!string.IsNullOrWhiteSpace(procPath) && procPath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        {
+            return procPath;
+        }
+
         try
         {
-            var mainModule = Process.GetCurrentProcess().MainModule?.FileName;
+            using var currentProc = Process.GetCurrentProcess();
+            var mainModule = currentProc.MainModule?.FileName;
             if (!string.IsNullOrWhiteSpace(mainModule))
             {
                 if (string.Equals(Path.GetExtension(mainModule), ".exe", StringComparison.OrdinalIgnoreCase))

@@ -1,8 +1,9 @@
+using System;
 using System.Collections.Generic;
 
 namespace MasterHub.Core.Audio;
 
-public interface IAudioService
+public interface IAudioService : IDisposable
 {
     float GetMasterPlaybackVolume();
     void SetMasterPlaybackVolume(float volume);

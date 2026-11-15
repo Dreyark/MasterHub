@@ -3,15 +3,21 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using MasterHub.Core.Profiles.Backup;
 using MasterHub.Core.Security;
 
 namespace MasterHub.Core.Profiles;
 
-public class ProfileService : IProfileService
+public partial class ProfileService : IProfileService
 {
+    private readonly object _fileLock = new();
     private readonly string _profilesDirectory;
     private readonly string _settingsFilePath;
     private readonly ISecretProtectionService _secretProtection;
+    private readonly ProfileMigrator _migrator;
+    private readonly List<string> _quarantined = new();
+    private bool _migrationSnapshotTaken;
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
         WriteIndented = true,
@@ -20,6 +26,8 @@ public class ProfileService : IProfileService
     };
 
     private string _activeProfileId = "";
+    // Aktywny profil ustawiony automatycznie (Smart Profiles) – tylko w pamięci, nie trafia do settings.json.
+    private string? _transientActiveProfileId;
     private List<string> _savedColors = new()
     {
         "#00FFCC", "#7928CA", "#38BDF8", "#EF4444", "#F59E0B", "#10B981"
@@ -35,9 +43,19 @@ public class ProfileService : IProfileService
     private HomeAssistantSettingsModel _homeAssistantSettings = new();
     private AppSettingsModel _appSettings = new();
 
-    public ProfileService(string? customBasePath = null, ISecretProtectionService? secretProtection = null)
+    /// <summary>Snapshots of settings and profiles (daily, before delete/import/migration, manual).</summary>
+    public IBackupService Backups { get; }
+
+    /// <summary>Files that could not be read and were renamed to <c>*.corrupt-&lt;timestamp&gt;</c> (never deleted).</summary>
+    public IReadOnlyList<string> QuarantinedFiles
+    {
+        get { lock (_fileLock) { return _quarantined.ToList(); } }
+    }
+
+    public ProfileService(string? customBasePath = null, ISecretProtectionService? secretProtection = null, ProfileMigrator? migrator = null)
     {
         _secretProtection = secretProtection ?? new SecretProtectionService();
+        _migrator = migrator ?? ProfileMigrator.Default;
         string baseDir = customBasePath ?? Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             "MasterHub");
@@ -45,7 +63,12 @@ public class ProfileService : IProfileService
         _profilesDirectory = Path.Combine(baseDir, "profiles");
         _settingsFilePath = Path.Combine(baseDir, "settings.json");
 
+        Backups = new BackupService(baseDir, mirrorPath: () => _appSettings.BackupMirrorPath);
+        // Daily snapshot first, so that a bad migration or a corrupt file can always be rolled back.
+        try { Backups.EnsureDailySnapshot(); } catch { }
+
         EnsureDirectoryAndDefaultProfile();
+        InitializeDrafts(baseDir);
     }
 
     private void EnsureDirectoryAndDefaultProfile()
@@ -71,23 +94,8 @@ public class ProfileService : IProfileService
             else
             {
                 var def = existing.FirstOrDefault(p => p.IsDefault) ?? existing.FirstOrDefault(p => p.Id == "default") ?? existing[0];
-                if (def.Id == "default" && (def.LedColorHex == "#00FFCC" || def.Sliders.Any(s => s.ColorHex == "#00FFCC")))
-                {
-                    def.LedColorHex = "#000000";
-                    def.BaseBrightness = 0;
-                    foreach (var s in def.Sliders)
-                    {
-                        s.ColorHex = "#000000";
-                        s.Brightness = 0;
-                    }
-                    foreach (var r in def.Rollers)
-                    {
-                        r.ColorHex = "#000000";
-                        r.Brightness = 0;
-                    }
-                    SaveProfile(def);
-                }
-
+                // Uwaga: usunięto dawną "migrację", która przy KAŻDYM starcie zerowała kolor i jasność
+                // profilu domyślnego, jeśli użytkownik wybrał paletowy kolor #00FFCC (utrata ustawień).
                 if (string.IsNullOrWhiteSpace(_activeProfileId) || existing.All(p => p.Id != _activeProfileId))
                 {
                     _activeProfileId = def.Id;
@@ -98,207 +106,256 @@ public class ProfileService : IProfileService
         catch { }
     }
 
-    private void LoadSettings()
+    private static void AtomicWriteText(string path, string content)
     {
+        string tmpPath = $"{path}.{Guid.NewGuid():N}.tmp";
         try
         {
-            if (File.Exists(_settingsFilePath))
+            File.WriteAllText(tmpPath, content);
+            File.Move(tmpPath, path, overwrite: true);
+        }
+        finally
+        {
+            try { if (File.Exists(tmpPath)) File.Delete(tmpPath); } catch { }
+        }
+    }
+
+    /// <summary>
+    /// Identyfikator profilu staje się nazwą pliku, więc musi być bezpieczny:
+    /// tylko litery, cyfry, '-' i '_' (blokuje path traversal typu "..\settings" z importowanych plików).
+    /// </summary>
+    internal static bool IsSafeProfileId(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id) || id.Length > 64) return false;
+        foreach (char c in id)
+        {
+            if (!(char.IsAsciiLetterOrDigit(c) || c == '-' || c == '_')) return false;
+        }
+        return true;
+    }
+
+    private void LoadSettings()
+    {
+        lock (_fileLock)
+        {
+            try
             {
-                string json = File.ReadAllText(_settingsFilePath);
-                using var doc = JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty("ActiveProfileId", out var prop))
+                if (File.Exists(_settingsFilePath))
                 {
-                    _activeProfileId = prop.GetString() ?? "";
-                }
-                if (doc.RootElement.TryGetProperty("SavedColors", out var colProp) && colProp.ValueKind == JsonValueKind.Array)
-                {
-                    var loaded = colProp.EnumerateArray()
-                        .Select(x => x.GetString() ?? "")
-                        .Where(x => !string.IsNullOrWhiteSpace(x))
-                        .ToList();
-                    if (loaded.Count > 0)
+                    string json = File.ReadAllText(_settingsFilePath);
+                    JsonDocument parsed;
+                    try { parsed = JsonDocument.Parse(json); }
+                    catch (JsonException)
                     {
-                        _savedColors = loaded;
+                        // Unreadable settings.json: keep it (never delete) and continue with defaults.
+                        Quarantine(_settingsFilePath);
+                        return;
+                    }
+                    using var doc = parsed;
+                    if (doc.RootElement.TryGetProperty("ActiveProfileId", out var prop))
+                    {
+                        _activeProfileId = prop.GetString() ?? "";
+                    }
+                    if (doc.RootElement.TryGetProperty("SavedColors", out var colProp) && colProp.ValueKind == JsonValueKind.Array)
+                    {
+                        var loaded = colProp.EnumerateArray()
+                            .Select(x => x.GetString() ?? "")
+                            .Where(x => !string.IsNullOrWhiteSpace(x))
+                            .ToList();
+                        if (loaded.Count > 0)
+                        {
+                            _savedColors = loaded;
+                        }
+                    }
+                    if (doc.RootElement.TryGetProperty("DiscordSettings", out var dcProp) && dcProp.ValueKind == JsonValueKind.Object)
+                    {
+                        _discordSettings = JsonSerializer.Deserialize<DiscordSettingsModel>(dcProp.GetRawText(), _jsonOptions) ?? new();
+                        _discordSettings.ClientSecret = _secretProtection.Unprotect(_discordSettings.ClientSecret) ?? "";
+                        _discordSettings.AccessToken = _secretProtection.Unprotect(_discordSettings.AccessToken) ?? "";
+                    }
+                    if (doc.RootElement.TryGetProperty("ObsSettings", out var obsProp) && obsProp.ValueKind == JsonValueKind.Object)
+                    {
+                        _obsSettings = JsonSerializer.Deserialize<ObsSettingsModel>(obsProp.GetRawText(), _jsonOptions) ?? new();
+                        _obsSettings.Password = _secretProtection.Unprotect(_obsSettings.Password) ?? "";
+                    }
+                    if (doc.RootElement.TryGetProperty("TwitchSettings", out var twitchProp) && twitchProp.ValueKind == JsonValueKind.Object)
+                    {
+                        _twitchSettings = JsonSerializer.Deserialize<TwitchSettingsModel>(twitchProp.GetRawText(), _jsonOptions) ?? new();
+                        _twitchSettings.OAuthToken = _secretProtection.Unprotect(_twitchSettings.OAuthToken) ?? "";
+                    }
+                    if (doc.RootElement.TryGetProperty("KickSettings", out var kickProp) && kickProp.ValueKind == JsonValueKind.Object)
+                    {
+                        _kickSettings = JsonSerializer.Deserialize<KickSettingsModel>(kickProp.GetRawText(), _jsonOptions) ?? new();
+                        _kickSettings.AuthToken = _secretProtection.Unprotect(_kickSettings.AuthToken) ?? "";
+                    }
+                    if (doc.RootElement.TryGetProperty("JetKvmSettings", out var jetProp) && jetProp.ValueKind == JsonValueKind.Object)
+                    {
+                        _jetKvmSettings = JsonSerializer.Deserialize<JetKvmSettingsModel>(jetProp.GetRawText(), _jsonOptions) ?? new();
+                        _jetKvmSettings.AuthToken = _secretProtection.Unprotect(_jetKvmSettings.AuthToken) ?? "";
+                    }
+                    if (doc.RootElement.TryGetProperty("SpotifySettings", out var spotifyProp) && spotifyProp.ValueKind == JsonValueKind.Object)
+                    {
+                        _spotifySettings = JsonSerializer.Deserialize<SpotifySettingsModel>(spotifyProp.GetRawText(), _jsonOptions) ?? new();
+                        _spotifySettings.AccessToken = _secretProtection.Unprotect(_spotifySettings.AccessToken) ?? "";
+                        _spotifySettings.RefreshToken = _secretProtection.Unprotect(_spotifySettings.RefreshToken) ?? "";
+                        _spotifySettings.ClientSecret = _secretProtection.Unprotect(_spotifySettings.ClientSecret) ?? "";
+                    }
+                    if (doc.RootElement.TryGetProperty("VlcSettings", out var vlcProp) && vlcProp.ValueKind == JsonValueKind.Object)
+                    {
+                        _vlcSettings = JsonSerializer.Deserialize<VlcSettingsModel>(vlcProp.GetRawText(), _jsonOptions) ?? new();
+                        _vlcSettings.Password = _secretProtection.Unprotect(_vlcSettings.Password) ?? "";
+                    }
+                    if (doc.RootElement.TryGetProperty("VoicemodSettings", out var vmProp) && vmProp.ValueKind == JsonValueKind.Object)
+                    {
+                        _voicemodSettings = JsonSerializer.Deserialize<VoicemodSettingsModel>(vmProp.GetRawText(), _jsonOptions) ?? new();
+                        _voicemodSettings.ApiKey = _secretProtection.Unprotect(_voicemodSettings.ApiKey) ?? "";
+                    }
+                    if (doc.RootElement.TryGetProperty("HomeAssistantSettings", out var haProp) && haProp.ValueKind == JsonValueKind.Object)
+                    {
+                        _homeAssistantSettings = JsonSerializer.Deserialize<HomeAssistantSettingsModel>(haProp.GetRawText(), _jsonOptions) ?? new();
+                        _homeAssistantSettings.AccessToken = _secretProtection.Unprotect(_homeAssistantSettings.AccessToken) ?? "";
+                        _homeAssistantSettings.ServerUrl = _secretProtection.Unprotect(_homeAssistantSettings.ServerUrl) ?? _homeAssistantSettings.ServerUrl;
+                    }
+                    if (doc.RootElement.TryGetProperty("AppSettings", out var appProp) && appProp.ValueKind == JsonValueKind.Object)
+                    {
+                        _appSettings = JsonSerializer.Deserialize<AppSettingsModel>(appProp.GetRawText(), _jsonOptions) ?? new();
                     }
                 }
-                if (doc.RootElement.TryGetProperty("DiscordSettings", out var dcProp) && dcProp.ValueKind == JsonValueKind.Object)
-                {
-                    _discordSettings = JsonSerializer.Deserialize<DiscordSettingsModel>(dcProp.GetRawText(), _jsonOptions) ?? new();
-                    _discordSettings.ClientSecret = _secretProtection.Unprotect(_discordSettings.ClientSecret) ?? "";
-                    _discordSettings.AccessToken = _secretProtection.Unprotect(_discordSettings.AccessToken) ?? "";
-                }
-                if (doc.RootElement.TryGetProperty("ObsSettings", out var obsProp) && obsProp.ValueKind == JsonValueKind.Object)
-                {
-                    _obsSettings = JsonSerializer.Deserialize<ObsSettingsModel>(obsProp.GetRawText(), _jsonOptions) ?? new();
-                    _obsSettings.Password = _secretProtection.Unprotect(_obsSettings.Password) ?? "";
-                }
-                if (doc.RootElement.TryGetProperty("TwitchSettings", out var twitchProp) && twitchProp.ValueKind == JsonValueKind.Object)
-                {
-                    _twitchSettings = JsonSerializer.Deserialize<TwitchSettingsModel>(twitchProp.GetRawText(), _jsonOptions) ?? new();
-                    _twitchSettings.OAuthToken = _secretProtection.Unprotect(_twitchSettings.OAuthToken) ?? "";
-                }
-                if (doc.RootElement.TryGetProperty("KickSettings", out var kickProp) && kickProp.ValueKind == JsonValueKind.Object)
-                {
-                    _kickSettings = JsonSerializer.Deserialize<KickSettingsModel>(kickProp.GetRawText(), _jsonOptions) ?? new();
-                    _kickSettings.AuthToken = _secretProtection.Unprotect(_kickSettings.AuthToken) ?? "";
-                }
-                if (doc.RootElement.TryGetProperty("JetKvmSettings", out var jetProp) && jetProp.ValueKind == JsonValueKind.Object)
-                {
-                    _jetKvmSettings = JsonSerializer.Deserialize<JetKvmSettingsModel>(jetProp.GetRawText(), _jsonOptions) ?? new();
-                    _jetKvmSettings.AuthToken = _secretProtection.Unprotect(_jetKvmSettings.AuthToken) ?? "";
-                }
-                if (doc.RootElement.TryGetProperty("SpotifySettings", out var spotifyProp) && spotifyProp.ValueKind == JsonValueKind.Object)
-                {
-                    _spotifySettings = JsonSerializer.Deserialize<SpotifySettingsModel>(spotifyProp.GetRawText(), _jsonOptions) ?? new();
-                    _spotifySettings.AccessToken = _secretProtection.Unprotect(_spotifySettings.AccessToken) ?? "";
-                    _spotifySettings.RefreshToken = _secretProtection.Unprotect(_spotifySettings.RefreshToken) ?? "";
-                    _spotifySettings.ClientSecret = _secretProtection.Unprotect(_spotifySettings.ClientSecret) ?? "";
-                }
-                if (doc.RootElement.TryGetProperty("VlcSettings", out var vlcProp) && vlcProp.ValueKind == JsonValueKind.Object)
-                {
-                    _vlcSettings = JsonSerializer.Deserialize<VlcSettingsModel>(vlcProp.GetRawText(), _jsonOptions) ?? new();
-                    _vlcSettings.Password = _secretProtection.Unprotect(_vlcSettings.Password) ?? "";
-                }
-                if (doc.RootElement.TryGetProperty("VoicemodSettings", out var vmProp) && vmProp.ValueKind == JsonValueKind.Object)
-                {
-                    _voicemodSettings = JsonSerializer.Deserialize<VoicemodSettingsModel>(vmProp.GetRawText(), _jsonOptions) ?? new();
-                    _voicemodSettings.ApiKey = _secretProtection.Unprotect(_voicemodSettings.ApiKey) ?? "";
-                }
-                if (doc.RootElement.TryGetProperty("HomeAssistantSettings", out var haProp) && haProp.ValueKind == JsonValueKind.Object)
-                {
-                    _homeAssistantSettings = JsonSerializer.Deserialize<HomeAssistantSettingsModel>(haProp.GetRawText(), _jsonOptions) ?? new();
-                    _homeAssistantSettings.AccessToken = _secretProtection.Unprotect(_homeAssistantSettings.AccessToken) ?? "";
-                    _homeAssistantSettings.ServerUrl = _secretProtection.Unprotect(_homeAssistantSettings.ServerUrl) ?? _homeAssistantSettings.ServerUrl;
-                }
-                if (doc.RootElement.TryGetProperty("AppSettings", out var appProp) && appProp.ValueKind == JsonValueKind.Object)
-                {
-                    _appSettings = JsonSerializer.Deserialize<AppSettingsModel>(appProp.GetRawText(), _jsonOptions) ?? new();
-                }
             }
+            catch { /* a bad section keeps its defaults; the file itself is only set aside when it is not JSON at all */ }
         }
-        catch { }
     }
 
     private void SaveSettings()
     {
-        try
+        lock (_fileLock)
         {
-            System.Text.Json.Nodes.JsonObject rootObj = new();
-            if (File.Exists(_settingsFilePath))
+            try
             {
-                try
+                System.Text.Json.Nodes.JsonObject rootObj = new();
+                if (File.Exists(_settingsFilePath))
                 {
-                    string existing = File.ReadAllText(_settingsFilePath);
-                    if (!string.IsNullOrWhiteSpace(existing) &&
-                        System.Text.Json.Nodes.JsonNode.Parse(existing) is System.Text.Json.Nodes.JsonObject parsedObj)
+                    try
                     {
-                        rootObj = parsedObj;
+                        string existing = File.ReadAllText(_settingsFilePath);
+                        if (!string.IsNullOrWhiteSpace(existing) &&
+                            System.Text.Json.Nodes.JsonNode.Parse(existing) is System.Text.Json.Nodes.JsonObject parsedObj)
+                        {
+                            rootObj = parsedObj;
+                        }
                     }
+                    catch (JsonException)
+                    {
+                        // Never overwrite an unreadable settings.json silently (B-09).
+                        Quarantine(_settingsFilePath);
+                    }
+                    catch { }
                 }
-                catch { }
+
+                rootObj["ActiveProfileId"] = _activeProfileId;
+                var colorsArray = new System.Text.Json.Nodes.JsonArray();
+                foreach (var c in _savedColors)
+                {
+                    colorsArray.Add(c);
+                }
+                rootObj["SavedColors"] = colorsArray;
+
+                // Zabezpieczenie haseł i tokenów przed zapisem na dysk
+                var dcToSave = new DiscordSettingsModel
+                {
+                    ClientId = _discordSettings.ClientId,
+                    ClientSecret = _secretProtection.Protect(_discordSettings.ClientSecret) ?? "",
+                    AccessToken = _secretProtection.Protect(_discordSettings.AccessToken) ?? "",
+                    MuteHotkey = _discordSettings.MuteHotkey,
+                    DeafenHotkey = _discordSettings.DeafenHotkey,
+                    CameraHotkey = _discordSettings.CameraHotkey,
+                    ScreenShareHotkey = _discordSettings.ScreenShareHotkey,
+                    UseRpc = _discordSettings.UseRpc
+                };
+                var obsToSave = new ObsSettingsModel
+                {
+                    Host = _obsSettings.Host,
+                    Port = _obsSettings.Port,
+                    Password = _secretProtection.Protect(_obsSettings.Password) ?? "",
+                    AutoConnect = _obsSettings.AutoConnect
+                };
+                var twitchToSave = new TwitchSettingsModel
+                {
+                    Channel = _twitchSettings.Channel,
+                    BotUsername = _twitchSettings.BotUsername,
+                    OAuthToken = _secretProtection.Protect(_twitchSettings.OAuthToken) ?? "",
+                    ClientId = _twitchSettings.ClientId,
+                    AutoConnect = _twitchSettings.AutoConnect
+                };
+                var kickToSave = new KickSettingsModel
+                {
+                    Channel = _kickSettings.Channel,
+                    BotUsername = _kickSettings.BotUsername,
+                    AuthToken = _secretProtection.Protect(_kickSettings.AuthToken) ?? "",
+                    AutoConnect = _kickSettings.AutoConnect
+                };
+                var jetToSave = new JetKvmSettingsModel
+                {
+                    Host = _jetKvmSettings.Host,
+                    Port = _jetKvmSettings.Port,
+                    UseHttps = _jetKvmSettings.UseHttps,
+                    AuthToken = _secretProtection.Protect(_jetKvmSettings.AuthToken) ?? "",
+                    AutoConnect = _jetKvmSettings.AutoConnect,
+                    StatusPollIntervalSeconds = _jetKvmSettings.StatusPollIntervalSeconds
+                };
+                var spotifyToSave = new SpotifySettingsModel
+                {
+                    ClientId = _spotifySettings.ClientId,
+                    ClientSecret = _secretProtection.Protect(_spotifySettings.ClientSecret) ?? "",
+                    AccessToken = _secretProtection.Protect(_spotifySettings.AccessToken) ?? "",
+                    RefreshToken = _secretProtection.Protect(_spotifySettings.RefreshToken) ?? "",
+                    TokenExpiresAtUtc = _spotifySettings.TokenExpiresAtUtc,
+                    AutoConnect = _spotifySettings.AutoConnect,
+                    StatusPollIntervalSeconds = _spotifySettings.StatusPollIntervalSeconds,
+                    FallbackToDesktopHotkeys = _spotifySettings.FallbackToDesktopHotkeys
+                };
+                var vlcToSave = new VlcSettingsModel
+                {
+                    Host = _vlcSettings.Host,
+                    Port = _vlcSettings.Port,
+                    Password = _secretProtection.Protect(_vlcSettings.Password) ?? "",
+                    AutoConnect = _vlcSettings.AutoConnect,
+                    StatusPollIntervalSeconds = _vlcSettings.StatusPollIntervalSeconds,
+                    FallbackToDesktopHotkeys = _vlcSettings.FallbackToDesktopHotkeys
+                };
+                var voicemodToSave = new VoicemodSettingsModel
+                {
+                    Host = _voicemodSettings.Host,
+                    Port = _voicemodSettings.Port,
+                    ApiKey = _secretProtection.Protect(_voicemodSettings.ApiKey) ?? "",
+                    AutoConnect = _voicemodSettings.AutoConnect,
+                    ReconnectIntervalSeconds = _voicemodSettings.ReconnectIntervalSeconds,
+                    FallbackToDesktopHotkeys = _voicemodSettings.FallbackToDesktopHotkeys
+                };
+                var haToSave = new HomeAssistantSettingsModel
+                {
+                    ServerUrl = _secretProtection.Protect(_homeAssistantSettings.ServerUrl) ?? _homeAssistantSettings.ServerUrl,
+                    AccessToken = _secretProtection.Protect(_homeAssistantSettings.AccessToken) ?? "",
+                    AutoConnect = _homeAssistantSettings.AutoConnect,
+                    StatusPollIntervalSeconds = _homeAssistantSettings.StatusPollIntervalSeconds
+                };
+
+                rootObj["DiscordSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(dcToSave, _jsonOptions));
+                rootObj["ObsSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(obsToSave, _jsonOptions));
+                rootObj["TwitchSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(twitchToSave, _jsonOptions));
+                rootObj["KickSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(kickToSave, _jsonOptions));
+                rootObj["JetKvmSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(jetToSave, _jsonOptions));
+                rootObj["SpotifySettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(spotifyToSave, _jsonOptions));
+                rootObj["VlcSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(vlcToSave, _jsonOptions));
+                rootObj["VoicemodSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(voicemodToSave, _jsonOptions));
+                rootObj["HomeAssistantSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(haToSave, _jsonOptions));
+                rootObj["AppSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(_appSettings, _jsonOptions));
+
+                string json = rootObj.ToJsonString(_jsonOptions);
+                AtomicWriteText(_settingsFilePath, json);
             }
-
-            rootObj["ActiveProfileId"] = _activeProfileId;
-            var colorsArray = new System.Text.Json.Nodes.JsonArray();
-            foreach (var c in _savedColors)
-            {
-                colorsArray.Add(c);
-            }
-            rootObj["SavedColors"] = colorsArray;
-
-            // Zabezpieczenie haseł i tokenów przed zapisem na dysk
-            var dcToSave = new DiscordSettingsModel
-            {
-                ClientId = _discordSettings.ClientId,
-                ClientSecret = _secretProtection.Protect(_discordSettings.ClientSecret) ?? "",
-                AccessToken = _secretProtection.Protect(_discordSettings.AccessToken) ?? "",
-                MuteHotkey = _discordSettings.MuteHotkey,
-                DeafenHotkey = _discordSettings.DeafenHotkey,
-                UseRpc = _discordSettings.UseRpc
-            };
-            var obsToSave = new ObsSettingsModel
-            {
-                Host = _obsSettings.Host,
-                Port = _obsSettings.Port,
-                Password = _secretProtection.Protect(_obsSettings.Password) ?? "",
-                AutoConnect = _obsSettings.AutoConnect
-            };
-            var twitchToSave = new TwitchSettingsModel
-            {
-                Channel = _twitchSettings.Channel,
-                BotUsername = _twitchSettings.BotUsername,
-                OAuthToken = _secretProtection.Protect(_twitchSettings.OAuthToken) ?? "",
-                ClientId = _twitchSettings.ClientId,
-                AutoConnect = _twitchSettings.AutoConnect
-            };
-            var kickToSave = new KickSettingsModel
-            {
-                Channel = _kickSettings.Channel,
-                BotUsername = _kickSettings.BotUsername,
-                AuthToken = _secretProtection.Protect(_kickSettings.AuthToken) ?? "",
-                AutoConnect = _kickSettings.AutoConnect
-            };
-            var jetToSave = new JetKvmSettingsModel
-            {
-                Host = _jetKvmSettings.Host,
-                Port = _jetKvmSettings.Port,
-                UseHttps = _jetKvmSettings.UseHttps,
-                AuthToken = _secretProtection.Protect(_jetKvmSettings.AuthToken) ?? "",
-                AutoConnect = _jetKvmSettings.AutoConnect,
-                StatusPollIntervalSeconds = _jetKvmSettings.StatusPollIntervalSeconds
-            };
-            var spotifyToSave = new SpotifySettingsModel
-            {
-                ClientId = _spotifySettings.ClientId,
-                ClientSecret = _secretProtection.Protect(_spotifySettings.ClientSecret) ?? "",
-                AccessToken = _secretProtection.Protect(_spotifySettings.AccessToken) ?? "",
-                RefreshToken = _secretProtection.Protect(_spotifySettings.RefreshToken) ?? "",
-                TokenExpiresAtUtc = _spotifySettings.TokenExpiresAtUtc,
-                AutoConnect = _spotifySettings.AutoConnect,
-                StatusPollIntervalSeconds = _spotifySettings.StatusPollIntervalSeconds,
-                FallbackToDesktopHotkeys = _spotifySettings.FallbackToDesktopHotkeys
-            };
-            var vlcToSave = new VlcSettingsModel
-            {
-                Host = _vlcSettings.Host,
-                Port = _vlcSettings.Port,
-                Password = _secretProtection.Protect(_vlcSettings.Password) ?? "",
-                AutoConnect = _vlcSettings.AutoConnect,
-                StatusPollIntervalSeconds = _vlcSettings.StatusPollIntervalSeconds,
-                FallbackToDesktopHotkeys = _vlcSettings.FallbackToDesktopHotkeys
-            };
-            var voicemodToSave = new VoicemodSettingsModel
-            {
-                Host = _voicemodSettings.Host,
-                Port = _voicemodSettings.Port,
-                ApiKey = _secretProtection.Protect(_voicemodSettings.ApiKey) ?? "",
-                AutoConnect = _voicemodSettings.AutoConnect,
-                ReconnectIntervalSeconds = _voicemodSettings.ReconnectIntervalSeconds,
-                FallbackToDesktopHotkeys = _voicemodSettings.FallbackToDesktopHotkeys
-            };
-            var haToSave = new HomeAssistantSettingsModel
-            {
-                ServerUrl = _secretProtection.Protect(_homeAssistantSettings.ServerUrl) ?? _homeAssistantSettings.ServerUrl,
-                AccessToken = _secretProtection.Protect(_homeAssistantSettings.AccessToken) ?? "",
-                AutoConnect = _homeAssistantSettings.AutoConnect,
-                StatusPollIntervalSeconds = _homeAssistantSettings.StatusPollIntervalSeconds
-            };
-
-            rootObj["DiscordSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(dcToSave, _jsonOptions));
-            rootObj["ObsSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(obsToSave, _jsonOptions));
-            rootObj["TwitchSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(twitchToSave, _jsonOptions));
-            rootObj["KickSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(kickToSave, _jsonOptions));
-            rootObj["JetKvmSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(jetToSave, _jsonOptions));
-            rootObj["SpotifySettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(spotifyToSave, _jsonOptions));
-            rootObj["VlcSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(vlcToSave, _jsonOptions));
-            rootObj["VoicemodSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(voicemodToSave, _jsonOptions));
-            rootObj["HomeAssistantSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(haToSave, _jsonOptions));
-            rootObj["AppSettings"] = System.Text.Json.Nodes.JsonNode.Parse(JsonSerializer.Serialize(_appSettings, _jsonOptions));
-
-            string json = rootObj.ToJsonString(_jsonOptions);
-            File.WriteAllText(_settingsFilePath, json);
+            catch { }
         }
-        catch { }
     }
 
     public DiscordSettingsModel GetDiscordSettings()
@@ -402,18 +459,44 @@ public class ProfileService : IProfileService
 
     public List<ProfileModel> GetAllProfiles()
     {
-        var list = new List<ProfileModel>();
-        if (!Directory.Exists(_profilesDirectory)) return list;
-
-        var files = Directory.GetFiles(_profilesDirectory, "*.json");
-        foreach (var file in files)
+        lock (_fileLock)
         {
-            try
+            var list = new List<ProfileModel>();
+            if (!Directory.Exists(_profilesDirectory)) return list;
+
+            var files = Directory.GetFiles(_profilesDirectory, "*.json");
+            foreach (var file in files)
             {
-                string json = File.ReadAllText(file);
-                var prof = JsonSerializer.Deserialize<ProfileModel>(json, _jsonOptions);
-                if (prof != null)
+                try
                 {
+                    string json = File.ReadAllText(file);
+                    var node = JsonNode.Parse(json) as JsonObject;
+                    if (node == null)
+                    {
+                        Quarantine(file);
+                        continue;
+                    }
+
+                    if (_migrator.NeedsMigration(node))
+                    {
+                        // Snapshot once, before the first file is upgraded, then rewrite the upgraded JSON as-is
+                        // (credentials stay as the encrypted blobs they already are).
+                        if (!_migrationSnapshotTaken)
+                        {
+                            _migrationSnapshotTaken = true;
+                            Backups.CreateSnapshot("before-migration");
+                        }
+                        _migrator.Apply(node);
+                        AtomicWriteText(file, node.ToJsonString(_jsonOptions));
+                    }
+
+                    var prof = node.Deserialize<ProfileModel>(_jsonOptions);
+                    if (prof == null)
+                    {
+                        Quarantine(file);
+                        continue;
+                    }
+
                     prof.ObsPassword = _secretProtection.Unprotect(prof.ObsPassword);
                     prof.TwitchOAuthToken = _secretProtection.Unprotect(prof.TwitchOAuthToken);
                     prof.YouTubeApiKey = _secretProtection.Unprotect(prof.YouTubeApiKey);
@@ -421,17 +504,28 @@ public class ProfileService : IProfileService
                     prof.DiscordAccessToken = _secretProtection.Unprotect(prof.DiscordAccessToken);
                     list.Add(prof);
                 }
+                catch (JsonException)
+                {
+                    Quarantine(file);
+                }
+                catch { /* IO error (file locked by another process): skip this round, do not touch the file */ }
             }
-            catch { }
-        }
 
-        return list.OrderByDescending(p => p.IsDefault).ThenBy(p => p.Name).ToList();
+            return list.OrderByDescending(p => p.IsDefault).ThenBy(p => p.Name).ToList();
+        }
     }
 
     public ProfileModel GetActiveProfile()
     {
+        // a draft on the deck (T-08) is the active profile until it is kept or thrown away; it is not among the saved profiles
+        lock (_fileLock)
+        {
+            if (_activeDraft != null && _transientActiveProfileId == _activeDraft.Id) return _activeDraft;
+        }
+
         var all = GetAllProfiles();
-        var current = all.FirstOrDefault(p => p.Id == _activeProfileId)
+        var current = (_transientActiveProfileId != null ? all.FirstOrDefault(p => p.Id == _transientActiveProfileId) : null)
+                      ?? all.FirstOrDefault(p => p.Id == _activeProfileId)
                       ?? all.FirstOrDefault(p => p.IsDefault)
                       ?? all.FirstOrDefault();
 
@@ -464,79 +558,106 @@ public class ProfileService : IProfileService
     public void SaveProfile(ProfileModel profile)
     {
         if (profile == null) return;
+        if (!IsSafeProfileId(profile.Id))
+            throw new ArgumentException($"Niepoprawny identyfikator profilu: '{profile.Id}'.", nameof(profile));
         string path = Path.Combine(_profilesDirectory, $"{profile.Id}.json");
 
-        try
+        lock (_fileLock)
         {
-            // Szyfrowanie poświadczeń na dysku z zachowaniem czystego stanu w pamięci podręcznej RAM
-            string rawJson = JsonSerializer.Serialize(profile, _jsonOptions);
-            if (System.Text.Json.Nodes.JsonNode.Parse(rawJson) is System.Text.Json.Nodes.JsonObject node)
+            if (TrySaveAsDraft(profile)) return;   // the draft on the deck is saved in its own file, never among the profiles
+
+            try
             {
-                if (node.ContainsKey("ObsPassword") && node["ObsPassword"] != null)
+                // Szyfrowanie poświadczeń na dysku z zachowaniem czystego stanu w pamięci podręcznej RAM
+                string rawJson = JsonSerializer.Serialize(profile, _jsonOptions);
+                if (System.Text.Json.Nodes.JsonNode.Parse(rawJson) is System.Text.Json.Nodes.JsonObject node)
                 {
-                    string? plain = node["ObsPassword"]?.GetValue<string>();
-                    node["ObsPassword"] = _secretProtection.Protect(plain);
-                }
-                if (node.ContainsKey("TwitchOAuthToken") && node["TwitchOAuthToken"] != null)
-                {
-                    string? plain = node["TwitchOAuthToken"]?.GetValue<string>();
-                    node["TwitchOAuthToken"] = _secretProtection.Protect(plain);
-                }
-                if (node.ContainsKey("YouTubeApiKey") && node["YouTubeApiKey"] != null)
-                {
-                    string? plain = node["YouTubeApiKey"]?.GetValue<string>();
-                    node["YouTubeApiKey"] = _secretProtection.Protect(plain);
-                }
-                if (node.ContainsKey("StreamlabsApiToken") && node["StreamlabsApiToken"] != null)
-                {
-                    string? plain = node["StreamlabsApiToken"]?.GetValue<string>();
-                    node["StreamlabsApiToken"] = _secretProtection.Protect(plain);
-                }
-                if (node.ContainsKey("DiscordAccessToken") && node["DiscordAccessToken"] != null)
-                {
-                    string? plain = node["DiscordAccessToken"]?.GetValue<string>();
-                    node["DiscordAccessToken"] = _secretProtection.Protect(plain);
-                }
+                    if (node.ContainsKey("ObsPassword") && node["ObsPassword"] != null)
+                    {
+                        string? plain = node["ObsPassword"]?.GetValue<string>();
+                        node["ObsPassword"] = _secretProtection.Protect(plain);
+                    }
+                    if (node.ContainsKey("TwitchOAuthToken") && node["TwitchOAuthToken"] != null)
+                    {
+                        string? plain = node["TwitchOAuthToken"]?.GetValue<string>();
+                        node["TwitchOAuthToken"] = _secretProtection.Protect(plain);
+                    }
+                    if (node.ContainsKey("YouTubeApiKey") && node["YouTubeApiKey"] != null)
+                    {
+                        string? plain = node["YouTubeApiKey"]?.GetValue<string>();
+                        node["YouTubeApiKey"] = _secretProtection.Protect(plain);
+                    }
+                    if (node.ContainsKey("StreamlabsApiToken") && node["StreamlabsApiToken"] != null)
+                    {
+                        string? plain = node["StreamlabsApiToken"]?.GetValue<string>();
+                        node["StreamlabsApiToken"] = _secretProtection.Protect(plain);
+                    }
+                    if (node.ContainsKey("DiscordAccessToken") && node["DiscordAccessToken"] != null)
+                    {
+                        string? plain = node["DiscordAccessToken"]?.GetValue<string>();
+                        node["DiscordAccessToken"] = _secretProtection.Protect(plain);
+                    }
 
-                File.WriteAllText(path, node.ToJsonString(_jsonOptions));
-                return;
+                    AtomicWriteText(path, node.ToJsonString(_jsonOptions));
+                    return;
+                }
             }
-        }
-        catch { }
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+            {
+                // Błąd serializacji nie może skutkować zapisem jawnych poświadczeń na dysk (dawny fallback).
+                throw new InvalidOperationException("Nie udało się zserializować profilu z zachowaniem szyfrowania poświadczeń.", ex);
+            }
 
-        string fallbackJson = JsonSerializer.Serialize(profile, _jsonOptions);
-        File.WriteAllText(path, fallbackJson);
+            throw new InvalidOperationException("Profil nie jest obiektem JSON - zapis przerwany.");
+        }
     }
 
     public void DeleteProfile(string profileId)
     {
+        if (!IsSafeProfileId(profileId)) return;
         string path = Path.Combine(_profilesDirectory, $"{profileId}.json");
-        if (File.Exists(path))
+        lock (_fileLock)
         {
-            try { File.Delete(path); } catch { }
-        }
+            if (File.Exists(path))
+            {
+                try { Backups.CreateSnapshot("before-delete"); } catch { }
+                try { File.Delete(path); } catch { }
+            }
 
-        var remaining = GetAllProfiles();
-        if (remaining.Count == 0)
-        {
-            var def = ProfileModel.CreateEmpty("Domyślny", isDefault: true);
-            def.Id = "default";
-            SaveProfile(def);
-            _activeProfileId = def.Id;
-            SaveSettings();
-        }
-        else if (_activeProfileId == profileId)
-        {
-            var fallback = remaining.FirstOrDefault(p => p.IsDefault) ?? remaining[0];
-            _activeProfileId = fallback.Id;
-            SaveSettings();
+            if (_transientActiveProfileId == profileId) _transientActiveProfileId = null;
+            var remaining = GetAllProfiles();
+            if (remaining.Count == 0)
+            {
+                var def = ProfileModel.CreateEmpty("Domyślny", isDefault: true);
+                def.Id = "default";
+                SaveProfile(def);
+                _activeProfileId = def.Id;
+                SaveSettings();
+            }
+            else if (_activeProfileId == profileId)
+            {
+                var fallback = remaining.FirstOrDefault(p => p.IsDefault) ?? remaining[0];
+                _activeProfileId = fallback.Id;
+                SaveSettings();
+            }
         }
     }
 
-    public void SetActiveProfile(string profileId)
+    public void SetActiveProfile(string profileId, bool persist = true)
     {
-        _activeProfileId = profileId;
-        SaveSettings();
+        // choosing a profile (by hand, by the tray, by auto-switching) leaves the preview: the draft is thrown away
+        if (_activeDraft != null && profileId != _activeDraft.Id) DiscardDraft();
+
+        if (persist)
+        {
+            _transientActiveProfileId = null;
+            _activeProfileId = profileId;
+            SaveSettings();
+        }
+        else
+        {
+            _transientActiveProfileId = profileId;
+        }
     }
 
     public void SetDefaultProfile(string profileId)
@@ -551,6 +672,61 @@ public class ProfileService : IProfileService
                 SaveProfile(p);
             }
         }
+    }
+
+    /// <summary>
+    /// Restores a backup snapshot (a <c>before-restore</c> snapshot is taken first) and reloads settings and the active
+    /// profile from disk. Integrations that already hold the old settings objects should be restarted afterwards.
+    /// </summary>
+    public bool RestoreBackup(string name)
+    {
+        lock (_fileLock)
+        {
+            if (!Backups.Restore(name)) return false;
+
+            _activeProfileId = "";
+            LoadSettings();
+
+            var all = GetAllProfiles();
+            if (all.Count == 0)
+            {
+                var def = ProfileModel.CreateEmpty("Domyślny", isDefault: true);
+                def.Id = "default";
+                SaveProfile(def);
+                all = GetAllProfiles();
+            }
+
+            if (string.IsNullOrWhiteSpace(_activeProfileId) || all.All(p => p.Id != _activeProfileId))
+            {
+                _activeProfileId = (all.FirstOrDefault(p => p.IsDefault) ?? all[0]).Id;
+                SaveSettings();
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Renames an unreadable file to <c>&lt;name&gt;.corrupt-&lt;yyyyMMdd-HHmmss&gt;</c> instead of deleting or overwriting it.
+    /// Callers hold <c>_fileLock</c>.
+    /// </summary>
+    private void Quarantine(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return;
+
+            string stamp = DateTime.Now.ToString("yyyyMMdd-HHmmss");
+            string target = $"{path}.corrupt-{stamp}";
+            for (int i = 2; File.Exists(target); i++)
+            {
+                target = $"{path}.corrupt-{stamp}-{i}";
+            }
+
+            File.Move(path, target);
+            _quarantined.Add(target);
+        }
+        catch { /* could not rename (locked): the file stays where it is, nothing is lost */ }
     }
 
     // --- ETAP 2: EKSPORT I IMPORT PROFILI ---
@@ -583,7 +759,7 @@ public class ProfileService : IProfileService
         {
             Directory.CreateDirectory(dir);
         }
-        File.WriteAllText(filePath, json);
+        AtomicWriteText(filePath, json);
     }
 
     public ProfileModel ImportProfileFromJson(string json)
@@ -593,6 +769,8 @@ public class ProfileService : IProfileService
 
         var imported = JsonSerializer.Deserialize<ProfileModel>(json, _jsonOptions)
                        ?? throw new InvalidOperationException("Nie udało się odczytać profilu z formatu JSON.");
+
+        try { Backups.CreateSnapshot("before-import"); } catch { }
 
         // Ochrona bezpieczeństwa: importowany profil nie może nadpisać ani wstrzyknąć obcych poświadczeń
         imported.ObsPassword = null;
@@ -605,7 +783,9 @@ public class ProfileService : IProfileService
         bool idCollision = existing.Any(p => p.Id == imported.Id);
         bool nameCollision = existing.Any(p => string.Equals(p.Name, imported.Name, StringComparison.OrdinalIgnoreCase));
 
-        if (idCollision || string.IsNullOrWhiteSpace(imported.Id))
+        imported.Keys ??= new();
+        imported.Pages ??= new();
+        if (idCollision || !IsSafeProfileId(imported.Id))
         {
             // Generuj nowe ID, by nie nadpisać istniejącego profilu
             imported.Id = Guid.NewGuid().ToString("N");
@@ -652,10 +832,11 @@ public class ProfileService : IProfileService
             if (importedList.Count == 0)
                 throw new InvalidOperationException("Plik .mhz nie zawiera żadnego poprawnego profilu MasterHUB.");
 
+            try { Backups.CreateSnapshot("before-import"); } catch { }
             var existing = GetAllProfiles();
             foreach (var prof in importedList)
             {
-                if (existing.Any(p => p.Id == prof.Id))
+                if (!IsSafeProfileId(prof.Id) || existing.Any(p => p.Id == prof.Id))
                 {
                     prof.Id = Guid.NewGuid().ToString("N");
                 }

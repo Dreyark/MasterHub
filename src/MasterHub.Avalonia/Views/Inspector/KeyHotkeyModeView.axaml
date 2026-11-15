@@ -1,0 +1,18 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyHotkeyModeView"
+             x:DataType="vm:KeyItemViewModel">
+    <!-- Skrót klawiszowy: tryb wysyłania. "Dla gier" = kody skanowania trzymane krótko (gry czytające klawiaturę przez DirectInput). -->
+    <StackPanel Spacing="6" IsVisible="{Binding IsHotkeyAction}">
+        <TextBlock Text="{loc:Loc Hotkey_SendAs}" Classes="caption" />
+        <ComboBox ItemsSource="{x:Static vm:KeyItemViewModel.HotkeyModeOptions}" SelectedItem="{Binding SelectedHotkeyMode, Mode=TwoWay}"
+                  HorizontalAlignment="Stretch" />
+        <StackPanel Spacing="4" IsVisible="{Binding ShowsHotkeyHold}">
+            <TextBlock Text="{loc:Loc Hotkey_HoldMs}" Classes="caption" />
+            <NumericUpDown Value="{Binding HotkeyHoldMs, Mode=TwoWay}" Minimum="0" Maximum="500" Increment="10" FormatString="0" />
+            <TextBlock Text="{loc:Loc Hotkey_GamesHint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>

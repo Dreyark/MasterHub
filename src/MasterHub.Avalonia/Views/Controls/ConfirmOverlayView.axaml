@@ -1,0 +1,21 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             x:Class="MasterHub.Avalonia.Views.Controls.ConfirmOverlayView"
+             x:DataType="vm:ConfirmOverlayViewModel"
+             IsVisible="{Binding IsVisible}">
+    <!-- Zasłona + karta potwierdzenia. Przyciski noszą czasownik akcji ("Usuń profil"), nigdy gołe "OK". Esc = anuluj. -->
+    <Grid Background="{StaticResource ScrimBrush}">
+        <Border Classes="glassCard" Background="{StaticResource PanelBgBrush}" Padding="24"
+                Width="440" HorizontalAlignment="Center" VerticalAlignment="Center">
+            <StackPanel Spacing="14">
+                <TextBlock Text="{Binding Title}" Classes="h2" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding Message}" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="10" Margin="0,6,0,0">
+                    <Button x:Name="CancelButton" Content="{Binding CancelLabel}" Command="{Binding CancelCommand}" Classes="actionBtn" />
+                    <Button Content="{Binding ConfirmLabel}" Command="{Binding AcceptCommand}" Classes="accentBtn" Classes.danger="{Binding IsDestructive}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Grid>
+</UserControl>

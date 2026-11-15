@@ -6,7 +6,9 @@ public enum AudioTargetType
     MasterRecording,    // Głośność mikrofonu
     Process,            // Konkretny proces (np. Spotify, Discord, Chrome)
     None,               // Brak powiązania
-    HomeAssistantLight  // 💡 Suwak: Jasność oświetlenia Home Assistant (0..255)
+    HomeAssistantLight, // 💡 Suwak: Jasność oświetlenia Home Assistant (0..255)
+    ForegroundApp,      // 🔊 Program na wierzchu (T-17 d)
+    EverythingElse      // 🎚 Wszystko inne – programy, których nie obsługuje żaden inny suwak profilu (T-17 h)
 }
 
 public class AudioSessionItem

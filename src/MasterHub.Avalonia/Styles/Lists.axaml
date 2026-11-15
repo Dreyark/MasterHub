@@ -1,0 +1,99 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Listy i wiersze: rowBtn (płaski wiersz), iconTile (kafelek ikony wektorowej), sectionTitle (nagłówek sekcji) -->
+
+    <Style Selector="Button.rowBtn">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="8,6" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.rowBtn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource HoverOverlayBrush}" />
+    </Style>
+    <Style Selector="Button.rowBtn:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+    </Style>
+    <Style Selector="Button.rowBtn PathIcon.rowAdd">
+        <Setter Property="Foreground" Value="{StaticResource TextDimBrush}" />
+    </Style>
+    <Style Selector="Button.rowBtn:pointerover PathIcon.rowAdd">
+        <Setter Property="Foreground" Value="{StaticResource AccentPrimaryBrush}" />
+    </Style>
+
+    <!-- Kafelek ikony: zaokrąglony, półprzezroczysty akcent, ikona wektorowa wyśrodkowana (nic nie jest ucinane) -->
+    <Style Selector="Border.iconTile">
+        <Setter Property="Width" Value="34" />
+        <Setter Property="Height" Value="34" />
+        <Setter Property="CornerRadius" Value="11" />
+        <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.iconTile > Panel">
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Border.iconTile.small">
+        <Setter Property="Width" Value="26" />
+        <Setter Property="Height" Value="26" />
+        <Setter Property="CornerRadius" Value="8" />
+    </Style>
+
+    <!-- Nagłówek sekcji w module / panelu (jak "CHECKOUTS" w referencji: mały, rozstrzelony, przygaszony) -->
+    <Style Selector="TextBlock.sectionTitle">
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="Bold" />
+        <Setter Property="LetterSpacing" Value="0.8" />
+        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+    </Style>
+
+    <!-- Podpowiedź / informacja kontekstowa (zamiast drobnego, przyciemnionego tekstu) -->
+    <Style Selector="Border.callout">
+        <Setter Property="Background" Value="{StaticResource AccentSoftBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderAccentBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="12,10" />
+    </Style>
+    <!-- Dymek pływający nad treścią (kreator, pytanie asystenta, podpowiedź, wersja robocza): nieprzezroczysty, z cieniem – tekst pod spodem się nie zlewa -->
+    <Style Selector="Border.callout.floating">
+        <Setter Property="Background" Value="{StaticResource FloatingBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource FloatingBorderBrush}" />
+        <Setter Property="CornerRadius" Value="14" />
+        <Setter Property="BoxShadow" Value="0 12 32 0 #B0000000" />
+    </Style>
+    <Style Selector="Border.callout TextBlock">
+        <Setter Property="FontSize" Value="11.5" />
+        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+
+    <!-- Przełącznik segmentowy: grupa pillBtn w jednej "szynie" (filtry, zakładki) -->
+    <Style Selector="Border.segmented">
+        <Setter Property="Background" Value="{StaticResource InsetBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="4" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+    </Style>
+    <Style Selector="Border.segmented Button.pillBtn">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="CornerRadius" Value="9" />
+        <Setter Property="Padding" Value="14,6" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Border.segmented Button.pillBtn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource HoverOverlayBrush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Border.segmented Button.pillBtn.active /template/ ContentPresenter#PART_ContentPresenter, Border.segmented Button.pillBtn.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource CardActiveBgBrush}" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+</Styles>

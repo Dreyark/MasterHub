@@ -441,8 +441,12 @@ public sealed class StreamlabsService : IStreamlabsService
         }
         catch
         {
-            _pendingRequests.TryRemove(id, out _);
             return null;
+        }
+        finally
+        {
+            // Wpis usuwamy zawsze - po timeoucie (brak odpowiedzi) zostawał w słowniku na zawsze.
+            _pendingRequests.TryRemove(id, out _);
         }
     }
 

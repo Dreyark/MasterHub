@@ -25,8 +25,16 @@ public static class CoolerMasterMhzImporter
         return Import(stream, Path.GetFileName(filePath));
     }
 
-    public static List<ProfileModel> Import(Stream stream, string fileName)
+    public static List<ProfileModel> Import(Stream stream, string fileName) => Import(stream, fileName, 0);
+
+    private const int MaxNestingDepth = 3;
+    private const long MaxEntryBytes = 128L * 1024 * 1024;
+
+    private static List<ProfileModel> Import(Stream stream, string fileName, int depth)
     {
+        if (depth > MaxNestingDepth)
+            throw new InvalidOperationException("Archiwum .mhz jest zagnieżdżone zbyt głęboko.");
+
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
         byte[]? jsonBytes = null;
         var images = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -40,6 +48,8 @@ public static class CoolerMasterMhzImporter
         {
             if (string.IsNullOrEmpty(entry.Name) && entry.FullName.EndsWith("/"))
                 continue;
+
+            if (entry.Length > MaxEntryBytes) continue; // ochrona przed zip-bombą
 
             string normalized = entry.FullName.Replace('\\', '/');
             string baseName = Path.GetFileName(normalized);
@@ -85,7 +95,7 @@ public static class CoolerMasterMhzImporter
             {
                 using (innerMs)
                 {
-                    multiProfiles.AddRange(Import(innerMs, innerName));
+                    multiProfiles.AddRange(Import(innerMs, innerName, depth + 1));
                 }
             }
             return multiProfiles;
@@ -183,6 +193,10 @@ public static class CoolerMasterMhzImporter
                     slider.TargetType = AudioTargetType.Process;
                     slider.DisplayTarget = "OBS Audio";
                 }
+                else
+                {
+                    NoteUnmappedControl(profile, $"slider {i + 1}", func);
+                }
             }
         }
 
@@ -196,9 +210,11 @@ public static class CoolerMasterMhzImporter
             string leftFunc = GetStr(left, "btnFunc");
             if (string.IsNullOrEmpty(leftFunc)) leftFunc = GetStr(rollerBlock, "btnFunc");
             profile.Rollers[0].Action = MapRollerAction(leftFunc);
+            if (profile.Rollers[0].Action == RollerActionType.None) NoteUnmappedControl(profile, "left roller", leftFunc);
 
             string rightFunc = GetStr(right, "btnFunc");
             profile.Rollers[1].Action = MapRollerAction(rightFunc);
+            if (profile.Rollers[1].Action == RollerActionType.None) NoteUnmappedControl(profile, "right roller", rightFunc);
         }
 
         // 4. Pokrętła (knobsList): rotateB (0), rotateR (1), rotateG (2)
@@ -216,6 +232,7 @@ public static class CoolerMasterMhzImporter
 
                 string func = GetStr(funcNode, "btnFunc");
                 knob.RotateAction = MapRollerAction(func);
+                if (knob.RotateAction == RollerActionType.None) NoteUnmappedControl(profile, $"knob {i + 1}", func);
                 if (knob.RotateAction == RollerActionType.MasterVolume)
                 {
                     knob.PressAction = DeckActionType.MasterMute;
@@ -234,6 +251,7 @@ public static class CoolerMasterMhzImporter
             JsonNode? funcNode = dialNode["functionList"] is JsonArray fList && fList.Count > 0 ? fList[0] : dialNode;
             string func = GetStr(funcNode, "btnFunc");
             profile.Dial.RotateAction = MapRollerAction(func);
+            if (profile.Dial.RotateAction == RollerActionType.None) NoteUnmappedControl(profile, "dial", func);
             if (profile.Dial.RotateAction == RollerActionType.MasterVolume)
             {
                 profile.Dial.PressAction = DeckActionType.MasterMute;
@@ -333,6 +351,7 @@ public static class CoolerMasterMhzImporter
         {
             key.Action = DeckActionType.MultiAction;
             key.MultiActions = new List<MultiActionStepModel>();
+            var skippedSteps = new List<string>();
             if (btn["actionList"] is JsonArray actList)
             {
                 for (int s = 0; s < actList.Count; s++)
@@ -347,14 +366,23 @@ public static class CoolerMasterMhzImporter
                             DelayMs = s == 0 ? 0 : 280
                         });
                     }
+                    else if (OriginalName(actList[s]) is { } lostStep)
+                    {
+                        skippedSteps.Add(lostStep);
+                    }
                 }
             }
+
+            if (skippedSteps.Count > 0) MarkNotSupported(key, string.Join(", ", skippedSteps), profile, steps: true);
         }
         else
         {
             var (action, param) = ConvertAction(btn);
             key.Action = action;
             key.ActionParameter = param;
+
+            // Nothing disappears silently: an action without an equivalent stays as an empty key that says what it was
+            if (action == DeckActionType.None && OriginalName(btn) is { } lost) MarkNotSupported(key, lost, profile, steps: false);
 
             if (action == DeckActionType.ObsSceneSwitch)
             {
@@ -377,6 +405,34 @@ public static class CoolerMasterMhzImporter
                 key.HotkeyKeys = param.Split('+').ToList();
             }
         }
+    }
+
+    /// <summary>The official app's name of a control's function (e.g. <c>ps-brush</c>), or null for an empty slot that never had one.</summary>
+    internal static string? OriginalName(JsonNode? btn)
+    {
+        string f = GetStr(btn, "btnFunc").Trim();
+        return f.Length == 0 || f.Equals("none", StringComparison.OrdinalIgnoreCase) || f.Equals("default", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : f;
+    }
+
+    /// <summary>
+    /// Leaves a visible trace of an action this app has no equivalent for: "Not supported: name" as the key's text (or under its own
+    /// title), and a line in the log. The key itself stays empty, so nothing runs by accident.
+    /// </summary>
+    private static void MarkNotSupported(KeyAssignmentModel key, string original, ProfileModel profile, bool steps)
+    {
+        string note = steps ? $"Not supported (steps): {original}" : $"Not supported: {original}";
+        if (string.IsNullOrWhiteSpace(key.CustomTitle)) key.CustomTitle = note;
+        else if (string.IsNullOrWhiteSpace(key.CustomSubtitle)) key.CustomSubtitle = note;
+        MasterHub.Core.Diagnostics.AppLog.Write($"Import '{profile.Name}': key {key.Index + 1} – {note}");
+    }
+
+    /// <summary>The kinds of control (slider, roller, knob, dial) whose function has no equivalent: noted in the log, not lost silently.</summary>
+    private static void NoteUnmappedControl(ProfileModel profile, string control, string func)
+    {
+        if (string.IsNullOrWhiteSpace(func)) return;
+        MasterHub.Core.Diagnostics.AppLog.Write($"Import '{profile.Name}': {control} – not supported: {func}");
     }
 
     private static (DeckActionType Action, string Parameter) ConvertAction(JsonNode? btn)

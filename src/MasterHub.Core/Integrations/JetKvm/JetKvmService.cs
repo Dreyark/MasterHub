@@ -124,6 +124,11 @@ public class JetKvmService : IJetKvmService
 
     private async Task<(bool Success, string Message)> AuthenticateAsync(bool forceReauth = false)
     {
+        if (string.IsNullOrWhiteSpace(_settings.Host))
+        {
+            return (false, "Brak skonfigurowanego adresu hosta JetKVM.");
+        }
+
         if (!forceReauth && IsAuthenticated && (!string.IsNullOrEmpty(_authToken) || AuthMode == "noPassword"))
         {
             return (true, "OK");

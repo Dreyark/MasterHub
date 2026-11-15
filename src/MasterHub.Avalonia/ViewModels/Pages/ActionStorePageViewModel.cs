@@ -1,5 +1,6 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
@@ -22,7 +23,7 @@ public record IntegrationStatusItem(string Name, string Description, string Icon
     public string StatusColor => IsOnline ? "#10B981" : "#6B7280";
 }
 
-public class StreamDeckPluginItemViewModel : ObservableObject
+public class StreamDeckPluginItemViewModel : ObservableObject, IDisposable
 {
     public StreamDeckInstalledPlugin Plugin { get; }
     public Bitmap? PluginBitmap { get; }
@@ -46,14 +47,73 @@ public class StreamDeckPluginItemViewModel : ObservableObject
             PluginBitmap = KeyItemViewModel.LoadMediaBitmap(plugin.IconPath);
         }
     }
+
+    // ── T-31: compatibility badge and reasons (e, f), CPU flag (a) ──────────────────────────
+
+    private PluginCompatReport _compat = new(PluginVerdict.Runs, Array.Empty<PluginIssueItem>());
+    private PluginCpuUse? _cpu;
+
+    public PluginCompatReport Compat
+    {
+        get => _compat;
+        set
+        {
+            _compat = value ?? new PluginCompatReport(PluginVerdict.Runs, Array.Empty<PluginIssueItem>());
+            OnPropertyChanged(nameof(Compat));
+            OnPropertyChanged(nameof(VerdictText));
+            OnPropertyChanged(nameof(CanRun));
+            OnPropertyChanged(nameof(IsPartial));
+            OnPropertyChanged(nameof(HasIssues));
+            OnPropertyChanged(nameof(IssuesText));
+            OnPropertyChanged(nameof(NeedsNode));
+        }
+    }
+
+    public bool CanRun => Compat.Verdict == PluginVerdict.Runs;
+    public bool IsPartial => Compat.Verdict == PluginVerdict.Partial;
+    public bool HasIssues => Compat.Issues.Count > 0;
+    public string VerdictText => PluginTexts.Verdict(Compat.Verdict);
+    public string IssuesText => string.Join("\n", Compat.Issues.Select(PluginTexts.Describe));
+
+    /// <summary>Node.js is missing or too old: the card offers the download (after asking).</summary>
+    public bool NeedsNode => Compat.Issues.Any(i => i.Issue is PluginIssue.NodeMissing or PluginIssue.NodeTooOld);
+
+    public int RequiredNodeMajor => NodeResolver.RequiredMajor(Plugin.Manifest?.Nodejs?.Version);
+
+    public PluginCpuUse? Cpu
+    {
+        get => _cpu;
+        set
+        {
+            _cpu = value;
+            OnPropertyChanged(nameof(Cpu));
+            OnPropertyChanged(nameof(IsCpuHeavy));
+            OnPropertyChanged(nameof(CpuText));
+        }
+    }
+
+    public bool IsCpuHeavy => Cpu?.IsHeavy == true;
+    public string CpuText => Cpu is { IsHeavy: true } c
+        ? string.Format(LocalizationService.Instance.GetString("Plugin_CpuHeavy", "Uses a lot of CPU: {0:0} % of one core"), c.PercentOfOneCore)
+        : "";
+
+    public void Dispose()
+    {
+        PluginBitmap?.Dispose();
+    }
 }
 
 public partial class ActionStorePageViewModel : ObservableObject
 {
     private readonly IObsService? _obsService;
+    private readonly MasterHub.Core.Dialogs.IConfirmDialogService _confirmDialog;
     private readonly IDiscordService? _discordService;
     private readonly ITeamsService? _teamsService;
     private readonly IStreamDeckPluginHost? _streamDeckHost;
+    private readonly MasterHub.Core.Profiles.IProfileService? _profiles;
+
+    /// <summary>For tests: replaces the Node.js download (T-31 b).</summary>
+    internal Func<int, Task<NodeInstallResult>>? NodeInstaller { get; set; }
 
     public ObservableCollection<IntegrationStatusItem> Integrations { get; } = new();
     public ObservableCollection<StreamDeckPluginItemViewModel> StreamDeckPlugins { get; } = new();
@@ -80,17 +140,27 @@ public partial class ActionStorePageViewModel : ObservableObject
         IDiscordService? discordService = null,
         ITeamsService? teamsService = null,
         IStreamDeckPluginHost? streamDeckHost = null,
-        IPluginCatalogService? catalogService = null)
+        IPluginCatalogService? catalogService = null,
+        MasterHub.Core.Dialogs.IConfirmDialogService? confirmDialog = null,
+        MasterHub.Core.Profiles.IProfileService? profiles = null)
     {
+        _profiles = profiles;
         _obsService = obsService;
         _discordService = discordService;
         _teamsService = teamsService;
         _streamDeckHost = streamDeckHost;
+        _confirmDialog = confirmDialog ?? new MasterHub.Core.Dialogs.AutoConfirmDialogService();
         _catalog = new PluginCatalogViewModel(catalogService ?? new PluginCatalogService(), streamDeckHost, () => RefreshPlugins());
 
         if (_obsService != null) _obsService.ConnectionStateChanged += _ => Dispatcher.UIThread.Post(RefreshIntegrations);
         if (_discordService != null) _discordService.ConnectionStateChanged += _ => Dispatcher.UIThread.Post(RefreshIntegrations);
-        if (_streamDeckHost != null) _streamDeckHost.PluginInstalled += _ => Dispatcher.UIThread.Post(RefreshPlugins);
+        if (_streamDeckHost != null)
+        {
+            _streamDeckHost.PluginInstalled += _ => Dispatcher.UIThread.Post(RefreshPlugins);
+            // T-31 a / f: the CPU flag and "why it did not start" reach the card without a refresh
+            _streamDeckHost.PluginCpuChanged += use => Dispatcher.UIThread.Post(() => OnPluginCpuChanged(use));
+            _streamDeckHost.PluginCannotRun += (uuid, report) => Dispatcher.UIThread.Post(() => OnPluginCannotRun(uuid, report));
+        }
 
         LocalizationService.Instance.LanguageChanged += _ =>
         {
@@ -108,30 +178,44 @@ public partial class ActionStorePageViewModel : ObservableObject
         var loc = LocalizationService.Instance;
 
         bool obsOnline = _obsService?.IsConnected ?? false;
-        Integrations.Add(new("OBS Studio", loc.GetString("Store_ObsDesc", "..."), "📡",
+        Integrations.Add(new("OBS Studio", loc.GetString("Store_ObsDesc", "..."), "ObsLogo",
             obsOnline ? loc.GetString("Store_ObsOnline", "Połączono (WebSocket v5)") : loc.GetString("Store_ObsOffline", "Gotowy do połączenia"), obsOnline));
 
         bool discordOnline = _discordService?.IsConnected ?? false;
-        Integrations.Add(new("Discord", loc.GetString("Store_DiscordDesc", "..."), "🎙️",
+        Integrations.Add(new("Discord", loc.GetString("Store_DiscordDesc", "..."), "Discord",
             discordOnline ? loc.GetString("Store_DiscordOnline", "Aktywny (Local IPC)") : loc.GetString("Store_DiscordOffline", "Oczekiwanie na klienta"), discordOnline));
 
         bool teamsOnline = _teamsService?.IsTeamsRunning ?? false;
-        Integrations.Add(new("Microsoft Teams", loc.GetString("Store_TeamsDesc", "..."), "💼",
+        Integrations.Add(new("Microsoft Teams", loc.GetString("Store_TeamsDesc", "..."), "Teams",
             teamsOnline ? loc.GetString("Store_TeamsOnline", "Wykryto proces Teams") : loc.GetString("Store_TeamsOffline", "Nieuruchomiony"), teamsOnline));
 
-        Integrations.Add(new("System & Media", loc.GetString("Store_SysMediaDesc", "..."), "🖥️", loc.GetString("Store_SysMediaActive", "Aktywny (System API)"), true));
-        Integrations.Add(new("Razer Synapse & Wooting", loc.GetString("Store_HardwareDesc", "..."), "⚡", loc.GetString("Store_HardwareReady", "Gotowy (HID SDK)"), true));
+        Integrations.Add(new("System & Media", loc.GetString("Store_SysMediaDesc", "..."), "Computer", loc.GetString("Store_SysMediaActive", "Aktywny (System API)"), true));
+        Integrations.Add(new("Razer Synapse & Wooting", loc.GetString("Store_HardwareDesc", "..."), "Razer", loc.GetString("Store_HardwareReady", "Gotowy (HID SDK)"), true));
     }
 
     [RelayCommand]
     public void RefreshPlugins()
     {
+        // The old items leave the list first and their icons are released afterwards: an Image that is still on screen must never
+        // be handed a disposed bitmap (it throws in the layout pass).
+        var old = StreamDeckPlugins.ToList();
         StreamDeckPlugins.Clear();
+        if (old.Count > 0)
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                foreach (var p in old) p.Dispose();
+            }, DispatcherPriority.Background);
+        }
         if (_streamDeckHost == null) return;
         _streamDeckHost.RefreshPlugins();
         foreach (var p in _streamDeckHost.InstalledPlugins)
         {
-            StreamDeckPlugins.Add(new StreamDeckPluginItemViewModel(p));
+            StreamDeckPlugins.Add(new StreamDeckPluginItemViewModel(p)
+            {
+                Compat = _streamDeckHost.CheckCompatibility(p.PluginUuid),
+                Cpu = _streamDeckHost.GetCpuUse(p.PluginUuid)
+            });
         }
         Catalog?.UpdateInstalledStates();
     }
@@ -165,8 +249,7 @@ public partial class ActionStorePageViewModel : ObservableObject
                 var installed = await _streamDeckHost.InstallPluginPackageAsync(path);
                 if (installed != null)
                 {
-                    StatusMessage = $"Zainstalowano: {installed.Name}";
-                    await _streamDeckHost.StartPluginAsync(installed.PluginUuid);
+                    StatusMessage = (await PluginInstallFollowUp.RunAsync(_streamDeckHost, installed)).Message;
                     RefreshPlugins();
                 }
                 else
@@ -215,6 +298,7 @@ public partial class ActionStorePageViewModel : ObservableObject
     public async Task TogglePluginAsync(StreamDeckPluginItemViewModel? item)
     {
         if (item == null || _streamDeckHost == null) return;
+        // (starting / stopping is not destructive: it used to show the "Uninstall plugin?" question by mistake)
         if (item.IsRunning)
         {
             await _streamDeckHost.StopPluginAsync(item.PluginUuid);
@@ -232,6 +316,9 @@ public partial class ActionStorePageViewModel : ObservableObject
     public async Task UninstallPluginAsync(StreamDeckPluginItemViewModel? item)
     {
         if (item == null || _streamDeckHost == null) return;
+        // T-31 c: the question lists the keys that will stop working
+        var usages = _profiles == null ? Array.Empty<PluginUsage>() : PluginUsageScanner.Find(_profiles.GetAllProfiles(), item.PluginUuid);
+        if (!await _confirmDialog.ConfirmAsync(MasterHub.Avalonia.Services.ConfirmRequests.UninstallPlugin(item.Name, usages))) return;
         bool deleted = await _streamDeckHost.UninstallPluginAsync(item.PluginUuid);
         if (deleted)
         {

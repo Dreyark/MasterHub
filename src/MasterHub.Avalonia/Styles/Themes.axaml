@@ -12,7 +12,12 @@
 
     <StyleInclude Source="avares://MasterHub.Avalonia/Styles/Typography.axaml" />
     <StyleInclude Source="avares://MasterHub.Avalonia/Styles/Buttons.axaml" />
+    <StyleInclude Source="avares://MasterHub.Avalonia/Styles/Buttons.Rail.axaml" />
+    <StyleInclude Source="avares://MasterHub.Avalonia/Styles/Buttons.Chips.axaml" />
     <StyleInclude Source="avares://MasterHub.Avalonia/Styles/Cards.axaml" />
+    <StyleInclude Source="avares://MasterHub.Avalonia/Styles/Shell.axaml" />
+    <StyleInclude Source="avares://MasterHub.Avalonia/Styles/Lists.axaml" />
     <StyleInclude Source="avares://MasterHub.Avalonia/Styles/Inputs.axaml" />
     <StyleInclude Source="avares://MasterHub.Avalonia/Styles/ScrollBars.axaml" />
+    <StyleInclude Source="avares://MasterHub.Avalonia/Styles/Menus.axaml" />
 </Styles>

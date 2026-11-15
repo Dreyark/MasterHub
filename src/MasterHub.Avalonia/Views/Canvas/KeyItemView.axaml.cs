@@ -16,6 +16,7 @@ public partial class KeyItemView : UserControl
     public KeyItemView()
     {
         InitializeComponent();
+        InitializeEditing();
     }
 
     private void OnKeyPointerPressed(object? sender, PointerPressedEventArgs e)
@@ -23,6 +24,7 @@ public partial class KeyItemView : UserControl
         if (DataContext is KeyItemViewModel key)
         {
             e.Handled = true;
+            BeginDrag(e);
             var canvasVm = this.FindAncestorOfType<KeysModuleView>()?.DataContext as CanvasViewModel
                         ?? this.FindAncestorOfType<ModuleCanvasView>()?.DataContext as CanvasViewModel;
 

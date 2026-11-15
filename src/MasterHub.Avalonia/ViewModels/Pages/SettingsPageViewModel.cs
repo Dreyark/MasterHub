@@ -47,6 +47,14 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     private bool _startMinimizedToTray = true;
 
+    /// <summary>Czas przytrzymania (ms) dla gestu Hold klawisza (T-05).</summary>
+    [ObservableProperty]
+    private int _holdDurationMs = 500;
+
+    /// <summary>Maksymalny odstęp (ms) między dwoma dotknięciami gestu Double (T-05).</summary>
+    [ObservableProperty]
+    private int _doublePressIntervalMs = 300;
+
     [ObservableProperty]
     private string _discordClientId = "207646673902501888";
 
@@ -61,6 +69,12 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
 
     [ObservableProperty]
     private string _discordDeafenHotkey = "Ctrl+Shift+D";
+
+    [ObservableProperty]
+    private string _discordCameraHotkey = "Ctrl+Shift+O";
+
+    [ObservableProperty]
+    private string _discordScreenShareHotkey = "Ctrl+Shift+S";
 
     [ObservableProperty]
     private bool _discordUseRpc = false;
@@ -755,6 +769,9 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>Karta kopii zapasowych (T-02).</summary>
+    public BackupsCardViewModel Backups { get; }
+
     public SettingsPageViewModel(
         IMasterHubDeviceService deviceService,
         CanvasViewModel canvas,
@@ -769,7 +786,8 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         IHomeAssistantService homeAssistantService,
         IProfileService profileService,
         ISystemControlService systemControl,
-        IStartupService startupService)
+        IStartupService startupService,
+        MasterHub.Core.Dialogs.IConfirmDialogService? confirmDialog = null)
     {
         _deviceService = deviceService ?? throw new ArgumentNullException(nameof(deviceService));
         _canvas = canvas ?? throw new ArgumentNullException(nameof(canvas));
@@ -785,10 +803,16 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         _profileService = profileService ?? throw new ArgumentNullException(nameof(profileService));
         _systemControl = systemControl ?? throw new ArgumentNullException(nameof(systemControl));
         _startupService = startupService ?? throw new ArgumentNullException(nameof(startupService));
+        Backups = new BackupsCardViewModel(profileService, confirmDialog);
 
         var appSettings = _profileService.GetAppSettings();
-        _startWithWindows = _startupService.IsRunAtStartupEnabled();
+        // T-34 #4: renew the autostart entry for the current program path at every start, and log what it is
+        var renewal = _startupService.RenewOnStart();
+        MasterHub.Core.Diagnostics.AppLog.Write(MasterHub.Core.SystemControl.AutostartEntry.Describe(renewal));
+        _startWithWindows = renewal.Enabled || _startupService.IsRunAtStartupEnabled();
         _startMinimizedToTray = appSettings.StartMinimizedToTray;
+        _holdDurationMs = Math.Clamp(appSettings.HoldDurationMs, 200, 3000);
+        _doublePressIntervalMs = Math.Clamp(appSettings.DoublePressIntervalMs, 100, 1000);
 
         string currentCode = LocalizationService.Instance.CurrentLanguageCode ?? appSettings.LanguageCode ?? "pl";
         _selectedLanguage = AvailableLanguages.FirstOrDefault(l => l.Code == currentCode) ?? AvailableLanguages[0];
@@ -799,6 +823,8 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         _discordAccessToken = dc.AccessToken;
         _discordMuteHotkey = dc.MuteHotkey;
         _discordDeafenHotkey = dc.DeafenHotkey;
+        _discordCameraHotkey = dc.CameraHotkey;
+        _discordScreenShareHotkey = dc.ScreenShareHotkey;
         _discordUseRpc = dc.UseRpc;
 
         var obs = _profileService.GetObsSettings();
@@ -1039,6 +1065,33 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         SaveAppSettings();
     }
 
+    partial void OnHoldDurationMsChanged(int value)
+    {
+        _canvas.ApplyGestureTimes(value, DoublePressIntervalMs);
+        SaveAppSettings();
+    }
+
+    partial void OnDoublePressIntervalMsChanged(int value)
+    {
+        _canvas.ApplyGestureTimes(HoldDurationMs, value);
+        SaveAppSettings();
+    }
+
+    /// <summary>T-17 g: a fader on the main volume also shows the Windows volume popup.</summary>
+    public bool VolumeOsdForFaders
+    {
+        get => _profileService.GetAppSettings().VolumeOsdForFaders;
+        set
+        {
+            var settings = _profileService.GetAppSettings();
+            if (settings.VolumeOsdForFaders == value) return;
+            settings.VolumeOsdForFaders = value;
+            _profileService.SaveAppSettings(settings);
+            _canvas.ApplyVolumeOsdSetting(value);
+            OnPropertyChanged();
+        }
+    }
+
     partial void OnStartMinimizedToTrayChanged(bool value)
     {
         if (StartWithWindows)
@@ -1048,14 +1101,31 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
         SaveAppSettings();
     }
 
+    /// <summary>Runs the setup tour again (set by the main view model).</summary>
+    public Action? RunTourRequested { get; set; }
+
+    [RelayCommand]
+    private void RunTour() => RunTourRequested?.Invoke();
+
+    /// <summary>The assistant's settings card (T-37): the master switch, press counting, delete counted data. Set by the main view model.</summary>
+    [ObservableProperty]
+    private AssistViewModel? _assist;
+
+    /// <summary>The update check card (T-32). Set by the main view model.</summary>
+    [ObservableProperty]
+    private UpdatesViewModel? _updates;
+
     private void SaveAppSettings()
     {
-        _profileService.SaveAppSettings(new AppSettingsModel
-        {
-            StartWithWindows = StartWithWindows,
-            StartMinimizedToTray = StartMinimizedToTray,
-            LanguageCode = SelectedLanguage?.Code ?? LocalizationService.Instance.CurrentLanguageCode ?? "pl"
-        });
+        // Change the settings that are on this page and keep everything else as it is: other cards own the rest (the assistant,
+        // the update check, status lights, the tour …). Building a new model here once reset them all on every save.
+        var settings = _profileService.GetAppSettings();
+        settings.StartWithWindows = StartWithWindows;
+        settings.StartMinimizedToTray = StartMinimizedToTray;
+        settings.LanguageCode = SelectedLanguage?.Code ?? LocalizationService.Instance.CurrentLanguageCode ?? "pl";
+        settings.HoldDurationMs = HoldDurationMs;
+        settings.DoublePressIntervalMs = DoublePressIntervalMs;
+        _profileService.SaveAppSettings(settings);
     }
 
     partial void OnSelectedLanguageChanged(MasterHub.Core.Localization.LanguageOption? value)
@@ -1083,6 +1153,8 @@ public partial class SettingsPageViewModel : ObservableObject, IDisposable
             AccessToken = DiscordAccessToken,
             MuteHotkey = DiscordMuteHotkey,
             DeafenHotkey = DiscordDeafenHotkey,
+            CameraHotkey = DiscordCameraHotkey,
+            ScreenShareHotkey = DiscordScreenShareHotkey,
             UseRpc = DiscordUseRpc
         });
         DiscordStatusMessage = LocalizationService.Instance.GetString("Discord_SavedMsg", "Ustawienia Discorda zostały zapisane.");

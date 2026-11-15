@@ -40,9 +40,12 @@ public class LocalizationService : ILocalizationService
         LoadSavedLanguage();
     }
 
-    public string GetString(string key, string fallback = "")
+    public string GetString(string key, string fallback = "") => GetStringFor(_currentLanguageCode, key, fallback);
+
+    /// <summary>The text of a key in a given language, with the same fallback (English, then Polish, then the fallback).</summary>
+    internal string GetStringFor(string languageCode, string key, string fallback = "")
     {
-        if (_translations.TryGetValue(_currentLanguageCode, out var dict) && dict.TryGetValue(key, out var val))
+        if (_translations.TryGetValue(languageCode, out var dict) && dict.TryGetValue(key, out var val))
         {
             return val;
         }
@@ -169,6 +172,10 @@ public class LocalizationService : ILocalizationService
             if (!resourceName.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
                 continue;
 
+            // only the language files: the assembly also embeds other JSON (profile templates, ...) that is not a translation
+            if (!resourceName.Contains(".Localization.Locales.", StringComparison.OrdinalIgnoreCase))
+                continue;
+
             var parts = resourceName.Split('.');
             if (parts.Length < 2) continue;
             string langCode = parts[^2].ToLowerInvariant(); // np. "pl" lub "en"
@@ -194,55 +201,124 @@ public class LocalizationService : ILocalizationService
         }
     }
 
+    /// <summary>The folder of the user's own language files (T-34 #11): <c>%APPDATA%\MasterHub\Languages</c>.</summary>
+    public static string UserLanguagesFolder =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MasterHub", "Languages");
+
+    /// <summary>The name of the file "Make a language file" writes; it is never loaded as a language itself.</summary>
+    public const string TemplateFileName = "template.json";
+
+    /// <summary>Language files larger than this are skipped (a translation is a few hundred KB).</summary>
+    internal const long MaxLanguageFileBytes = 4L * 1024 * 1024;
+
     private void LoadFileSystemTranslations()
     {
         try
         {
-            var searchPaths = new List<string>();
-
-            string appDataLanguages = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MasterHub", "Languages");
-            if (Directory.Exists(appDataLanguages))
-            {
-                searchPaths.AddRange(Directory.GetFiles(appDataLanguages, "*.json"));
-            }
-
-            string baseDirLanguages = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Locales");
-            if (Directory.Exists(baseDirLanguages))
-            {
-                searchPaths.AddRange(Directory.GetFiles(baseDirLanguages, "*.json"));
-            }
-
-            foreach (var file in searchPaths)
-            {
-                try
-                {
-                    string langCode = Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
-                    string json = File.ReadAllText(file);
-                    var dict = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
-                    if (dict != null)
-                    {
-                        if (!_translations.TryGetValue(langCode, out var existing))
-                        {
-                            existing = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                            _translations[langCode] = existing;
-                        }
-
-                        foreach (var kvp in dict)
-                        {
-                            existing[kvp.Key] = kvp.Value;
-                        }
-
-                        EnsureSupportedLanguage(langCode, dict);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"[Localization] Error loading locale file {file}: {ex.Message}");
-                }
-            }
+            LoadLanguageFolder(UserLanguagesFolder);
+            LoadLanguageFolder(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Locales"));
         }
         catch { }
     }
+
+    /// <summary>
+    /// Loads every <c>&lt;code&gt;.json</c> of a folder as a language: a new code appears in the language picker (its name from
+    /// <c>_LanguageName</c>), a known code gets its texts replaced key by key. A key the file lacks falls back to English.
+    /// Returns the codes loaded.
+    /// </summary>
+    internal IReadOnlyList<string> LoadLanguageFolder(string folder)
+    {
+        var loaded = new List<string>();
+        if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return loaded;
+
+        foreach (var file in Directory.GetFiles(folder, "*.json"))
+        {
+            try
+            {
+                if (Path.GetFileName(file).Equals(TemplateFileName, StringComparison.OrdinalIgnoreCase)) continue;
+                string langCode = Path.GetFileNameWithoutExtension(file).ToLowerInvariant();
+                if (!IsValidLanguageCode(langCode)) continue;
+                if (new FileInfo(file).Length > MaxLanguageFileBytes) continue;
+
+                var dict = ParseLanguageFile(File.ReadAllText(file));
+                if (dict == null || dict.Count == 0) continue;
+
+                if (!_translations.TryGetValue(langCode, out var existing))
+                {
+                    existing = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                    _translations[langCode] = existing;
+                }
+                foreach (var kvp in dict) existing[kvp.Key] = kvp.Value;
+
+                EnsureSupportedLanguage(langCode, dict);
+                loaded.Add(langCode);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Localization] Error loading locale file {file}: {ex.Message}");
+            }
+        }
+        return loaded;
+    }
+
+    /// <summary>A language code made of letters, digits and <c>-</c> (<c>it</c>, <c>pt-br</c>), at most 16 characters.</summary>
+    internal static bool IsValidLanguageCode(string? code) =>
+        !string.IsNullOrEmpty(code) && code.Length <= 16 && code.All(c => char.IsAsciiLetterOrDigit(c) || c == '-');
+
+    /// <summary>The text entries of a language file; entries that are not text are ignored, broken JSON gives <c>null</c>.</summary>
+    internal static Dictionary<string, string>? ParseLanguageFile(string json)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(json, new JsonDocumentOptions { AllowTrailingCommas = true, CommentHandling = JsonCommentHandling.Skip });
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+            var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var property in doc.RootElement.EnumerateObject())
+            {
+                if (property.Value.ValueKind == JsonValueKind.String && property.Name.Length > 0)
+                    dict[property.Name] = property.Value.GetString() ?? "";
+            }
+            return dict;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// "Make a language file" (T-34 #11): writes every English text into <c>template.json</c> (sorted by key, with a
+    /// <c>_LanguageName</c> to fill in). Rename the copy to the language code (<c>it.json</c>), translate the values and
+    /// restart the app: the language appears in the picker. Returns the path written.
+    /// </summary>
+    public string WriteLanguageTemplate(string? folder = null)
+    {
+        folder ??= UserLanguagesFolder;
+        Directory.CreateDirectory(folder);
+
+        var english = _translations.TryGetValue("en", out var en) ? en : new Dictionary<string, string>();
+        string path = Path.Combine(folder, TemplateFileName);
+        using (var stream = new FileStream(path, FileMode.Create, FileAccess.Write))
+        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions
+               {
+                   Indented = true,
+                   Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+               }))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("_LanguageName", "My language (XX)");   // first, so a translator sees it at once
+            foreach (var kvp in english.Where(k => k.Key != "_LanguageName").OrderBy(k => k.Key, StringComparer.Ordinal))
+            {
+                writer.WriteString(kvp.Key, kvp.Value);
+            }
+            writer.WriteEndObject();
+        }
+        return path;
+    }
+
+    /// <summary>The English text of a key, or <c>null</c> (for tests and the template).</summary>
+    internal string? EnglishText(string key) =>
+        _translations.TryGetValue("en", out var en) && en.TryGetValue(key, out var v) ? v : null;
 
     private void EnsureSupportedLanguage(string langCode, Dictionary<string, string> dict)
     {

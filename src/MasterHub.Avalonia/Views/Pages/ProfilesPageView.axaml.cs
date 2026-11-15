@@ -15,63 +15,75 @@ public partial class ProfilesPageView : UserControl
 
     private async void OnImportProfileClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not ProfilesPageViewModel vm) return;
-
-        var topLevel = TopLevel.GetTopLevel(this);
-        if (topLevel == null) return;
-
-        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        try
         {
-            Title = LocalizationService.Instance.GetString("Profiles_ImportDialogTitle", "Wybierz plik profilu"),
-            AllowMultiple = false,
-            FileTypeFilter = new[]
+            if (DataContext is not ProfilesPageViewModel vm) return;
+
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel == null) return;
+
+            var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
             {
-                new FilePickerFileType("Wszystkie profile (*.json, *.mhz)")
+                Title = LocalizationService.Instance.GetString("Profiles_ImportDialogTitle", "Wybierz plik profilu"),
+                AllowMultiple = false,
+                FileTypeFilter = new[]
                 {
-                    Patterns = new[] { "*.json", "*.mhz" }
-                },
-                new FilePickerFileType("Pakiety Cooler Master (*.mhz)")
-                {
-                    Patterns = new[] { "*.mhz" }
-                },
-                new FilePickerFileType("Profile MasterHub (*.json)")
-                {
-                    Patterns = new[] { "*.json" }
+                    new FilePickerFileType("Wszystkie profile (*.mhdeck, *.json, *.mhz)")
+                    {
+                        Patterns = new[] { "*.mhdeck", "*.json", "*.mhz" }
+                    },
+                    new FilePickerFileType("Pakiety Cooler Master (*.mhz)")
+                    {
+                        Patterns = new[] { "*.mhz" }
+                    },
+                    new FilePickerFileType("Profile MasterHub (*.json)")
+                    {
+                        Patterns = new[] { "*.json" }
+                    }
                 }
-            }
-        });
+            });
 
-        if (files.Count > 0)
-        {
-            vm.ImportProfile(files[0].Path.LocalPath);
+            if (files.Count > 0)
+            {
+                vm.ImportProfile(files[0].Path.LocalPath);
+            }
         }
+        catch { }
     }
 
     private async void OnExportProfileClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not ProfilesPageViewModel vm) return;
-        if (sender is not Control { Tag: ProfileItemViewModel item }) return;
-
-        var topLevel = TopLevel.GetTopLevel(this);
-        if (topLevel == null) return;
-
-        var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        try
         {
-            Title = LocalizationService.Instance.GetString("Profiles_ExportDialogTitle", "Eksportuj profil"),
-            DefaultExtension = "json",
-            SuggestedFileName = $"{item.Name}.json",
-            FileTypeChoices = new[]
+            if (DataContext is not ProfilesPageViewModel vm) return;
+            if (sender is not Control { Tag: ProfileItemViewModel item }) return;
+
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel == null) return;
+
+            var file = await topLevel.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
             {
-                new FilePickerFileType("MasterHub Profile (*.json)")
+                Title = LocalizationService.Instance.GetString("Profiles_ExportDialogTitle", "Eksportuj profil"),
+                DefaultExtension = "mhdeck",
+                SuggestedFileName = $"{item.Name}.mhdeck",
+                FileTypeChoices = new[]
                 {
-                    Patterns = new[] { "*.json" }
+                    new FilePickerFileType("MasterHub package with pictures (*.mhdeck)")
+                    {
+                        Patterns = new[] { "*.mhdeck" }
+                    },
+                    new FilePickerFileType("MasterHub Profile - settings only (*.json)")
+                    {
+                        Patterns = new[] { "*.json" }
+                    }
                 }
-            }
-        });
+            });
 
-        if (file != null)
-        {
-            vm.ExportProfile(item, file.Path.LocalPath);
+            if (file != null)
+            {
+                vm.ExportProfile(item, file.Path.LocalPath);
+            }
         }
+        catch { }
     }
 }

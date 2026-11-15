@@ -8,11 +8,55 @@ using MasterHub.Core.Models;
 
 namespace MasterHub.Core.Profiles;
 
+/// <summary>One extra gesture of a key (T-05): what a hold or a double tap does. Reuses the key's own action types and parameter string
+/// (a conditional action or a multi-action is stored in <see cref="ActionParameter"/> exactly as on the key itself).</summary>
+public class KeyGestureBinding
+{
+    public DeckActionType Action { get; set; } = DeckActionType.None;
+    public string ActionParameter { get; set; } = "";
+}
+
+/// <summary>Optional extra gestures of a key. Absent (null) = the key only has its tap binding, as in every older profile.</summary>
+public class KeyGestures
+{
+    public KeyGestureBinding? Hold { get; set; }
+    public KeyGestureBinding? Double { get; set; }
+
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsEmpty => Hold is not { Action: not DeckActionType.None } && Double is not { Action: not DeckActionType.None };
+}
+
 public class KeyAssignmentModel
 {
     public int Index { get; set; }
     public DeckActionType Action { get; set; } = DeckActionType.None;
     public KeyPressMode PressMode { get; set; } = KeyPressMode.OnPress;
+    /// <summary>Opt-out of hold-to-confirm for shutdown/restart/sleep keys (one press is enough). Default: confirmation required.</summary>
+    public bool SkipPowerConfirmation { get; set; } = false;
+
+    /// <summary>T-17 f: toggle / push-to-talk / push-to-mute for mute keys (system mic, Discord, Teams).</summary>
+    public Audio.MutePressMode MutePressMode { get; set; } = Audio.MutePressMode.Toggle;
+
+    /// <summary>Hold and double-tap bindings next to the tap (<see cref="Action"/>). Null for keys that have none.</summary>
+    public KeyGestures? Gestures { get; set; }
+
+    /// <summary>How a Hotkey action is sent: Normal (virtual keys) or ForGames (scan codes held HotkeyHoldMs). T-10.</summary>
+    public SystemControl.HotkeySendMode HotkeySendMode { get; set; } = SystemControl.HotkeySendMode.Normal;
+
+    /// <summary>Hold time (ms) of the main key in ForGames mode; 0 = the default (30 ms).</summary>
+    public int HotkeyHoldMs { get; set; }
+
+    /// <summary>Source and look of a <see cref="DeckActionType.LiveValue"/> key (T-11). Tokens are never in here, only the name of the stored one.</summary>
+    public LiveValues.LiveValueSettings? LiveValue { get; set; }
+
+    /// <summary>Length / phases of a timer key (T-13). Timers themselves are volatile; only this set-up is saved.</summary>
+    public Timers.TimerSettings? Timer { get; set; }
+
+    /// <summary>File, volume, mode and device of a <see cref="DeckActionType.SoundPlay"/> key (T-14). The file path is never packed into a package.</summary>
+    public Audio.SoundSettings? Sound { get; set; }
+
+    /// <summary>"When" rules that change the key's look while a condition holds (T-12). Empty = a plain key.</summary>
+    public List<Looks.KeyLookRule>? LookRules { get; set; }
     public string CustomTitle { get; set; } = "";
     public string CustomSubtitle { get; set; } = "";
     public string BackgroundColorHex { get; set; } = "";
@@ -30,6 +74,31 @@ public class KeyAssignmentModel
     public bool IsBold { get; set; } = true;
     public bool IsItalic { get; set; } = false;
     public bool IsStrikeThrough { get; set; } = false;
+    public bool IsTextWrappingEnabled { get; set; } = true;
+
+    // Typografia i pozycja tytułu
+    public string TitleFontFamily { get; set; } = "";
+    public int TitleFontSize { get; set; } = 0;
+    public bool TitleIsBold { get; set; } = true;
+    public bool TitleIsItalic { get; set; } = false;
+    public bool TitleIsStrikeThrough { get; set; } = false;
+    public bool TitleIsTextWrappingEnabled { get; set; } = true;
+    public string TitleAlignment { get; set; } = "Center";
+    public string TitleVerticalPosition { get; set; } = "Center";
+    public int TitleOffsetX { get; set; } = 0;
+    public int TitleOffsetY { get; set; } = 0;
+
+    // Typografia i pozycja podtytułu
+    public string SubtitleFontFamily { get; set; } = "";
+    public int SubtitleFontSize { get; set; } = 0;
+    public bool SubtitleIsBold { get; set; } = false;
+    public bool SubtitleIsItalic { get; set; } = false;
+    public bool SubtitleIsStrikeThrough { get; set; } = false;
+    public bool SubtitleIsTextWrappingEnabled { get; set; } = true;
+    public string SubtitleAlignment { get; set; } = "Center";
+    public string SubtitleVerticalPosition { get; set; } = "Bottom";
+    public int SubtitleOffsetX { get; set; } = 0;
+    public int SubtitleOffsetY { get; set; } = 0;
     public string ActionParameter { get; set; } = ""; // Np. nazwa profilu Razer lub urządzenia
     public KeyStateMode StateMode { get; set; } = KeyStateMode.Static;
 
@@ -110,6 +179,9 @@ public class KnobAssignmentModel
     public string ColorHex { get; set; } = "#00E5A3";
     public int Brightness { get; set; } = 100; // 0..100
     public int Speed { get; set; } = 50; // 0..100
+
+    /// <summary>T-17 i: the turn jobs of RotateAction = Modes ("MasterVolume, ScrollVertical, MediaTrack").</summary>
+    public string RotateModes { get; set; } = "";
 }
 
 public class DialAssignmentModel
@@ -121,6 +193,9 @@ public class DialAssignmentModel
     public string ColorHex { get; set; } = "#00E5A3";
     public string? ImagePath { get; set; }
     public string DisplayWidget { get; set; } = "Image"; // "Image", "Clock", "CpuDial", "Volume"
+
+    /// <summary>T-17 i: the turn jobs of RotateAction = Modes.</summary>
+    public string RotateModes { get; set; } = "";
 }
 
 public class SmartProfileRule
@@ -216,6 +291,10 @@ public class KeyPageModel : INotifyPropertyChanged
     public DeckWallpaperMode WallpaperMode { get; set; } = DeckWallpaperMode.PerKey;
     public string? PanoramicWallpaperPath { get; set; }
     public string PanoramicWallpaperFitMode { get; set; } = "Cover";
+    /// <summary>Zoom of the whole-deck wallpaper in percent (20–400) and its move in percent of the travel (−100…100), as for the picture of a single key.</summary>
+    public int PanoramicWallpaperScale { get; set; } = 100;
+    public int PanoramicWallpaperOffsetX { get; set; } = 0;
+    public int PanoramicWallpaperOffsetY { get; set; } = 0;
 
     [JsonIgnore]
     public bool IsSelected
@@ -257,11 +336,25 @@ public class KeyPageModel : INotifyPropertyChanged
 
 public class ProfileModel
 {
+    /// <summary>
+    /// Schema version of the profile file (see <c>ProfileMigrator</c>). Optional in JSON: a file without it is version 1.
+    /// </summary>
+    public int SchemaVersion { get; set; } = Backup.ProfileMigrator.CurrentVersion;
+
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
     public string Name { get; set; } = "Domyślny";
     public bool IsDefault { get; set; } = false;
+    /// <summary>
+    /// Made by the assistant for a program on this PC (T-37) and not switched on yet: its Smart Profile rules are off, so it never
+    /// takes over the deck by itself. "Switch on" turns the rules on and clears this flag.
+    /// </summary>
+    public bool AutoMade { get; set; } = false;
     public string LedColorHex { get; set; } = "#000000";
     public int BaseBrightness { get; set; } = 0;
+    /// <summary>Edge-light effect of the base for this profile (T-18); Static = the plain colour, as before.</summary>
+    public Devices.LedEffect BaseLedMode { get; set; } = Devices.LedEffect.Static;
+    /// <summary>Speed (0..100) of the animated edge effects.</summary>
+    public int BaseLedSpeed { get; set; } = 50;
     public int KeypadBrightness { get; set; } = 100;
     public int MasterBrightness { get; set; } = 100;
 
@@ -273,6 +366,10 @@ public class ProfileModel
     public DeckWallpaperMode WallpaperMode { get; set; } = DeckWallpaperMode.PerKey;
     public string? PanoramicWallpaperPath { get; set; }
     public string PanoramicWallpaperFitMode { get; set; } = "Cover";
+    /// <summary>Zoom of the whole-deck wallpaper in percent (20–400) and its move in percent of the travel (−100…100), as for the picture of a single key.</summary>
+    public int PanoramicWallpaperScale { get; set; } = 100;
+    public int PanoramicWallpaperOffsetX { get; set; } = 0;
+    public int PanoramicWallpaperOffsetY { get; set; } = 0;
 
     public List<KeyAssignmentModel> Keys { get; set; } = new();
     public List<SliderAssignmentModel> Sliders { get; set; } = new();

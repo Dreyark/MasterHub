@@ -17,26 +17,66 @@ public static class SvgRasterizer
             if (string.IsNullOrWhiteSpace(svgPath) || !File.Exists(svgPath))
                 return null;
 
-            var svg = new SKSvg();
+            using var svg = new SKSvg();
             svg.Load(svgPath);
             if (svg.Picture == null) return null;
 
-            var info = new SKImageInfo(targetWidth, targetHeight, SKColorType.Rgba8888, SKAlphaType.Premul);
-            var bitmap = new SKBitmap(info);
+            SKBitmap? bitmap = null;
+            try
+            {
+                var info = new SKImageInfo(targetWidth, targetHeight, SKColorType.Rgba8888, SKAlphaType.Premul);
+                bitmap = new SKBitmap(info);
+                using var canvas = new SKCanvas(bitmap);
+                canvas.Clear(SKColors.Transparent);
+
+                float cullW = svg.Picture.CullRect.Width;
+                float cullH = svg.Picture.CullRect.Height;
+                if (cullW > 0 && cullH > 0)
+                {
+                    float scale = Math.Min((float)targetWidth / cullW, (float)targetHeight / cullH);
+                    float dx = (targetWidth - cullW * scale) / 2f;
+                    float dy = (targetHeight - cullH * scale) / 2f;
+                    canvas.Translate(dx, dy);
+                    canvas.Scale(scale);
+                }
+
+                canvas.DrawPicture(svg.Picture);
+                return bitmap;
+            }
+            catch
+            {
+                bitmap?.Dispose();
+                return null;
+            }
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Draws SVG text (not a file) into a transparent bitmap, fitted and centred; <c>null</c> when it cannot be read.</summary>
+    public static SKBitmap? RasterizeSvgText(string svgText, int targetWidth, int targetHeight)
+    {
+        if (string.IsNullOrWhiteSpace(svgText) || targetWidth <= 0 || targetHeight <= 0) return null;
+        try
+        {
+            using var svg = new SKSvg();
+            svg.FromSvg(svgText);
+            if (svg.Picture == null) return null;
+
+            var bitmap = new SKBitmap(new SKImageInfo(targetWidth, targetHeight, SKColorType.Rgba8888, SKAlphaType.Premul));
             using var canvas = new SKCanvas(bitmap);
             canvas.Clear(SKColors.Transparent);
-
             float cullW = svg.Picture.CullRect.Width;
             float cullH = svg.Picture.CullRect.Height;
             if (cullW > 0 && cullH > 0)
             {
-                float scale = Math.Min((float)targetWidth / cullW, (float)targetHeight / cullH);
-                float dx = (targetWidth - cullW * scale) / 2f;
-                float dy = (targetHeight - cullH * scale) / 2f;
-                canvas.Translate(dx, dy);
+                float scale = Math.Min(targetWidth / cullW, targetHeight / cullH);
+                canvas.Translate((targetWidth - cullW * scale) / 2f, (targetHeight - cullH * scale) / 2f);
                 canvas.Scale(scale);
+                canvas.Translate(-svg.Picture.CullRect.Left, -svg.Picture.CullRect.Top);
             }
-
             canvas.DrawPicture(svg.Picture);
             return bitmap;
         }

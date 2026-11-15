@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Controls.QuarantineBannerView"
+             x:DataType="vm:QuarantineBannerViewModel"
+             IsVisible="{Binding IsVisible}">
+    <!-- Pływająca podpowiedź nad stronami: pliki, których nie dało się odczytać, zostały odłożone (nie usunięte). -->
+    <Border Classes="callout floating" Padding="14,10" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,8,0,0">
+        <StackPanel Orientation="Horizontal" Spacing="12">
+            <TextBlock Text="{Binding Text}" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="560" />
+            <Button Content="{loc:Loc Quarantine_OpenFolder}" Command="{Binding OpenFolderCommand}" Classes="actionBtn" />
+            <Button Content="{loc:Loc Quarantine_Dismiss}" Command="{Binding DismissCommand}" Classes="actionBtn" />
+        </StackPanel>
+    </Border>
+</UserControl>

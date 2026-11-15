@@ -10,7 +10,7 @@
             <!-- Tytuł sekcji -->
             <Grid ColumnDefinitions="*,Auto">
                 <TextBlock Grid.Column="0" Text="{loc:Loc DeviceHeader_ModuleStatus}" Classes="caption" FontWeight="Bold" />
-                <TextBlock Grid.Column="1" Text="COOLER MASTER" Classes="dim" FontSize="9.5" />
+                <TextBlock Grid.Column="1" Text="COOLER MASTER" Classes="dim" FontSize="10.5" />
             </Grid>
 
             <!-- Siatka mini-kart modułów z wektorowymi ikonami SVG i dynamicznym stanem połączenia -->
@@ -20,7 +20,7 @@
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
                         <PathIcon Data="{StaticResource IconKeypad}" Width="16" Height="16"
                                   Foreground="{StaticResource AccentPrimaryBrush}" HorizontalAlignment="Center" />
-                        <TextBlock Text="{loc:Loc DeviceHeader_Keys}" FontSize="9" FontWeight="Medium"
+                        <TextBlock Text="{loc:Loc DeviceHeader_Keys}" FontSize="10.5" FontWeight="Medium"
                                    Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" />
                         <Ellipse Width="5" Height="5" Fill="{Binding KeypadStatusColor}" HorizontalAlignment="Center" />
                     </StackPanel>
@@ -31,7 +31,7 @@
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
                         <PathIcon Data="{StaticResource IconFaders}" Width="16" Height="16"
                                   Foreground="{StaticResource AccentPrimaryBrush}" HorizontalAlignment="Center" />
-                        <TextBlock Text="{loc:Loc DeviceHeader_Sliders}" FontSize="9" FontWeight="Medium"
+                        <TextBlock Text="{loc:Loc DeviceHeader_Sliders}" FontSize="10.5" FontWeight="Medium"
                                    Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" />
                         <Ellipse Width="5" Height="5" Fill="{Binding SliderStatusColor}" HorizontalAlignment="Center" />
                     </StackPanel>
@@ -42,7 +42,7 @@
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
                         <PathIcon Data="{StaticResource IconDials}" Width="16" Height="16"
                                   Foreground="{StaticResource AccentPrimaryBrush}" HorizontalAlignment="Center" />
-                        <TextBlock Text="{loc:Loc DeviceHeader_Rollers}" FontSize="9" FontWeight="Medium"
+                        <TextBlock Text="{loc:Loc DeviceHeader_Rollers}" FontSize="10.5" FontWeight="Medium"
                                    Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" />
                         <Ellipse Width="5" Height="5" Fill="{Binding RollerStatusColor}" HorizontalAlignment="Center" />
                     </StackPanel>
@@ -54,7 +54,7 @@
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
                         <PathIcon Data="{StaticResource IconDials}" Width="16" Height="16"
                                   Foreground="{StaticResource AccentSecondaryBrush}" HorizontalAlignment="Center" />
-                        <TextBlock Text="{loc:Loc DeviceHeader_Knobs}" FontSize="9" FontWeight="Medium"
+                        <TextBlock Text="{loc:Loc DeviceHeader_Knobs}" FontSize="10.5" FontWeight="Medium"
                                    Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" />
                         <Ellipse Width="5" Height="5" Fill="{Binding KnobStatusColor}" HorizontalAlignment="Center" />
                     </StackPanel>
@@ -66,7 +66,7 @@
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
                         <PathIcon Data="{StaticResource IconRotate}" Width="16" Height="16"
                                   Foreground="{StaticResource AccentPrimaryBrush}" HorizontalAlignment="Center" />
-                        <TextBlock Text="{loc:Loc DeviceHeader_Dial}" FontSize="9" FontWeight="Medium"
+                        <TextBlock Text="{loc:Loc DeviceHeader_Dial}" FontSize="10.5" FontWeight="Medium"
                                    Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" />
                         <Ellipse Width="5" Height="5" Fill="{Binding DialStatusColor}" HorizontalAlignment="Center" />
                     </StackPanel>
@@ -77,7 +77,7 @@
                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
                         <PathIcon Data="{StaticResource IconBase}" Width="16" Height="16"
                                   Foreground="{StaticResource AccentPrimaryBrush}" HorizontalAlignment="Center" />
-                        <TextBlock Text="{loc:Loc DeviceHeader_Base}" FontSize="9" FontWeight="Medium"
+                        <TextBlock Text="{loc:Loc DeviceHeader_Base}" FontSize="10.5" FontWeight="Medium"
                                    Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" />
                         <Ellipse Width="5" Height="5" Fill="{Binding BaseStatusColor}" HorizontalAlignment="Center" />
                     </StackPanel>

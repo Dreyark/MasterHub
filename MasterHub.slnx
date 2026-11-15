@@ -1,6 +1,11 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/MasterHub.Avalonia/MasterHub.Avalonia.csproj" />
+    <Project Path="src/MasterHub.Cli/MasterHub.Cli.csproj" />
     <Project Path="src/MasterHub.Core/MasterHub.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MasterHub.Avalonia.Tests/MasterHub.Avalonia.Tests.csproj" />
+    <Project Path="tests/MasterHub.Core.Tests/MasterHub.Core.Tests.csproj" />
   </Folder>
 </Solution>

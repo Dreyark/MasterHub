@@ -69,7 +69,7 @@ public partial class PluginCatalogViewModel : ObservableObject
             var installedUuids = _streamDeckHost?.InstalledPlugins.Select(p => p.PluginUuid).ToHashSet(StringComparer.OrdinalIgnoreCase)
                                  ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            var items = entries.Select(e => new PluginCatalogItemViewModel(e, installedUuids.Contains(e.Id))).ToList();
+            var items = entries.Select(e => new PluginCatalogItemViewModel(e, installedUuids.Contains(e.Id), InstallPluginAsync)).ToList();
 
             var cats = entries
                 .Select(e => string.IsNullOrWhiteSpace(e.Category) ? "Inne" : e.Category!)
@@ -131,12 +131,12 @@ public partial class PluginCatalogViewModel : ObservableObject
 
             if (installed != null)
             {
-                await _streamDeckHost.StartPluginAsync(installed.PluginUuid).ConfigureAwait(false);
+                var outcome = await PluginInstallFollowUp.RunAsync(_streamDeckHost, installed).ConfigureAwait(false);
                 Dispatcher.UIThread.Post(() =>
                 {
-                    item.IsInstalled = true;
+                    item.IsInstalled = !outcome.Removed;
                     item.IsInstalling = false;
-                    StatusMessage = $"Pomyślnie zainstalowano i uruchomiono: {item.Name}";
+                    StatusMessage = outcome.Message;
                     _onPluginInstalledCallback?.Invoke();
                 });
             }
@@ -166,6 +166,8 @@ public partial class PluginCatalogViewModel : ObservableObject
         foreach (var item in _allEntries)
         {
             item.IsInstalled = installedUuids.Contains(item.Id);
+            // T-31 e: the badge of the compatibility check, known once the plugin (its manifest) is here
+            item.CompatBadge = item.IsInstalled ? PluginTexts.Verdict(_streamDeckHost.CheckCompatibility(item.Id).Verdict) : "";
         }
     }
 

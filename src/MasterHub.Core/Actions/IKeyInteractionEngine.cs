@@ -23,13 +23,23 @@ public interface IKeyInteractionEngine : IDisposable
     /// <summary>Zdarzenie wywoływane gdy warunek danego trybu klawisza zostanie spełniony.</summary>
     event Action<int, KeyPressMode>? KeyTriggered;
 
+    /// <summary>Zdarzenie dla klawiszy z gestami (T-05): dotknięcie / przytrzymanie / podwójne dotknięcie.</summary>
+    event Action<int, KeyGesture>? GestureTriggered;
+
     /// <summary>
     /// Przetwarza surowy stan klawisza (ze zdarzenia HID urządzenia).
     /// </summary>
     /// <param name="keyIndex">Indeks klawisza (0..14).</param>
     /// <param name="isPressed">Stan fizyczny klawisza (true = wciśnięty, false = zwolniony).</param>
     /// <param name="mode">Skonfigurowany tryb wyzwalania dla tego klawisza.</param>
-    void HandleKeyEvent(int keyIndex, bool isPressed, KeyPressMode mode);
+    /// <param name="holdDurationMs">Opcjonalny czas przytrzymania dla tego zdarzenia (np. 1500 ms dla potwierdzenia wyłączenia komputera); null = HoldDurationMs.</param>
+    void HandleKeyEvent(int keyIndex, bool isPressed, KeyPressMode mode, int? holdDurationMs = null);
+
+    /// <summary>
+    /// Przetwarza klawisz mający przypisane gesty Hold i/lub Double: dotknięcie czeka na rozstrzygnięcie (zwolnienie lub koniec okna
+    /// podwójnego kliknięcia), a wynik wraca przez <see cref="GestureTriggered"/>. Klawisz bez gestów obsługuj przez <see cref="HandleKeyEvent"/>.
+    /// </summary>
+    void HandleGestureEvent(int keyIndex, bool isPressed, GestureBindings bound);
 
     /// <summary>Resetuje stany i timery wszystkich klawiszy.</summary>
     void Reset();

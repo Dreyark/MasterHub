@@ -47,6 +47,7 @@ public interface IMasterHubManager : IDisposable
     event Action<string>? LogMessage;
     event Action<List<DeviceInfo>>? DevicesDiscovered;
     event Action<bool>? StandbyStateChanged;
+    event Action<string>? ModuleUnresponsive;               // Keys/Dial nie odpowiada po handshake (nazwa modułu)
 
     // Control methods
     void Start();
@@ -66,6 +67,11 @@ public interface IMasterHubManager : IDisposable
     void SetKnobLedColor(int knobIndex, byte r, byte g, byte b);
     void SetKnobLedBrightness(int knobIndex, byte brightness);
     void SetKnobLedMode(int knobIndex, MasterHub.Core.Profiles.KnobLedMode mode);
+
+    // Efekty świetlne podstawy i suwaków (T-18); LED-y pojedyncze i rolki nie są adresowalne.
+    void SetBaseLedMode(LedEffect effect);
+    void SetSliderLedMode(int sliderIndex, LedEffect effect);
+    void SetLedSpeed(byte speed);
     void SetDialBrightness(byte brightness);
     void SetDialColor(byte r, byte g, byte b);
     void SetDialImage(byte[] jpeg);

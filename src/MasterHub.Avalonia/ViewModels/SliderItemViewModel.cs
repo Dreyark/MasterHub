@@ -10,7 +10,7 @@ using MasterHub.Core.Localization;
 
 namespace MasterHub.Avalonia.ViewModels;
 
-public partial class SliderItemViewModel : ObservableObject
+public partial class SliderItemViewModel : ObservableObject, IDisposable
 {
     protected bool SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
@@ -24,10 +24,17 @@ public partial class SliderItemViewModel : ObservableObject
     private string _targetProcessName = "";
     private string _colorHex = "#38BDF8";
     private byte _brightness = 100;
+    private readonly Action<string> _onLanguageChanged;
 
     public SliderItemViewModel()
     {
-        LocalizationService.Instance.LanguageChanged += _ => NotifyLanguageChanged();
+        _onLanguageChanged = _ => NotifyLanguageChanged();
+        LocalizationService.Instance.LanguageChanged += _onLanguageChanged;
+    }
+
+    public void Dispose()
+    {
+        LocalizationService.Instance.LanguageChanged -= _onLanguageChanged;
     }
 
     public int Index { get; set; }

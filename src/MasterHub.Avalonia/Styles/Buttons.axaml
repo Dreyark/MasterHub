@@ -1,6 +1,16 @@
 <Styles xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
+    <!--
+        UWAGA (Fluent): szablon Button/ToggleButton ustawia Background/BorderBrush/Foreground stanów :pointerover,
+        :pressed, :checked i :disabled bezpośrednio na ContentPresenter#PART_ContentPresenter. Reguły ustawiające te
+        właściwości na samym Button są przez to ignorowane (hover wyglądał "systemowo"). Dlatego wszystkie stany poniżej
+        celują w "/template/ ContentPresenter#PART_ContentPresenter".
+        Ten plik: actionBtn, accentBtn, ghostBtn. Buttons.Rail.axaml: iconBtn, closeBtn. Shell.axaml: navItem (pasek boczny), segmented.
+        Buttons.Chips.axaml: pillBtn, glyphBtn, swatchBtn. Klasy: actionBtn (drugorzędny), accentBtn (główny / CTA), pillBtn (chip), iconBtn, navItem, ghostBtn
+        (przezroczysty kontener), swatchBtn (próbka koloru), glyphBtn (kafelek ikony).
+    -->
+
     <!-- Uniwersalny przycisk akcji (Action Button) -->
     <Style Selector="Button.actionBtn">
         <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
@@ -23,101 +33,117 @@
             </Transitions>
         </Setter>
     </Style>
-    <Style Selector="Button.actionBtn:pointerover">
+    <Style Selector="Button.actionBtn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="Background" Value="{StaticResource CardHoverBgBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
-        <Setter Property="Foreground" Value="#FFFFFF" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
     </Style>
     <Style Selector="Button.actionBtn:pressed">
-        <Setter Property="Background" Value="{StaticResource AccentPrimaryBrush}" />
-        <Setter Property="Foreground" Value="#0A0E17" />
         <Setter Property="RenderTransform" Value="scale(0.97)" />
     </Style>
+    <Style Selector="Button.actionBtn:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource AccentPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource OnAccentBrush}" />
+    </Style>
+    <Style Selector="Button.actionBtn:disabled">
+        <Setter Property="Opacity" Value="0.4" />
+        <Setter Property="Cursor" Value="Arrow" />
+    </Style>
+    <Style Selector="Button.actionBtn:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
+        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    </Style>
+    <!-- Stan wybrany (zakładka / przełącznik) -->
     <Style Selector="Button.actionBtn.tabActive">
+        <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+    <Style Selector="Button.actionBtn.tabActive /template/ ContentPresenter#PART_ContentPresenter, Button.actionBtn.tabActive:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.actionBtn:checked /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.actionBtn:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
         <Setter Property="Background" Value="{StaticResource CardActiveBgBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
         <Setter Property="Foreground" Value="{StaticResource AccentPrimaryBrush}" />
+    </Style>
+    <Style Selector="ToggleButton.actionBtn:checked">
         <Setter Property="FontWeight" Value="Bold" />
     </Style>
+    <Style Selector="Button.actionBtn.tabActive TextBlock, ToggleButton.actionBtn:checked TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource AccentPrimaryBrush}" />
+    </Style>
+    <Style Selector="Button.actionBtn.tabActive PathIcon, ToggleButton.actionBtn:checked PathIcon">
+        <Setter Property="Foreground" Value="{StaticResource AccentPrimaryBrush}" />
+    </Style>
 
-    <!-- Przycisk lewej listwy nawigacyjnej (Sidebar Rail) -->
-    <Style Selector="Button.navRailBtn">
-        <Setter Property="Width" Value="44" />
-        <Setter Property="Height" Value="44" />
-        <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
-        <Setter Property="BorderBrush" Value="Transparent" />
+    <!-- Przycisk główny / wezwanie do działania (CTA) -->
+    <Style Selector="Button.accentBtn">
+        <Setter Property="Background" Value="{StaticResource AccentPrimaryBrush}" />
+        <Setter Property="Foreground" Value="#FFFFFF" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="12" />
-        <Setter Property="Padding" Value="0" />
+        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="Padding" Value="12,7" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
-        <Setter Property="FontSize" Value="18" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Transitions">
             <Transitions>
                 <BrushTransition Property="Background" Duration="0:0:0.12" />
                 <BrushTransition Property="BorderBrush" Duration="0:0:0.12" />
-                <BrushTransition Property="Foreground" Duration="0:0:0.12" />
                 <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.08" />
             </Transitions>
         </Setter>
     </Style>
-    <Style Selector="Button.navRailBtn:pointerover">
-        <Setter Property="Background" Value="{StaticResource CardHoverBgBrush}" />
-        <Setter Property="Foreground" Value="{StaticResource AccentPrimaryBrush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
-    </Style>
-    <Style Selector="Button.navRailBtn:pressed">
-        <Setter Property="RenderTransform" Value="scale(0.92)" />
-    </Style>
-    <Style Selector="Button.navRailBtn.active">
-        <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
-        <Setter Property="Foreground" Value="{StaticResource AccentPrimaryBrush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
-    </Style>
-
-    <!-- Przycisk ikony / nagłówka -->
-    <Style Selector="Button.iconBtn">
-        <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
-        <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="CornerRadius" Value="6" />
-        <Setter Property="Padding" Value="6" />
-        <Setter Property="Cursor" Value="Hand" />
-    </Style>
-    <Style Selector="Button.iconBtn:pointerover">
-        <Setter Property="Background" Value="{StaticResource CardHoverBgBrush}" />
-        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-    </Style>
-    <Style Selector="Button.closeBtn:pointerover">
-        <Setter Property="Background" Value="#E03A4B" />
+    <Style Selector="Button.accentBtn TextBlock">
         <Setter Property="Foreground" Value="#FFFFFF" />
     </Style>
-
-    <!-- Przycisk pastylkowy (Pill Button / Chip) -->
-    <Style Selector="Button.pillBtn">
-        <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
-        <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="14" />
-        <Setter Property="Padding" Value="12,5" />
-        <Setter Property="FontSize" Value="11" />
-        <Setter Property="Cursor" Value="Hand" />
-    </Style>
-    <Style Selector="Button.pillBtn:pointerover">
-        <Setter Property="Background" Value="{StaticResource CardHoverBgBrush}" />
-        <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
-        <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
-    </Style>
-    <Style Selector="Button.pillBtn.active">
-        <Setter Property="Background" Value="{StaticResource AccentPrimaryBrush}" />
+    <Style Selector="Button.accentBtn PathIcon">
         <Setter Property="Foreground" Value="#FFFFFF" />
-        <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
     </Style>
-    <Style Selector="Button.pillBtn:disabled">
+    <Style Selector="Button.accentBtn:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource AccentSecondaryBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentSecondaryBrush}" />
+        <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Button.accentBtn:pressed">
+        <Setter Property="RenderTransform" Value="scale(0.97)" />
+    </Style>
+    <Style Selector="Button.accentBtn:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource AccentSecondaryBrush}" />
+        <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+    <Style Selector="Button.accentBtn:disabled">
         <Setter Property="Opacity" Value="0.4" />
         <Setter Property="Cursor" Value="Arrow" />
     </Style>
+    <Style Selector="Button.accentBtn:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource AccentPrimaryBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentPrimaryBrush}" />
+        <Setter Property="Foreground" Value="#FFFFFF" />
+    </Style>
+
+    <!-- Wariant destrukcyjny przycisku głównego (potwierdzenia usunięcia / wyłączenia) -->
+    <Style Selector="Button.accentBtn.danger">
+        <Setter Property="Background" Value="{StaticResource AccentWarningBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource AccentWarningBrush}" />
+    </Style>
+    <Style Selector="Button.accentBtn.danger:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{StaticResource CloseHoverBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource CloseHoverBrush}" />
+    </Style>
+
+    <!-- Przezroczysty kontener klikalny (np. cały wiersz listy z własną kartą w środku) -->
+    <Style Selector="Button.ghostBtn">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.ghostBtn:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.ghostBtn:pressed /template/ ContentPresenter#PART_ContentPresenter, Button.ghostBtn:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+
 </Styles>

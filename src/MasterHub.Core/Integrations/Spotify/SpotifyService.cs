@@ -101,13 +101,15 @@ public class SpotifyService : ISpotifyService
         {
             string codeVerifier = GenerateCodeVerifier();
             string codeChallenge = GenerateCodeChallenge(codeVerifier);
+            // Parametr "state" chroni callback przed wstrzyknięciem cudzego kodu autoryzacji (CSRF logowania OAuth).
+            string oauthState = GenerateCodeVerifier();
 
             listener = new HttpListener();
             listener.Prefixes.Add(DefaultRedirectUri);
             listener.Start();
 
             string scope = Uri.EscapeDataString("user-modify-playback-state user-read-playback-state user-read-currently-playing user-library-read user-library-modify playlist-read-private playlist-read-collaborative");
-            string authUrl = $"{AccountsBaseUrl}/authorize?client_id={Uri.EscapeDataString(clientId)}&response_type=code&redirect_uri={Uri.EscapeDataString(DefaultRedirectUri)}&code_challenge_method=S256&code_challenge={Uri.EscapeDataString(codeChallenge)}&scope={scope}";
+            string authUrl = $"{AccountsBaseUrl}/authorize?client_id={Uri.EscapeDataString(clientId)}&response_type=code&redirect_uri={Uri.EscapeDataString(DefaultRedirectUri)}&code_challenge_method=S256&code_challenge={Uri.EscapeDataString(codeChallenge)}&state={Uri.EscapeDataString(oauthState)}&scope={scope}";
 
             openBrowserCallback?.Invoke(authUrl);
 
@@ -123,6 +125,12 @@ public class SpotifyService : ISpotifyService
             string? code = context.Request.QueryString["code"];
             string? error = context.Request.QueryString["error"];
 
+            if (!string.Equals(context.Request.QueryString["state"], oauthState, StringComparison.Ordinal))
+            {
+                code = null;
+                error = "Niezgodny parametr state (możliwa próba przechwycenia logowania).";
+            }
+
             // Wyślij stronę z podziękowaniem do przeglądarki użytkownika
             byte[] responseBytes;
             if (!string.IsNullOrEmpty(code))
@@ -133,7 +141,7 @@ public class SpotifyService : ISpotifyService
             }
             else
             {
-                string html = $"<html><body style=\"font-family:Segoe UI,sans-serif;text-align:center;padding:60px;background:#121212;color:#FFFFFF;\"><h1 style=\"color:#EF4444;font-size:32px;\">✖ Anulowano logowanie</h1><p style=\"font-size:16px;color:#B3B3B3;\">{error ?? "Brak kodu autoryzacji."}</p></body></html>";
+                string html = $"<html><body style=\"font-family:Segoe UI,sans-serif;text-align:center;padding:60px;background:#121212;color:#FFFFFF;\"><h1 style=\"color:#EF4444;font-size:32px;\">✖ Anulowano logowanie</h1><p style=\"font-size:16px;color:#B3B3B3;\">{WebUtility.HtmlEncode(error ?? "Brak kodu autoryzacji.")}</p></body></html>";
                 responseBytes = Encoding.UTF8.GetBytes(html);
                 context.Response.StatusCode = 400;
             }
@@ -290,8 +298,23 @@ public class SpotifyService : ISpotifyService
         }
     }
 
+    private DateTime _rateLimitedUntilUtc = DateTime.MinValue;
+
+    // What the last request told us; the poll planner uses it to decide when to ask next (T-34 #3).
+    private SpotifyPollOutcome _lastOutcome = SpotifyPollOutcome.Failed;
+    private long _progressMs;
+    private long _durationMs;
+
     public async Task<SpotifyPlaybackState?> RefreshPlaybackStateAsync(CancellationToken ct = default)
     {
+        _lastOutcome = SpotifyPollOutcome.Failed;   // every path that does not reach the end below counts as a failed request
+
+        // Spotify zwraca 429 przy zbyt czestym odpytywaniu; honorujemy Retry-After zamiast dalej bombardowac API.
+        if (DateTime.UtcNow < _rateLimitedUntilUtc)
+        {
+            return CurrentState;
+        }
+
         bool hasAuth = await EnsureAccessTokenAsync(ct);
         if (!hasAuth)
         {
@@ -304,9 +327,25 @@ public class SpotifyService : ISpotifyService
             req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _settings.AccessToken);
 
             using var resp = await _httpClient.SendAsync(req, ct);
+            if (resp.StatusCode == (HttpStatusCode)429)
+            {
+                double wait = resp.Headers.RetryAfter?.Delta?.TotalSeconds ?? 5;
+                _rateLimitedUntilUtc = DateTime.UtcNow.AddSeconds(Math.Clamp(wait, 1, 300));
+                return CurrentState;
+            }
+
+            if (resp.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                // token uniewazniony (np. cofniety dostep) - wymus odswiezenie przy nastepnym cyklu
+                _settings.TokenExpiresAtUtc = DateTime.UtcNow.AddMinutes(-1);
+                return CurrentState;
+            }
+
             if (resp.StatusCode == HttpStatusCode.NoContent)
             {
                 IsPlaying = false;
+                _lastOutcome = SpotifyPollOutcome.NoPlayback;
+                _progressMs = _durationMs = 0;
                 PlaybackStateChanged?.Invoke(CurrentState);
                 return CurrentState;
             }
@@ -346,9 +385,13 @@ public class SpotifyService : ISpotifyService
                 VolumePercent = vol.GetInt32();
             }
 
+            _progressMs = root.TryGetProperty("progress_ms", out var prog) && prog.ValueKind == JsonValueKind.Number && prog.TryGetInt64(out long p) ? p : 0;
+            _durationMs = 0;
+
             string? newTrackId = null;
             if (root.TryGetProperty("item", out var item) && item.ValueKind == JsonValueKind.Object)
             {
+                if (item.TryGetProperty("duration_ms", out var dur) && dur.ValueKind == JsonValueKind.Number && dur.TryGetInt64(out long d)) _durationMs = d;
                 if (item.TryGetProperty("id", out var idProp)) newTrackId = idProp.GetString();
                 if (item.TryGetProperty("name", out var nameProp)) CurrentTrackTitle = nameProp.GetString();
 
@@ -379,6 +422,7 @@ public class SpotifyService : ISpotifyService
                 IsCurrentTrackLiked = false;
             }
 
+            _lastOutcome = SpotifyPollOutcome.Playback;
             PlaybackStateChanged?.Invoke(CurrentState);
             return CurrentState;
         }
@@ -387,6 +431,16 @@ public class SpotifyService : ISpotifyService
             Debug.WriteLine($"[SpotifyService] Błąd RefreshPlaybackState: {ex.Message}");
             return CurrentState;
         }
+    }
+
+    /// <summary>When to poll again after the last request (see <see cref="SpotifyPollPlanner"/>).</summary>
+    private TimeSpan NextPollDelay()
+    {
+        var limited = _rateLimitedUntilUtc - DateTime.UtcNow;
+        return SpotifyPollPlanner.Next(
+            TimeSpan.FromSeconds(Math.Max(1, _settings.StatusPollIntervalSeconds)),
+            _lastOutcome, IsPlaying, _progressMs, _durationMs,
+            limited > TimeSpan.Zero ? limited : TimeSpan.Zero);
     }
 
     private async Task<bool> CheckIfTrackIsLikedAsync(string trackId, CancellationToken ct = default)
@@ -875,7 +929,7 @@ public class SpotifyService : ISpotifyService
         {
             if (_pollTimer != null) return;
 
-            int intervalSec = Math.Max(1, _settings.StatusPollIntervalSeconds);
+            // One-shot timer, planned again after every poll: the wait depends on what Spotify just said (T-34 #3).
             _pollTimer = new Timer(async _ =>
             {
                 if (_isPolling) return;
@@ -889,7 +943,18 @@ public class SpotifyService : ISpotifyService
                 {
                     _isPolling = false;
                 }
-            }, null, TimeSpan.Zero, TimeSpan.FromSeconds(intervalSec));
+                SchedulePoll();
+            }, null, TimeSpan.Zero, Timeout.InfiniteTimeSpan);
+        }
+    }
+
+    private void SchedulePoll()
+    {
+        lock (_lock)
+        {
+            if (_pollTimer == null) return;   // monitoring was stopped meanwhile
+            try { _pollTimer.Change(NextPollDelay(), Timeout.InfiniteTimeSpan); }
+            catch (ObjectDisposedException) { /* stopped between the check and the call */ }
         }
     }
 

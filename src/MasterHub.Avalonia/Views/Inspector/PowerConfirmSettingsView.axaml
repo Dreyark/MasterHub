@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.PowerConfirmSettingsView"
+             x:DataType="vm:KeyItemViewModel">
+    <!-- Klawisze wyłączenia / restartu / uśpienia: domyślnie wymagają przytrzymania 1,5 s (hold-to-confirm). -->
+    <Border Classes="callout" IsVisible="{Binding IsPowerConfirmAction}" Padding="12,10">
+        <StackPanel Spacing="6">
+            <TextBlock Text="{loc:Loc Power_HoldHint}" TextWrapping="Wrap" Foreground="{StaticResource TextSecondaryBrush}" FontSize="11.5" />
+            <CheckBox IsChecked="{Binding SkipPowerConfirmation, Mode=TwoWay}" Content="{loc:Loc Power_SkipConfirm}" />
+        </StackPanel>
+    </Border>
+</UserControl>

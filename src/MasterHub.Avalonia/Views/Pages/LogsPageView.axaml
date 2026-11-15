@@ -2,35 +2,33 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
              xmlns:loc="using:MasterHub.Avalonia.Localization"
+             xmlns:ctl="using:MasterHub.Avalonia.Views.Controls"
              x:Class="MasterHub.Avalonia.Views.Pages.LogsPageView"
              x:DataType="vm:LogsPageViewModel">
 
     <Grid RowDefinitions="Auto,*" Margin="24">
-        <!-- Nagłówek -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
-            <StackPanel Grid.Column="0" Spacing="4">
-                <TextBlock Text="{loc:Loc Logs_Title}" Classes="h2" />
-                <TextBlock Text="{loc:Loc Logs_Subtitle}" Classes="dim" />
-            </StackPanel>
-            <Button Grid.Column="1" Classes="pillBtn" Command="{Binding ClearLogsCommand}" VerticalAlignment="Center">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <PathIcon Data="{StaticResource IconTrash}" Width="11" Height="11"
-                              Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
-                    <TextBlock Text="{loc:Loc Logs_ClearBtn}" FontSize="11" FontWeight="SemiBold" />
-                </StackPanel>
-            </Button>
-        </Grid>
+        <ctl:PageHeader Grid.Row="0" Icon="{StaticResource IconLogs}"
+                        Title="{loc:Loc NavLabel_Logs}" Subtitle="{loc:Loc Logs_Subtitle}">
+            <ctl:PageHeader.Actions>
+                <Button Classes="actionBtn" Command="{Binding ClearLogsCommand}" Padding="14,8">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <PathIcon Data="{StaticResource IconTrash}" Width="12" Height="12" VerticalAlignment="Center" />
+                        <TextBlock Text="{loc:Loc Logs_ClearBtn}" FontSize="12" FontWeight="SemiBold" />
+                    </StackPanel>
+                </Button>
+            </ctl:PageHeader.Actions>
+        </ctl:PageHeader>
 
         <!-- Okno logów w stylu terminala / konsoli -->
-        <Border Grid.Row="1" Background="{StaticResource MainBgBrush}"
+        <Border Grid.Row="1" Background="{StaticResource InsetBgBrush}"
                 BorderBrush="{StaticResource BorderSubtleBrush}"
-                BorderThickness="1" CornerRadius="12" Padding="14">
+                BorderThickness="1" CornerRadius="14" Padding="16">
             <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
                 <ItemsControl ItemsSource="{Binding LogEntries}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <TextBlock Text="{Binding Text}" FontFamily="Consolas, Cascadia Code, Courier New"
-                                       FontSize="11.5" Foreground="#00FFCC" Margin="0,2" />
+                                       FontSize="11.5" Foreground="{StaticResource AccentSuccessBrush}" Margin="0,2" />
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>

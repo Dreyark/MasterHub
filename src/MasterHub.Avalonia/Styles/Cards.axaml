@@ -6,7 +6,7 @@
         <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="CornerRadius" Value="16" />
         <Setter Property="Padding" Value="12" />
         <Setter Property="Transitions">
             <Transitions>
@@ -25,11 +25,11 @@
 
     <!-- Kontener modułu sprzętowego MasterHub -->
     <Style Selector="Border.moduleContainer">
-        <Setter Property="Background" Value="{StaticResource PanelBgBrush}" />
+        <Setter Property="Background" Value="{StaticResource CardSoftBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="12" />
-        <Setter Property="Padding" Value="14" />
+        <Setter Property="CornerRadius" Value="20" />
+        <Setter Property="Padding" Value="18" />
     </Style>
 
     <!-- Aktywne podświetlenie / poświata neonowa (Active Glow) -->
@@ -43,7 +43,7 @@
         <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="CornerRadius" Value="12" />
         <Setter Property="Padding" Value="10" />
         <Setter Property="Margin" Value="0,0,0,8" />
     </Style>
@@ -53,7 +53,7 @@
         <Setter Property="Background" Value="{StaticResource CardBgBrush}" />
         <Setter Property="BorderBrush" Value="{StaticResource BorderSubtleBrush}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="CornerRadius" Value="8" />
+        <Setter Property="CornerRadius" Value="10" />
         <Setter Property="Padding" Value="8,6" />
     </Style>
 </Styles>

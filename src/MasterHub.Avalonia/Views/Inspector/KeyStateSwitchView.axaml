@@ -1,0 +1,23 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyStateSwitchView"
+             x:DataType="vm:KeyItemViewModel">
+    <!-- Który stan klawisza się edytuje: domyślny czy aktywny (włączony / wciśnięty). Wspólny dla zakładek Tekst i Obraz. -->
+    <StackPanel Spacing="4">
+        <TextBlock Text="{loc:Loc Key_EditingState}" Classes="caption" />
+        <Border Classes="segmented" HorizontalAlignment="Stretch">
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="2">
+                <Button Grid.Column="0" Classes="pillBtn" Classes.active="{Binding IsEditStateDefault}"
+                        Command="{Binding SetEditStateCommand}" CommandParameter="0"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                        Content="{loc:Loc Key_StateDefault}" ToolTip.Tip="{loc:Loc Key_StateTip}" />
+                <Button Grid.Column="1" Classes="pillBtn" Classes.active="{Binding IsEditStateActive}"
+                        Command="{Binding SetEditStateCommand}" CommandParameter="1"
+                        HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                        Content="{loc:Loc Key_StateActive}" ToolTip.Tip="{loc:Loc Key_StateTip}" />
+            </Grid>
+        </Border>
+    </StackPanel>
+</UserControl>

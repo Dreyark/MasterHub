@@ -16,6 +16,16 @@ namespace MasterHub.Core.Devices;
 
 public class MasterHubManager : IMasterHubManager
 {
+    public static MasterHubManager? ActiveInstance { get; private set; }
+
+    private readonly LedCommandScheduler _leds;
+
+    public MasterHubManager()
+    {
+        ActiveInstance = this;
+        _leds = new LedCommandScheduler(SendLed);
+    }
+
     private MasterHubDeviceHandle? _hBase;
     private MasterHubDeviceHandle? _hKeypad;
     private MasterHubDeviceHandle? _hSlider;
@@ -58,7 +68,7 @@ public class MasterHubManager : IMasterHubManager
         return 1;
     }
 
-    private static byte FilterFaderValue(byte raw, byte last)
+    internal static byte FilterFaderValue(byte raw, byte last)
     {
         byte v = raw switch
         {
@@ -95,6 +105,9 @@ public class MasterHubManager : IMasterHubManager
     public event Action<string>? LogMessage;
     public event Action<List<DeviceInfo>>? DevicesDiscovered;
     public event Action<bool>? StandbyStateChanged;
+
+    /// <summary>A Key Deck / Dial accepted software mode but never answered (argument = module display name).</summary>
+    public event Action<string>? ModuleUnresponsive;
 
     public List<DeviceInfo> ConnectedDevices { get; } = new();
     public IReadOnlyList<bool> CurrentKeyStates => _keyStates;
@@ -160,6 +173,7 @@ public class MasterHubManager : IMasterHubManager
         if (_effectiveRotationAngle != newAngle)
         {
             _effectiveRotationAngle = newAngle;
+            _keyImages.Clear();
             Log($"[Rotacja Decka] Zastosowano efektywny kąt obrotu: {(int)newAngle}°");
             EffectiveRotationChanged?.Invoke(newAngle);
 
@@ -178,6 +192,7 @@ public class MasterHubManager : IMasterHubManager
         {
             SystemEvents.PowerModeChanged += OnPowerModeChanged;
             SystemEvents.SessionSwitch += OnSessionSwitch;
+            SystemEvents.SessionEnding += OnSessionEnding;
         }
         catch { }
 
@@ -230,9 +245,16 @@ public class MasterHubManager : IMasterHubManager
         }
     }
 
+    private void OnSessionEnding(object sender, SessionEndingEventArgs e)
+    {
+        Log("Wykryto zamykanie sesji Windows / wyłączanie komputera -> wygaszanie urządzeń MasterHub");
+        EnterStandby();
+        DisconnectAll();
+    }
+
     private void CheckOfficialSoftwareRunning()
     {
-        if (Process.GetProcessesByName("MasterHUB").Length > 0)
+        if (MasterHub.Core.SystemControl.ProcessHelper.IsProcessRunning("MasterHUB"))
         {
             Log("⚠️ UWAGA: Oficjalny proces Cooler Master MasterHUB.exe jest uruchomiony w tle!");
             Log("   Może on blokować wyłączny dostęp USB do modułów.");
@@ -251,6 +273,8 @@ public class MasterHubManager : IMasterHubManager
         DisconnectAll();
 
         _isStandby = false;
+        _leds.Invalidate(); // the modules have just been (re)initialised: resend LED state in full
+        _keyImages.Clear(); // ... and the key pictures
         StandbyStateChanged?.Invoke(false);
         ConnectedDevices.Clear();
         var discovered = ScanUsbDevices();
@@ -387,18 +411,21 @@ public class MasterHubManager : IMasterHubManager
     {
         Log($"Łączenie z 15-Keypad ({dev.SerialNumber})...");
         _hKeypad = MasterHubUsbTransport.ConnectDevice(dev.VendorId, dev.ProductId, dev.SerialNumber);
+        _keyImages.Clear();
         if (_hKeypad != null && _hKeypad.IsValid)
         {
             dev.IsConnected = true;
             AddOrUpdateConnectedDevice(dev);
             Log($"Połączono pomyślnie z 15-Keypad! (HID: {_hKeypad.DevicePath})");
 
-            // 1. Aktywacja trybu programowego (Software Mode)
-            int rSw = _hKeypad.SetSwMode(true);
-            Log($"Tryb Software Mode włączony (wynik: {rSw}).");
+            // 1. Aktywacja trybu programowego (Software Mode) – handshake: 2× wysłanie, przerwa 600/200 ms, do 3 prób
+            if (!EnterSoftwareModeOrGiveUp(ref _hKeypad, dev, "15-Keypad", isDial: false))
+            {
+                return;
+            }
 
             // 2. Wybudzenie podświetlenia ekraników LCD na 100%
-            int rBl = _hKeypad.AdjustBacklight(100);
+            int rBl = _hKeypad!.AdjustBacklight(100);
             Log($"Podświetlenie LCD ustawione na 100% (wynik: {rBl}).");
 
             // 3. Wyświetlenie grafik na 15 przyciskach
@@ -409,7 +436,7 @@ public class MasterHubManager : IMasterHubManager
             dev.IsConnected = false;
             AddOrUpdateConnectedDevice(dev);
             Log($"Nie udało się połączyć z Keypad.");
-            if (Process.GetProcessesByName("MasterHUB").Length > 0)
+            if (MasterHub.Core.SystemControl.ProcessHelper.IsProcessRunning("MasterHUB"))
             {
                 Log("   -> Prawdopodobna przyczyna: oficjalna aplikacja MasterHUB blokuje dostęp.");
             }
@@ -502,10 +529,12 @@ public class MasterHubManager : IMasterHubManager
             Log($"Połączono pomyślnie z modułem Dial IPS! (HID: {_hDial.DevicePath})");
 
             // KRYTYCZNE: Natychmiastowe włączenie Software Mode, aby zapobiec zawieszeniu MCU!
-            int rSw = _hDial.SetDialSwMode(true);
-            Log($"Tryb Software Mode dla Dial włączony (wynik: {rSw}).");
+            if (!EnterSoftwareModeOrGiveUp(ref _hDial, dev, "Dial IPS", isDial: true))
+            {
+                return;
+            }
 
-            int rBl = _hDial.AdjustDialBacklight(_currentBrightness);
+            int rBl = _hDial!.AdjustDialBacklight(_currentBrightness);
             Log($"Podświetlenie ekranu Dial IPS ustawione na: {_currentBrightness}% (wynik: {rBl}).");
         }
         else
@@ -516,18 +545,47 @@ public class MasterHubManager : IMasterHubManager
         }
     }
 
+    /// <summary>
+    /// Runs the software-mode handshake (see <see cref="SoftwareModeHandshake"/>) for a Key Deck / Dial handle.
+    /// When the module never answers it is released, reported through <see cref="ModuleUnresponsive"/> and dropped.
+    /// </summary>
+    private bool EnterSoftwareModeOrGiveUp(ref MasterHubDeviceHandle? handle, DeviceInfo dev, string displayName, bool isDial)
+    {
+        var link = new HandleHandshakeLink(handle!, isDial);
+        var sw = Stopwatch.StartNew();
+        var result = SoftwareModeHandshake.Run(link, Thread.Sleep, msg => Log($"[{displayName}] {msg}"));
+        if (result.Ready)
+        {
+            Log($"Tryb Software Mode włączony ({displayName}, próba {result.Attempts}, {sw.ElapsedMilliseconds} ms).");
+            return true;
+        }
+
+        Log($"⚠️ Moduł {displayName} nie odpowiada po {result.Attempts} próbach – uruchom ponownie aplikację lub wypnij i wepnij moduł.");
+        try { handle!.Release(500); } catch { }
+        handle!.Dispose();
+        handle = null;
+        dev.IsConnected = false;
+        AddOrUpdateConnectedDevice(dev);
+        ModuleUnresponsive?.Invoke(displayName);
+        return false;
+    }
+
     private byte _currentBrightness = 100;
     public byte CurrentBrightness => _currentBrightness;
 
     public void EnterStandby()
     {
         _isStandby = true;
+        Log($"[WYDAJNOŚĆ] Obrazy klawiszy: wysłano {_keyImages.Sent}, pominięto jako niezmienione {_keyImages.Skipped}");
+        _keyImages.Clear();
+        _leds.Clear(); // a late colour must never light a sleeping deck
         StandbyStateChanged?.Invoke(true);
         Log("Przełączanie modułów w tryb Standby (uśpienie)...");
 
-        // 1. Moduł 15 klawiszy LCD
+        // 1. Moduł 15 klawiszy LCD – pod blokadą obrazów, aby wygaszenie nie wpadło w środek wysyłanego obrazu
         if (_hKeypad != null && _hKeypad.IsValid)
         {
+            bool locked = _keypadLock.TryEnter(TimeSpan.FromMilliseconds(1000));
             try
             {
                 _hKeypad.FillScreen(0, 0, 0);
@@ -536,6 +594,10 @@ public class MasterHubManager : IMasterHubManager
             catch (Exception ex)
             {
                 Log($"Błąd uśpienia Keypad: {ex.Message}");
+            }
+            finally
+            {
+                if (locked) _keypadLock.Exit();
             }
         }
 
@@ -604,18 +666,25 @@ public class MasterHubManager : IMasterHubManager
         // 6. Moduł Dial IPS
         if (_hDial != null && _hDial.IsValid)
         {
+            bool locked = _dialLock.TryEnter(TimeSpan.FromMilliseconds(1000));
             try
             {
                 _hDial.FillDialColor(0, 0, 0);
                 _hDial.AdjustDialBacklight(1); // 1 = bezpieczna minimalna jasność (0 zawiesza MCU na USB)
             }
             catch { }
+            finally
+            {
+                if (locked) _dialLock.Exit();
+            }
         }
     }
 
     public void WakeUp()
     {
         _isStandby = false;
+        _leds.Invalidate(); // the modules have just been (re)initialised: resend LED state in full
+        _keyImages.Clear(); // the screen was blanked for the standby
         Log("Wybudzanie modułów MasterHub ze stanu Standby...");
 
         if (_hKeypad == null && _hSlider == null && _hBase == null && _hRoller == null && _hKnob == null && _hDial == null)
@@ -692,6 +761,51 @@ public class MasterHubManager : IMasterHubManager
         StandbyStateChanged?.Invoke(false);
     }
 
+    // ── LED: every live update goes through the scheduler (coalescing, diffs, ≥ 40 ms per knobs/faders module) ──
+
+    private static byte AllOrIndex(int index, int count) => index >= 0 && index < count ? (byte)index : (byte)0xFF;
+
+    private MasterHubDeviceHandle? HandleFor(LedDevice device) => device switch
+    {
+        LedDevice.Base => _hBase,
+        LedDevice.Faders => _hSlider,
+        LedDevice.Rollers => _hRoller,
+        LedDevice.Knobs => _hKnob,
+        _ => null
+    };
+
+    /// <summary>Writes one scheduled LED command to the module (runs on the scheduler's thread).</summary>
+    private int SendLed(LedCommand c)
+    {
+        var handle = HandleFor(c.Device);
+        if (handle == null || !handle.IsValid) return 7;
+
+        try
+        {
+            // device type in the report: base 0, faders 1, rollers and knobs 2 (never the persist byte: flash wear)
+            byte type = c.Device switch { LedDevice.Base => (byte)0, LedDevice.Faders => (byte)1, _ => (byte)2 };
+            int ret = c.Kind switch
+            {
+                LedKind.Mode => handle.AdjustLedMode(type, c.Index, c.V1, false),
+                LedKind.Color => handle.AdjustLedColor(type, c.Index, c.V1, c.V2, c.V3, false),
+                LedKind.Brightness => handle.AdjustLedBrightness(type, c.Index, c.V1),
+                LedKind.Speed => handle.AdjustLedSpeed(c.V1),
+                _ => -1
+            };
+            if (ret != 0) Log($"[LED {c.Device} #{c.Index}] {c.Kind} nie został przyjęty (kod: {ret})");
+            return ret;
+        }
+        catch (Exception ex)
+        {
+            Log($"[BŁĄD LED {c.Device}] {ex.Message}");
+            return -1;
+        }
+    }
+
+    /// <summary>LED reports sent / skipped / coalesced so far (for the periodic performance line).</summary>
+    public string LedStatistics =>
+        $"LED: sent {_leds.SentCount}, unchanged {_leds.SkippedUnchangedCount}, coalesced {_leds.CoalescedCount}, dropped {_leds.DroppedStaleCount}";
+
     public void SetBacklight(byte brightness)
     {
         _currentBrightness = brightness;
@@ -700,226 +814,73 @@ public class MasterHubManager : IMasterHubManager
             try { _hKeypad.AdjustBacklight(brightness); } catch { }
         }
 
-        if (_hBase != null && _hBase.IsValid)
-        {
-            try { _hBase.AdjustLedBrightness(0, 0, brightness); } catch { }
-        }
-
-        if (_hSlider != null && _hSlider.IsValid)
-        {
-            try { _hSlider.AdjustLedBrightness(1, 0xFF, brightness); } catch { }
-        }
-
-        if (_hRoller != null && _hRoller.IsValid)
-        {
-            try { _hRoller.AdjustLedBrightness(2, 0xFF, brightness); } catch { }
-        }
-
-        if (_hKnob != null && _hKnob.IsValid)
-        {
-            try { _hKnob.SetKnobLedBrightness(0xFF, brightness); } catch { }
-        }
-
         if (_hDial != null && _hDial.IsValid)
         {
             try { _hDial.AdjustDialBacklight(brightness); } catch { }
         }
+
+        _leds.Submit(new LedCommand(LedDevice.Base, 0, LedKind.Brightness, brightness));
+        _leds.Submit(new LedCommand(LedDevice.Faders, 0xFF, LedKind.Brightness, brightness));
+        _leds.Submit(new LedCommand(LedDevice.Rollers, 0xFF, LedKind.Brightness, brightness));
+        _leds.Submit(new LedCommand(LedDevice.Knobs, 0xFF, LedKind.Brightness, brightness));
 
         Log($"Jasność podświetlenia i diod LED ustawiona na: {brightness}%");
     }
 
     public void SetLedColor(byte r, byte g, byte b)
     {
-        if (_hBase != null && _hBase.IsValid)
-        {
-            try 
-            { 
-                _hBase.AdjustLedMode(0, 0, 1, false);
-                _hBase.AdjustLedColor(0, 0, r, g, b, false); 
-            } catch { }
-        }
-
-        if (_hSlider != null && _hSlider.IsValid)
-        {
-            try 
-            { 
-                _hSlider.AdjustLedMode(1, 0xFF, 1, false);
-                _hSlider.AdjustLedColor(1, 0xFF, r, g, b, false); 
-            } catch { }
-        }
-
-        if (_hRoller != null && _hRoller.IsValid)
-        {
-            try 
-            { 
-                _hRoller.AdjustLedMode(2, 0xFF, 1, false);
-                _hRoller.AdjustLedColor(2, 0xFF, r, g, b, false); 
-            } catch { }
-        }
-
-        Log($"Kolor podświetlenia LED modułów ustawiony na: RGB({r}, {g}, {b})");
+        SetBaseLedColor(r, g, b);
+        SubmitStatic(LedDevice.Faders, 0xFF, r, g, b);
+        SubmitStatic(LedDevice.Rollers, 0xFF, r, g, b);
     }
 
-    public void SetSliderLedColor(int sliderIndex, byte r, byte g, byte b)
+    /// <summary>Static mode first (the colour only shows in static mode), then the colour.</summary>
+    private void SubmitStatic(LedDevice device, byte index, byte r, byte g, byte b)
     {
-        if (_hSlider != null && _hSlider.IsValid)
-        {
-            try
-            {
-                byte ledIndex = (sliderIndex >= 0 && sliderIndex < 5) ? (byte)sliderIndex : (byte)0xFF;
-                _hSlider.AdjustLedMode(1, ledIndex, 1, false);
-                int ret = _hSlider.AdjustLedColor(1, ledIndex, r, g, b, false);
-                string label = (sliderIndex >= 0 && sliderIndex < 5) ? $"SUWAKA #{sliderIndex + 1}" : "WSZYSTKICH SUWAKÓW";
-                Log($"[LED {label}] Ustawiono sprzętowy kolor RGB({r}, {g}, {b}) (kod: {ret})");
-            }
-            catch (Exception ex)
-            {
-                Log($"[BŁĄD LED SUWAKA] {ex.Message}");
-            }
-        }
+        _leds.Submit(new LedCommand(device, index, LedKind.Mode, (byte)LedEffect.Static));
+        _leds.Submit(new LedCommand(device, index, LedKind.Color, r, g, b));
     }
 
-    public void SetSliderLedBrightness(int sliderIndex, byte brightness)
-    {
-        if (_hSlider != null && _hSlider.IsValid)
-        {
-            try
-            {
-                byte ledIndex = (sliderIndex >= 0 && sliderIndex < 5) ? (byte)sliderIndex : (byte)0xFF;
-                int ret = _hSlider.AdjustLedBrightness(1, ledIndex, brightness);
-                string label = (sliderIndex >= 0 && sliderIndex < 5) ? $"SUWAKA #{sliderIndex + 1}" : "WSZYSTKICH SUWAKÓW";
-                Log($"[JASNOŚĆ {label}] Ustawiono natężenie: {brightness}% (kod: {ret})");
-            }
-            catch (Exception ex)
-            {
-                Log($"[BŁĄD JASNOŚCI SUWAKA] {ex.Message}");
-            }
-        }
-    }
+    public void SetSliderLedColor(int sliderIndex, byte r, byte g, byte b) =>
+        SubmitStatic(LedDevice.Faders, AllOrIndex(sliderIndex, 5), r, g, b);
 
-    public void SetBaseLedColor(byte r, byte g, byte b)
-    {
-        if (_hBase != null && _hBase.IsValid)
-        {
-            try
-            {
-                _hBase.AdjustLedMode(0, 0, 1, false);
-                int ret = _hBase.AdjustLedColor(0, 0, r, g, b, false);
-                Log($"[LED PODSTAWKI] Ustawiono sprzętowy kolor RGB({r}, {g}, {b}) (kod: {ret})");
-            }
-            catch (Exception ex)
-            {
-                Log($"[BŁĄD LED PODSTAWKI] {ex.Message}");
-            }
-        }
-    }
+    public void SetSliderLedBrightness(int sliderIndex, byte brightness) =>
+        _leds.Submit(new LedCommand(LedDevice.Faders, AllOrIndex(sliderIndex, 5), LedKind.Brightness, brightness));
 
-    public void SetBaseLedBrightness(byte brightness)
-    {
-        if (_hBase != null && _hBase.IsValid)
-        {
-            try
-            {
-                int ret = _hBase.AdjustLedBrightness(0, 0, brightness);
-                Log($"[JASNOŚĆ PODSTAWKI] Ustawiono natężenie LED: {brightness}% (kod: {ret})");
-            }
-            catch (Exception ex)
-            {
-                Log($"[BŁĄD JASNOŚCI PODSTAWKI] {ex.Message}");
-            }
-        }
-    }
+    public void SetBaseLedColor(byte r, byte g, byte b) => SubmitStatic(LedDevice.Base, 0, r, g, b);
 
-    public void SetRollerLedColor(int rollerIndex, byte r, byte g, byte b)
-    {
-        if (_hRoller != null && _hRoller.IsValid)
-        {
-            try
-            {
-                byte ledIndex = (rollerIndex >= 0 && rollerIndex < 2) ? (byte)rollerIndex : (byte)0xFF;
-                _hRoller.AdjustLedMode(2, ledIndex, 1, false);
-                int ret = _hRoller.AdjustLedColor(2, ledIndex, r, g, b, false);
-                string label = (rollerIndex >= 0 && rollerIndex < 2) ? $"ROLKI #{rollerIndex + 1}" : "WSZYSTKICH ROLEK";
-                Log($"[LED {label}] Ustawiono sprzętowy kolor RGB({r}, {g}, {b}) (kod: {ret})");
-            }
-            catch (Exception ex)
-            {
-                Log($"[BŁĄD LED ROLKI] {ex.Message}");
-            }
-        }
-    }
+    public void SetBaseLedBrightness(byte brightness) =>
+        _leds.Submit(new LedCommand(LedDevice.Base, 0, LedKind.Brightness, brightness));
 
-    public void SetRollerLedBrightness(int rollerIndex, byte brightness)
-    {
-        if (_hRoller != null && _hRoller.IsValid)
-        {
-            try
-            {
-                byte ledIndex = (rollerIndex >= 0 && rollerIndex < 2) ? (byte)rollerIndex : (byte)0xFF;
-                int ret = _hRoller.AdjustLedBrightness(2, ledIndex, brightness);
-                string label = (rollerIndex >= 0 && rollerIndex < 2) ? $"ROLKI #{rollerIndex + 1}" : "WSZYSTKICH ROLEK";
-                Log($"[JASNOŚĆ {label}] Ustawiono natężenie LED: {brightness}% (kod: {ret})");
-            }
-            catch (Exception ex)
-            {
-                Log($"[BŁĄD JASNOŚCI ROLKI] {ex.Message}");
-            }
-        }
-    }
+    public void SetRollerLedColor(int rollerIndex, byte r, byte g, byte b) =>
+        SubmitStatic(LedDevice.Rollers, AllOrIndex(rollerIndex, 2), r, g, b);
 
-    public void SetKnobLedColor(int knobIndex, byte r, byte g, byte b)
-    {
-        if (_hKnob != null && _hKnob.IsValid)
-        {
-            try
-            {
-                byte ledIdx = (knobIndex >= 0 && knobIndex < 3) ? (byte)knobIndex : (byte)0xFF;
-                _hKnob.SetKnobLedMode(ledIdx, 1, false);
-                int ret = _hKnob.SetKnobLedColor(ledIdx, r, g, b, false);
-                string label = (knobIndex >= 0 && knobIndex < 3) ? $"POKRĘTŁA #{knobIndex + 1}" : "WSZYSTKICH POKRĘTEŁ";
-                Log($"[LED {label}] Ustawiono sprzętowy kolor RGB({r}, {g}, {b}) (kod: {ret})");
-            }
-            catch (Exception ex)
-            {
-                Log($"[BŁĄD LED POKRĘTŁA] {ex.Message}");
-            }
-        }
-    }
+    public void SetRollerLedBrightness(int rollerIndex, byte brightness) =>
+        _leds.Submit(new LedCommand(LedDevice.Rollers, AllOrIndex(rollerIndex, 2), LedKind.Brightness, brightness));
 
-    public void SetKnobLedBrightness(int knobIndex, byte brightness)
-    {
-        if (_hKnob != null && _hKnob.IsValid)
-        {
-            try
-            {
-                byte ledIdx = (knobIndex >= 0 && knobIndex < 3) ? (byte)knobIndex : (byte)0xFF;
-                int ret = _hKnob.SetKnobLedBrightness(ledIdx, brightness);
-                string label = (knobIndex >= 0 && knobIndex < 3) ? $"POKRĘTŁA #{knobIndex + 1}" : "WSZYSTKICH POKRĘTEŁ";
-                Log($"[JASNOŚĆ {label}] Ustawiono natężenie LED: {brightness}% (kod: {ret})");
-            }
-            catch (Exception ex)
-            {
-                Log($"[BŁĄD JASNOŚCI POKRĘTŁA] {ex.Message}");
-            }
-        }
-    }
+    public void SetKnobLedColor(int knobIndex, byte r, byte g, byte b) =>
+        SubmitStatic(LedDevice.Knobs, AllOrIndex(knobIndex, 3), r, g, b);
 
-    public void SetKnobLedMode(int knobIndex, KnobLedMode mode)
+    public void SetKnobLedBrightness(int knobIndex, byte brightness) =>
+        _leds.Submit(new LedCommand(LedDevice.Knobs, AllOrIndex(knobIndex, 3), LedKind.Brightness, brightness));
+
+    public void SetKnobLedMode(int knobIndex, KnobLedMode mode) =>
+        _leds.Submit(new LedCommand(LedDevice.Knobs, AllOrIndex(knobIndex, 3), LedKind.Mode, (byte)mode));
+
+    // ── lighting effects of the base and the faders (0x02 0x2C mode, 0x02 0x30 speed) ──────────
+
+    /// <summary>The base's edge light is only addressed as index 0 (index 0xFF is ignored by it).</summary>
+    public void SetBaseLedMode(LedEffect effect) =>
+        _leds.Submit(new LedCommand(LedDevice.Base, 0, LedKind.Mode, (byte)effect));
+
+    public void SetSliderLedMode(int sliderIndex, LedEffect effect) =>
+        _leds.Submit(new LedCommand(LedDevice.Faders, AllOrIndex(sliderIndex, 5), LedKind.Mode, (byte)effect));
+
+    /// <summary>Effect speed 0..100 (one setting for the whole M0 family on the shared report).</summary>
+    public void SetLedSpeed(byte speed)
     {
-        if (_hKnob != null && _hKnob.IsValid)
-        {
-            try
-            {
-                byte ledIdx = (knobIndex >= 0 && knobIndex < 3) ? (byte)knobIndex : (byte)0xFF;
-                int ret = _hKnob.SetKnobLedMode(ledIdx, (byte)mode, false);
-                string label = (knobIndex >= 0 && knobIndex < 3) ? $"POKRĘTŁA #{knobIndex + 1}" : "WSZYSTKICH POKRĘTEŁ";
-                Log($"[TRYB LED {label}] Ustawiono tryb: {mode} (kod: {ret})");
-            }
-            catch (Exception ex)
-            {
-                Log($"[BŁĄD TRYBU LED POKRĘTŁA] {ex.Message}");
-            }
-        }
+        byte clamped = Math.Min(speed, (byte)100);
+        _leds.Submit(new LedCommand(LedDevice.Base, 0, LedKind.Speed, clamped));
     }
 
     public void SetDialBrightness(byte brightness)
@@ -1023,6 +984,12 @@ public class MasterHubManager : IMasterHubManager
 
     private readonly System.Threading.Lock _keypadLock = new();
 
+    /// <summary>What each key of the keypad shows (T-30): a picture that did not change is not sent again.</summary>
+    private readonly SentKeyImages _keyImages = new();
+
+    /// <summary>How many key pictures went to the device and how many were skipped as unchanged (for the performance line and tests).</summary>
+    public (long Sent, long Skipped) KeyImageCounts => (_keyImages.Sent, _keyImages.Skipped);
+
     public void UpdateKeyDisplay(int keyIndex, bool isPressed)
     {
         if (_disposed || _isStandby || _hKeypad == null || !_hKeypad.IsValid || keyIndex < 0 || keyIndex >= 15) return;
@@ -1039,6 +1006,7 @@ public class MasterHubManager : IMasterHubManager
                 int physicalKey = KeyOrientationHelper.LogicalToPhysicalIndex(keyIndex, angle);
                 byte[] finalJpeg = (angle != 0) ? ButtonImageRenderer.RotateJpeg(jpeg, angle) : jpeg;
 
+                _keyImages.Forget(keyIndex);   // this picture is not remembered: the next SetKeyImage sends whatever it is
                 _hKeypad.DisplayPictureOnButton((byte)physicalKey, finalJpeg, finalJpeg.Length);
             }
             catch (Exception ex)
@@ -1057,10 +1025,14 @@ public class MasterHubManager : IMasterHubManager
             try
             {
                 int angle = (int)_effectiveRotationAngle;
+                if (_keyImages.IsAlreadyShown(keyIndex, jpeg, angle)) return;   // the key shows exactly this already
+
                 int physicalKey = KeyOrientationHelper.LogicalToPhysicalIndex(keyIndex, angle);
                 byte[] finalJpeg = (angle != 0) ? ButtonImageRenderer.RotateJpeg(jpeg, angle) : jpeg;
 
+                _keyImages.Forget(keyIndex);   // a write that fails halfway leaves the key in an unknown state
                 _hKeypad.DisplayPictureOnButton((byte)physicalKey, finalJpeg, finalJpeg.Length);
+                _keyImages.Remember(keyIndex, jpeg, angle);
             }
             catch (Exception ex)
             {
@@ -1080,6 +1052,7 @@ public class MasterHubManager : IMasterHubManager
                 int angle = (int)_effectiveRotationAngle;
                 byte[] finalJpeg = (angle == 180) ? ButtonImageRenderer.RotatePanoramicJpeg(jpeg, 180) : jpeg;
 
+                _keyImages.Clear();   // the whole panel changes: no key picture is known any more
                 _hKeypad.DisplayPanoramicPicture(finalJpeg, finalJpeg.Length);
             }
             catch (Exception ex)
@@ -1229,11 +1202,12 @@ public class MasterHubManager : IMasterHubManager
             try
             {
                 // 1. Sprawdzanie klawiatury 15 klawiszy
-                if (_hKeypad != null && _hKeypad.IsValid && !_isStandby)
+                var hKeypad = _hKeypad;
+                if (hKeypad != null && hKeypad.IsValid && !_isStandby)
                 {
                     while (true)
                     {
-                        int retIo = _hKeypad.ReadInputReport(ioKey, 0);
+                        int retIo = hKeypad.ReadInputReport(ioKey, 0);
                         if (retIo == 0)
                         {
                             int keyOffset = -1;
@@ -1275,8 +1249,8 @@ public class MasterHubManager : IMasterHubManager
                         else if (retIo == 7) // 7 = fizycznie odłączony
                         {
                             Log("[Hot-Plug] Moduł 15 klawiszy został fizycznie odłączony.");
-                            _hKeypad?.Dispose();
-                            _hKeypad = null;
+                            hKeypad.Dispose();
+                            if (_hKeypad == hKeypad) _hKeypad = null;
                             var d = ConnectedDevices.FirstOrDefault(x => x.ModuleType == MasterHubModuleType.KeyDeck15);
                             if (d != null) d.IsConnected = false;
                             DevicesDiscovered?.Invoke(new List<DeviceInfo>(ConnectedDevices));
@@ -1291,12 +1265,13 @@ public class MasterHubManager : IMasterHubManager
                 }
 
                 // 2. Obsługa suwaków: natychmiastowe zdarzenia interrupt (120 Hz) + okresowy fallback Feature 0x33
-                if (_hSlider != null && _hSlider.IsValid && !_isStandby)
+                var hSlider = _hSlider;
+                if (hSlider != null && hSlider.IsValid && !_isStandby)
                 {
                     bool hadInput = false;
                     while (true)
                     {
-                        int retSlider = _hSlider.ReadInputReport(ioSlider, 0);
+                        int retSlider = hSlider.ReadInputReport(ioSlider, 0);
                         if (retSlider == 0)
                         {
                             hadInput = true;
@@ -1305,8 +1280,8 @@ public class MasterHubManager : IMasterHubManager
                         else if (retSlider == 7) // 7 = fizycznie odłączony
                         {
                             Log("[Hot-Plug] Moduł 5 suwaków został fizycznie odłączony.");
-                            _hSlider?.Dispose();
-                            _hSlider = null;
+                            hSlider.Dispose();
+                            if (_hSlider == hSlider) _hSlider = null;
                             var d = ConnectedDevices.FirstOrDefault(x => x.ModuleType == MasterHubModuleType.Fader5);
                             if (d != null) d.IsConnected = false;
                             DevicesDiscovered?.Invoke(new List<DeviceInfo>(ConnectedDevices));
@@ -1320,9 +1295,9 @@ public class MasterHubManager : IMasterHubManager
                     }
 
                     // Fallback polling co 10 obiegów (~100ms), jeśli moduł nie przysłał raportu na przerwaniu
-                    if (!hadInput && _hSlider != null && loopCount % 10 == 0)
+                    if (!hadInput && _hSlider == hSlider && hSlider.IsValid && loopCount % 10 == 0)
                     {
-                        int rGet = _hSlider.GetSliderValues(sliderPollBuf);
+                        int rGet = hSlider.GetSliderValues(sliderPollBuf);
                         if (rGet == 0)
                         {
                             for (int s = 0; s < 5; s++)
@@ -1341,11 +1316,12 @@ public class MasterHubManager : IMasterHubManager
                 }
 
                 // 3. Sprawdzanie 2 rolek
-                if (_hRoller != null && _hRoller.IsValid && !_isStandby)
+                var hRoller = _hRoller;
+                if (hRoller != null && hRoller.IsValid && !_isStandby)
                 {
                     while (true)
                     {
-                        int retRoller = _hRoller.ReadInputReport(ioRoller, 0);
+                        int retRoller = hRoller.ReadInputReport(ioRoller, 0);
                         if (retRoller == 0)
                         {
                             int rOffset = -1;
@@ -1383,8 +1359,8 @@ public class MasterHubManager : IMasterHubManager
                         else if (retRoller == 7) // 7 = fizycznie odłączony
                         {
                             Log("[Hot-Plug] Moduł 2 rolek został fizycznie odłączony.");
-                            _hRoller?.Dispose();
-                            _hRoller = null;
+                            hRoller.Dispose();
+                            if (_hRoller == hRoller) _hRoller = null;
                             var d = ConnectedDevices.FirstOrDefault(x => x.ModuleType == MasterHubModuleType.RollerDial);
                             if (d != null) d.IsConnected = false;
                             DevicesDiscovered?.Invoke(new List<DeviceInfo>(ConnectedDevices));
@@ -1437,8 +1413,8 @@ public class MasterHubManager : IMasterHubManager
                         else if (retBase == 7) // 7 = fizycznie odłączony
                         {
                             Log("[Hot-Plug] Stacja Bazowa została fizycznie odłączona.");
-                            _hBase?.Dispose();
-                            _hBase = null;
+                            hBase.Dispose();
+                            if (_hBase == hBase) _hBase = null;
                             var d = ConnectedDevices.FirstOrDefault(x => x.ModuleType == MasterHubModuleType.BaseStation);
                             if (d != null) d.IsConnected = false;
                             DevicesDiscovered?.Invoke(new List<DeviceInfo>(ConnectedDevices));
@@ -1463,11 +1439,12 @@ public class MasterHubManager : IMasterHubManager
                 }
 
                 // 5. Sprawdzanie modułu 3 Pokręteł (Tag 0x2A)
-                if (_hKnob != null && _hKnob.IsValid && !_isStandby)
+                var hKnob = _hKnob;
+                if (hKnob != null && hKnob.IsValid && !_isStandby)
                 {
                     while (true)
                     {
-                        int retKnob = _hKnob.ReadInputReport(ioKnob, 0);
+                        int retKnob = hKnob.ReadInputReport(ioKnob, 0);
                         if (retKnob == 0)
                         {
                             ParseKnobReport(ioKnob);
@@ -1475,8 +1452,8 @@ public class MasterHubManager : IMasterHubManager
                         else if (retKnob == 7) // 7 = fizycznie odłączony
                         {
                             Log("[Hot-Plug] Moduł 3 pokręteł został fizycznie odłączony.");
-                            _hKnob?.Dispose();
-                            _hKnob = null;
+                            hKnob.Dispose();
+                            if (_hKnob == hKnob) _hKnob = null;
                             var d = ConnectedDevices.FirstOrDefault(x => x.ModuleType == MasterHubModuleType.Knob3);
                             if (d != null) d.IsConnected = false;
                             DevicesDiscovered?.Invoke(new List<DeviceInfo>(ConnectedDevices));
@@ -1491,11 +1468,12 @@ public class MasterHubManager : IMasterHubManager
                 }
 
                 // 6. Sprawdzanie modułu Dial IPS (Tag 0x44)
-                if (_hDial != null && _hDial.IsValid && !_isStandby)
+                var hDial = _hDial;
+                if (hDial != null && hDial.IsValid && !_isStandby)
                 {
                     while (true)
                     {
-                        int retDial = _hDial.ReadInputReport(ioDial, 0);
+                        int retDial = hDial.ReadInputReport(ioDial, 0);
                         if (retDial == 0)
                         {
                             ParseDialReport(ioDial);
@@ -1503,9 +1481,9 @@ public class MasterHubManager : IMasterHubManager
                         else if (retDial == 7) // 7 = fizycznie odłączony
                         {
                             Log("[Hot-Plug] Moduł Dial IPS został fizycznie odłączony.");
-                            try { _hDial?.SetDialSwMode(false); } catch { }
-                            _hDial?.Dispose();
-                            _hDial = null;
+                            try { hDial.SetDialSwMode(false); } catch { }
+                            hDial.Dispose();
+                            if (_hDial == hDial) _hDial = null;
                             var d = ConnectedDevices.FirstOrDefault(x => x.ModuleType == MasterHubModuleType.DialDisplay);
                             if (d != null) d.IsConnected = false;
                             DevicesDiscovered?.Invoke(new List<DeviceInfo>(ConnectedDevices));
@@ -1525,7 +1503,12 @@ public class MasterHubManager : IMasterHubManager
             }
 
             loopCount++;
-            Thread.Sleep(10);
+
+            // Adaptacyjny odstęp: ~100 Hz tylko gdy jest czego słuchać. W standby (ekrany wygaszone / blokada Windows)
+            // albo bez żadnego modułu pętla nie czyta raportów, więc budzenie jej 100 razy na sekundę tylko zużywa prąd.
+            bool noActiveInput = _isStandby ||
+                (_hKeypad == null && _hSlider == null && _hRoller == null && _hBase == null && _hKnob == null && _hDial == null);
+            Thread.Sleep(noActiveInput ? 100 : 10);
         }
     }
 
@@ -1689,11 +1672,16 @@ public class MasterHubManager : IMasterHubManager
 
     private void DisconnectAll()
     {
+        _leds.Clear();
         if (_hKeypad != null)
         {
-            try { _hKeypad.SetSwMode(false); } catch { }
+            // Release waits (bounded) for a picture in flight, then hands the module back; nothing is sent afterwards.
+            var step = Stopwatch.StartNew();
+            int r = 0;
+            try { r = _hKeypad.Release(); } catch { }
             _hKeypad.Dispose();
             _hKeypad = null;
+            Log($"Oddanie modułu Keypad: wynik {r}, {step.ElapsedMilliseconds} ms.");
         }
 
         _hSlider?.Dispose();
@@ -1710,9 +1698,12 @@ public class MasterHubManager : IMasterHubManager
 
         if (_hDial != null)
         {
-            try { _hDial.SetDialSwMode(false); } catch { }
+            var step = Stopwatch.StartNew();
+            int r = 0;
+            try { r = _hDial.Release(); } catch { }
             _hDial.Dispose();
             _hDial = null;
+            Log($"Oddanie modułu Dial: wynik {r}, {step.ElapsedMilliseconds} ms.");
         }
     }
 
@@ -1720,21 +1711,53 @@ public class MasterHubManager : IMasterHubManager
     {
         if (_disposed) return;
         _disposed = true;
+        if (ActiveInstance == this) ActiveInstance = null;
 
         try
         {
             SystemEvents.PowerModeChanged -= OnPowerModeChanged;
             SystemEvents.SessionSwitch -= OnSessionSwitch;
+            SystemEvents.SessionEnding -= OnSessionEnding;
         }
         catch { }
 
         _hotPlugCts?.Cancel();
         _cts.Cancel();
-        _pollThread?.Join(500);
+        // A poll thread that is still blocked (e.g. in a USB read) would touch a disposed token source: leave it to the GC then.
+        bool pollStopped = _pollThread?.Join(500) ?? true;
+        if (pollStopped)
+        {
+            _hotPlugCts?.Dispose();
+            _cts.Dispose();
+        }
 
         EnterStandby();
         Thread.Sleep(200);
+        _leds.Dispose();
         DisconnectAll();
         Log("Pomyślnie uśpiono i odłączono wszystkie moduły MasterHub.");
+    }
+
+    /// <summary>
+    /// Wygasza wszystkie podłączone moduły MasterHub (zarówno przez aktywną instancję, jak i bezpośrednie połączenie USB).
+    /// Wywoływane przy czystym wyjściu, obsłudze awarii/crashu oraz przez proces strażnika (Watchdog).
+    /// </summary>
+    public static void ExtinguishAllHardware()
+    {
+        try
+        {
+            if (ActiveInstance != null && !ActiveInstance._disposed)
+            {
+                ActiveInstance.EnterStandby();
+                Thread.Sleep(100);
+            }
+        }
+        catch { }
+
+        try
+        {
+            Native.MasterHubUsbTransport.ExtinguishAllConnectedDevices();
+        }
+        catch { }
     }
 }

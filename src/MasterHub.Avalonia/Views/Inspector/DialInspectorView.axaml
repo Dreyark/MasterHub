@@ -9,15 +9,15 @@
         <!-- Nagłówek Dial IPS -->
         <Border Classes="inspectorSection">
             <Grid ColumnDefinitions="Auto,*,Auto">
-                <TextBlock Grid.Column="0" Text="🎯" FontSize="20" Margin="0,0,10,0" VerticalAlignment="Center" />
+                <PathIcon Data="{StaticResource IconTarget}" Width="20" Height="20" Grid.Column="0" Margin="0,0,10,0" VerticalAlignment="Center" />
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock Text="{Binding Name}" Classes="h3" />
-                    <TextBlock Text="{Binding LastDirectionDisplay}" Classes="dim" FontSize="10" />
+                    <TextBlock Text="{Binding LastDirectionDisplay}" Classes="dim" FontSize="10.5" />
                 </StackPanel>
                 <Button Grid.Column="2" Classes="iconBtn" Command="{Binding ClearActionCommand}"
                         IsVisible="{Binding HasAction}"
                         ToolTip.Tip="{loc:Loc Knob_ClearActionTip}" Padding="6">
-                    <TextBlock Text="🗑️" FontSize="13" />
+                    <PathIcon Data="{StaticResource IconTrash}" Width="13" Height="13" />
                 </Button>
             </Grid>
         </Border>
@@ -29,7 +29,7 @@
                 <TextBlock Grid.Column="1" Text="{Binding StepsDisplay}" FontSize="13" FontWeight="Bold"
                            Foreground="{StaticResource AccentSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,10,0" />
                 <Button Grid.Column="2" Classes="iconBtn" Click="OnResetStepsClick" ToolTip.Tip="{loc:Loc Knob_ResetStepsTip}">
-                    <TextBlock Text="🔄" FontSize="11" />
+                    <PathIcon Data="{StaticResource IconRotate}" Width="12" Height="12" />
                 </Button>
             </Grid>
         </Border>
@@ -41,6 +41,11 @@
                 <TextBlock Text="{Binding RotateActionDisplayName}" FontWeight="SemiBold" FontSize="11.5"
                            Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap" />
             </Border>
+            <!-- T-17 i: zadania obrotu dla trybu Modes; naciśnięcie przełącza na kolejne -->
+            <StackPanel Spacing="3" IsVisible="{Binding IsModesAction}">
+                <TextBox Text="{Binding RotateModes, Mode=TwoWay}" PlaceholderText="MasterVolume, ScrollVertical, MediaTrack" />
+                <TextBlock Text="{loc:Loc Modes_Hint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+            </StackPanel>
             <TextBlock Text="{loc:Loc Dial_PressAction}" Classes="caption" Margin="0,4,0,0" />
             <Border Classes="statusBadgeCard" Padding="12,8">
                 <TextBlock Text="{Binding PressActionDisplayName}" FontWeight="SemiBold" FontSize="11.5"
@@ -55,13 +60,13 @@
                 <Grid ColumnDefinitions="*,Auto" Margin="0,2">
                     <Button Grid.Column="0" Classes="pillBtn" Click="OnBrowseImageClick" Margin="0,0,8,0">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock Text="📁" FontSize="12" />
+                            <PathIcon Data="{StaticResource IconFolder}" Width="12" Height="12" />
                             <TextBlock Text="{loc:Loc Dial_UploadBtn}" FontSize="11.5" />
                         </StackPanel>
                     </Button>
                     <Button Grid.Column="1" Classes="iconBtn" Click="OnClearImageClick"
                             IsVisible="{Binding HasCustomImage}" ToolTip.Tip="{loc:Loc Dial_ClearBtn}">
-                        <TextBlock Text="🗑️" FontSize="12" />
+                        <PathIcon Data="{StaticResource IconTrash}" Width="12" Height="12" />
                     </Button>
                 </Grid>
 
@@ -79,7 +84,7 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Button Width="24" Height="24" Margin="2" CornerRadius="12" Padding="0"
+                            <Button Classes="swatchBtn" Width="24" Height="24" Margin="2" CornerRadius="12" Padding="0"
                                     Background="{Binding Hex}" Tag="{Binding Hex}" Click="OnPresetColorClick"
                                     BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="1"
                                     ToolTip.Tip="{Binding Name}" Cursor="Hand" />

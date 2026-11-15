@@ -2,44 +2,57 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:MasterHub.Avalonia.ViewModels.Inspector"
              xmlns:loc="using:MasterHub.Avalonia.Localization"
+             xmlns:ctl="using:MasterHub.Avalonia.Views.Controls"
              x:Class="MasterHub.Avalonia.Views.Inspector.ActionLibraryView"
              x:DataType="vm:ActionLibraryViewModel">
 
-    <Grid RowDefinitions="Auto,Auto,Auto,*" Margin="0,4">
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*" Margin="0,4">
+        <!-- Hold / Double slot as the target: say so, offer the way back to Press, explain a refused pick -->
+        <Border Grid.Row="0" Classes="statusBadgeCard" Padding="10,8" Margin="0,0,0,8" IsVisible="{Binding IsSlotBannerVisible}">
+            <StackPanel Spacing="6">
+                <TextBlock Text="{Binding SlotBannerText}" FontSize="11.5" FontWeight="SemiBold" TextWrapping="Wrap"
+                           Foreground="{StaticResource AccentPrimaryBrush}" />
+                <TextBlock Text="{Binding SlotNotice}" FontSize="10.5" TextWrapping="Wrap" Classes="dim" IsVisible="{Binding HasSlotNotice}" />
+                <Button Classes="pillBtn" Padding="10,4" HorizontalAlignment="Left" Command="{Binding ReturnToPressCommand}"
+                        Content="{loc:Loc Library_BackToPress}" />
+            </StackPanel>
+        </Border>
+
         <!-- Nagłówek kontekstowy wybranego manipulatora -->
-        <Grid Grid.Row="0" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" Margin="0,0,0,8">
             <TextBlock Grid.Column="0" Text="{Binding ContextTitle}" FontSize="12" FontWeight="Bold"
                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
             <Border Grid.Column="1" Classes="statusBadgeCard" Padding="6,2" CornerRadius="6">
-                <TextBlock Text="{Binding ManipulatorBadge}" FontSize="9.5" FontWeight="SemiBold"
+                <TextBlock Text="{Binding ManipulatorBadge}" FontSize="10.5" FontWeight="SemiBold"
                            Foreground="{StaticResource AccentPrimaryBrush}" />
             </Border>
         </Grid>
 
         <!-- Pole wyszukiwania -->
-        <TextBox Grid.Row="1" Text="{Binding SearchQuery}"
-                 PlaceholderText="{loc:Loc Action_SearchPlaceholder}" Margin="0,0,0,8" />
+        <TextBox Grid.Row="2" Text="{Binding SearchQuery}"
+                 PlaceholderText="{loc:Loc Action_SearchPlaceholder}" Margin="0,0,0,8">
+            <TextBox.InnerLeftContent>
+                <PathIcon Data="{StaticResource IconSearch}" Width="14" Height="14" Margin="10,0,0,0"
+                          Foreground="{StaticResource TextMutedBrush}" />
+            </TextBox.InnerLeftContent>
+        </TextBox>
 
-        <!-- Pasek chipsów kategorii -->
-        <ItemsControl Grid.Row="2" ItemsSource="{Binding Categories}" Margin="0,0,0,8">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <WrapPanel Orientation="Horizontal" />
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
+        <!-- Kategoria: jedna lista rozwijana zamiast ~20 kafelków zajmujących pół panelu -->
+        <ComboBox Grid.Row="3" ItemsSource="{Binding Categories}" SelectedItem="{Binding SelectedCategoryItem}"
+                  Margin="0,0,0,8">
+            <ComboBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:CategoryFilterItem">
-                    <Button Classes="pillBtn" Classes.active="{Binding IsSelected}" Margin="0,0,5,5" Padding="8,4"
-                            Command="{Binding $parent[UserControl].((vm:ActionLibraryViewModel)DataContext).SelectCategoryCommand}"
-                            CommandParameter="{Binding Name}">
-                        <TextBlock Text="{Binding Name}" FontSize="10" />
-                    </Button>
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <PathIcon Data="{Binding IconKey, Converter={x:Static ctl:IconConverters.ByKey}}" Width="14" Height="14"
+                                  Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
+                        <TextBlock Text="{Binding Name}" VerticalAlignment="Center" />
+                    </StackPanel>
                 </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
 
         <!-- Lista akcji z zaokrąglonym podświetleniem (CornerRadius 10) i natychmiastowym przypisywaniem -->
-        <ListBox Grid.Row="3" ItemsSource="{Binding FilteredItems}"
+        <ListBox Grid.Row="4" ItemsSource="{Binding FilteredItems}"
                  SelectedItem="{Binding SelectedAction, Mode=TwoWay}"
                  Background="Transparent" BorderThickness="0" Padding="0">
             <ListBox.Styles>
@@ -63,29 +76,24 @@
             </ListBox.ItemsPanel>
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:ActionCatalogItem">
-                    <Button Classes="ghostBtn" Padding="0" Margin="0" HorizontalAlignment="Stretch"
+                    <Button Classes="rowBtn" HorizontalAlignment="Stretch"
                             Command="{Binding $parent[UserControl].((vm:ActionLibraryViewModel)DataContext).ChooseActionCommand}"
-                            CommandParameter="{Binding}"
-                            CornerRadius="10">
-                        <Border Classes="statusBadgeCard" Padding="10,8" CornerRadius="10" HorizontalAlignment="Stretch">
-                            <Grid ColumnDefinitions="Auto,*,Auto">
-                                <Panel Grid.Column="0" Width="20" Height="20" Margin="0,0,10,0" VerticalAlignment="Center">
+                            CommandParameter="{Binding}">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <Border Grid.Column="0" Classes="iconTile" Margin="0,0,12,0">
+                                <Panel>
                                     <Image Source="{Binding IconBitmap}" Width="20" Height="20"
                                            IsVisible="{Binding IconBitmap, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                                    <TextBlock Classes="emoji" Text="{Binding Icon}" FontSize="18"
-                                               FontFamily="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji, sans-serif"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                                               IsVisible="{Binding IconBitmap, Converter={x:Static ObjectConverters.IsNull}}" />
+                                    <PathIcon Data="{Binding IconKey, Converter={x:Static ctl:IconConverters.ByKey}}" Width="16" Height="16"
+                                              Foreground="{StaticResource AccentPrimaryBrush}"
+                                              IsVisible="{Binding IconBitmap, Converter={x:Static ObjectConverters.IsNull}}" />
                                 </Panel>
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-                                    <TextBlock Text="{Binding Title}" FontSize="11.5" FontWeight="SemiBold"
-                                               TextTrimming="CharacterEllipsis" />
-                                    <TextBlock Text="{Binding Category}" Classes="dim" FontSize="9.5" />
-                                </StackPanel>
-                                <PathIcon Grid.Column="2" Data="{StaticResource IconPlus}" Width="10" Height="10"
-                                          Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
-                            </Grid>
-                        </Border>
+                            </Border>
+                            <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="12.5" FontWeight="SemiBold"
+                                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                            <PathIcon Grid.Column="2" Classes="rowAdd" Data="{StaticResource IconPlus}" Width="12" Height="12"
+                                      VerticalAlignment="Center" />
+                        </Grid>
                     </Button>
                 </DataTemplate>
             </ListBox.ItemTemplate>

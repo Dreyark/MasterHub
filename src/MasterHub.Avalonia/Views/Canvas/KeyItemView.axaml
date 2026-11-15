@@ -1,6 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="using:MasterHub.Avalonia.Views.Controls"
              xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
              x:Class="MasterHub.Avalonia.Views.Canvas.KeyItemView"
              x:DataType="vm:KeyItemViewModel"
              Width="105" Height="105" Margin="4">
@@ -37,21 +39,35 @@
             Classes.pressed="{Binding IsPressed}"
             Cursor="Hand"
             PointerPressed="OnKeyPointerPressed">
+        <!-- Menu prawego przycisku: kopiuj / wytnij / wklej / wklej wygląd / wyczyść / cofnij / ponów (skróty działają w całym Studio) -->
+        <Border.ContextMenu>
+            <ContextMenu Opening="OnMenuOpening">
+                <MenuItem x:Name="MenuCopy" Header="{loc:Loc Edit_Copy}" InputGesture="Ctrl+C" Click="OnMenuCopy" />
+                <MenuItem x:Name="MenuCut" Header="{loc:Loc Edit_Cut}" InputGesture="Ctrl+X" Click="OnMenuCut" />
+                <MenuItem x:Name="MenuPaste" Header="{loc:Loc Edit_Paste}" InputGesture="Ctrl+V" Click="OnMenuPaste" />
+                <MenuItem x:Name="MenuPasteLook" Header="{loc:Loc Edit_PasteLook}" InputGesture="Ctrl+Shift+V" Click="OnMenuPasteLook" />
+                <MenuItem x:Name="MenuClear" Header="{loc:Loc Edit_Clear}" InputGesture="Delete" Click="OnMenuClear" />
+                <MenuItem x:Name="MenuClearAll" Header="{loc:Loc Edit_ClearAll}" Click="OnMenuClearAll" />
+                <Separator />
+                <MenuItem x:Name="MenuUndo" Header="{loc:Loc Edit_Undo}" InputGesture="Ctrl+Z" Click="OnMenuUndo" />
+                <MenuItem x:Name="MenuRedo" Header="{loc:Loc Edit_Redo}" InputGesture="Ctrl+Y" Click="OnMenuRedo" />
+            </ContextMenu>
+        </Border.ContextMenu>
         <Border CornerRadius="12" ClipToBounds="True">
             <Grid>
                 <!-- Podgląd wyrenderowanej grafiki LCD SkiaSharp -->
                 <Image Source="{Binding CachedBitmap}"
                        Stretch="UniformToFill"
+                       RenderOptions.BitmapInterpolationMode="HighQuality"
                        IsVisible="{Binding CachedBitmap, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
                 <!-- Fallback tekstowy i ikona akcji -->
                 <Grid IsVisible="{Binding CachedBitmap, Converter={x:Static ObjectConverters.IsNull}}"
                       RowDefinitions="Auto,*,Auto" Margin="8">
-                    <TextBlock Grid.Row="0" Text="{Binding Number}" FontSize="9.5" FontWeight="Bold"
+                    <TextBlock Grid.Row="0" Text="{Binding Number}" FontSize="10.5" FontWeight="Bold"
                                Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Left"
                                IsVisible="{Binding HasAction}" />
-                    <TextBlock Grid.Row="1" Classes="emoji" Text="{Binding ActionIcon}" FontSize="24"
-                               FontFamily="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji, sans-serif"
+                    <PathIcon Grid.Row="1"  Data="{Binding AssignedAction, Converter={x:Static ctl:IconConverters.ByAction}}" Width="26" Height="26" Foreground="{StaticResource AccentPrimaryBrush}"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                IsVisible="{Binding HasAction}" />
                     <TextBlock Grid.Row="2" Text="{Binding DisplayTitle}" FontSize="10.5" FontWeight="SemiBold"
@@ -60,6 +76,13 @@
 
                 <!-- Wskaźnik fizycznego wciśnięcia przycisku -->
                 <Border Background="#305E81F4" IsVisible="{Binding IsPressed}" />
+
+                <!-- Znaczek klawisza z dodatkowymi gestami: H = przytrzymanie, D = podwójne dotknięcie -->
+                <Border Background="{StaticResource AccentPrimaryBrush}" CornerRadius="6" Padding="5,1"
+                        HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,5,5,0"
+                        IsVisible="{Binding HasGestures}">
+                    <TextBlock Text="{Binding GestureBadge}" FontSize="9" FontWeight="Bold" Foreground="{StaticResource OnAccentBrush}" />
+                </Border>
             </Grid>
         </Border>
     </Border>

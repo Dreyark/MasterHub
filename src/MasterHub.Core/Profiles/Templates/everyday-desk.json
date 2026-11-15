@@ -1,0 +1,107 @@
+{
+  "id": "everyday-desk",
+  "version": 1,
+  "ledColor": "#5E81F4",
+  "exes": [],
+  "name": {
+    "en": "Everyday desk",
+    "pl": "Codzienne biurko",
+    "de": "Alltag am Schreibtisch"
+  },
+  "description": {
+    "en": "Media, volume, microphone, output switch, lock, screenshot and virtual desktops – the keys most people press every day.",
+    "pl": "Multimedia, głośność, mikrofon, przełączanie wyjścia, blokada, zrzut ekranu i pulpity wirtualne – klawisze używane codziennie."
+  },
+  "keys": [
+    {
+      "index": 0,
+      "action": "MediaPlayPause",
+      "title": "PLAY",
+      "background": "#1B2A3D"
+    },
+    {
+      "index": 1,
+      "action": "MediaPrevious",
+      "title": "PREV",
+      "background": "#1B2A3D"
+    },
+    {
+      "index": 2,
+      "action": "MediaNext",
+      "title": "NEXT",
+      "background": "#1B2A3D"
+    },
+    {
+      "index": 3,
+      "action": "VolumeDown",
+      "title": "VOL -",
+      "background": "#1B2A3D"
+    },
+    {
+      "index": 4,
+      "action": "VolumeUp",
+      "title": "VOL +",
+      "background": "#1B2A3D"
+    },
+    {
+      "index": 5,
+      "action": "MasterMute",
+      "title": "MUTE",
+      "background": "#1B2A3D"
+    },
+    {
+      "index": 6,
+      "action": "MicMute",
+      "title": "MIC",
+      "background": "#1F3A2E"
+    },
+    {
+      "index": 7,
+      "action": "AudioOutputSwitch",
+      "title": "OUTPUT",
+      "background": "#1F3A2E"
+    },
+    {
+      "index": 8,
+      "action": "SystemLockScreen",
+      "title": "LOCK",
+      "background": "#262A40"
+    },
+    {
+      "index": 9,
+      "action": "Screenshot",
+      "title": "SHOT",
+      "background": "#262A40"
+    },
+    {
+      "index": 10,
+      "action": "SystemShowDesktop",
+      "title": "DESKTOP",
+      "background": "#262A40"
+    },
+    {
+      "index": 11,
+      "action": "SystemClipboardHistory",
+      "title": "CLIPBOARD",
+      "background": "#262A40"
+    },
+    {
+      "index": 12,
+      "action": "SystemVirtualDesktopPrev",
+      "title": "DESK -",
+      "background": "#2A2A3A"
+    },
+    {
+      "index": 13,
+      "action": "SystemVirtualDesktopNext",
+      "title": "DESK +",
+      "background": "#2A2A3A"
+    },
+    {
+      "index": 14,
+      "action": "TaskManager",
+      "title": "TASKS",
+      "background": "#2A2A3A"
+    }
+  ]
+}

@@ -25,6 +25,27 @@ public interface IStreamDeckPluginHost : IDisposable
     event Action<string, string>? GlobalSettingsUpdated; // (pluginUuid, globalSettingsJson)
     event Action<string>? SwitchToProfileRequested; // (profileName)
 
+    /// <summary>T-31 a: a plugin started or stopped using a lot of CPU (the UI shows a flag).</summary>
+    event Action<PluginCpuUse>? PluginCpuChanged;
+
+    /// <summary>T-31 f: a plugin was not started, and why.</summary>
+    event Action<string, PluginCompatReport>? PluginCannotRun;
+
+    /// <summary>T-31 f / e: whether a plugin can run on this PC, with the reasons.</summary>
+    PluginCompatReport CheckCompatibility(string pluginUuid) => new(PluginVerdict.Runs, Array.Empty<PluginIssueItem>());
+
+    /// <summary>T-31 a: the plugin's recent CPU use.</summary>
+    PluginCpuUse GetCpuUse(string pluginUuid) => new(pluginUuid, 0, false);
+
+    /// <summary>T-31 d: the state a plugin key is in (0 for single-state actions).</summary>
+    int GetKeyState(int keyIndex) => 0;
+
+    /// <summary>T-31 d: the manifest picture of the state a plugin key is in, or <c>null</c>.</summary>
+    string? GetStateImagePath(int keyIndex) => null;
+
+    /// <summary>Whether the plugin's process has registered with the host (default: assume yes).</summary>
+    bool IsPluginConnected(string pluginUuid) => true;
+
     void RefreshPlugins();
     Task<StreamDeckInstalledPlugin?> InstallPluginPackageAsync(string packageFilePath);
     Task<bool> UninstallPluginAsync(string pluginUuid);

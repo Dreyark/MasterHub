@@ -1,0 +1,112 @@
+{
+  "id": "discord-meetings",
+  "version": 1,
+  "ledColor": "#10B981",
+  "exes": [
+    "Discord",
+    "DiscordPTB",
+    "ms-teams",
+    "Teams"
+  ],
+  "name": {
+    "en": "Discord and meetings",
+    "pl": "Discord i spotkania",
+    "de": "Discord und Meetings"
+  },
+  "description": {
+    "en": "Mute, deafen, camera, screen share and push-to-talk for Discord, plus mute, camera, raise hand and leave for Teams.",
+    "pl": "Wyciszenie, ogłuszenie, kamera, udostępnianie ekranu i push-to-talk w Discordzie oraz wyciszenie, kamera, podniesienie ręki i wyjście w Teams."
+  },
+  "keys": [
+    {
+      "index": 0,
+      "action": "DiscordMuteToggle",
+      "title": "MUTE",
+      "background": "#1F3A2E"
+    },
+    {
+      "index": 1,
+      "action": "DiscordDeafenToggle",
+      "title": "DEAFEN",
+      "background": "#1F3A2E"
+    },
+    {
+      "index": 2,
+      "action": "DiscordCameraToggle",
+      "title": "CAMERA",
+      "background": "#1F3A2E"
+    },
+    {
+      "index": 3,
+      "action": "DiscordScreenShareToggle",
+      "title": "SHARE",
+      "background": "#1F3A2E"
+    },
+    {
+      "index": 4,
+      "action": "DiscordPushToTalk",
+      "title": "PTT",
+      "background": "#1F3A2E"
+    },
+    {
+      "index": 5,
+      "action": "TeamsMuteToggle",
+      "title": "T MUTE",
+      "background": "#1B2A3D"
+    },
+    {
+      "index": 6,
+      "action": "TeamsCameraToggle",
+      "title": "T CAM",
+      "background": "#1B2A3D"
+    },
+    {
+      "index": 7,
+      "action": "TeamsRaiseHand",
+      "title": "T HAND",
+      "background": "#1B2A3D"
+    },
+    {
+      "index": 8,
+      "action": "TeamsLeaveMeeting",
+      "title": "T LEAVE",
+      "background": "#3A2D1E"
+    },
+    {
+      "index": 9,
+      "action": "MicMute",
+      "title": "MIC",
+      "background": "#1F3A2E"
+    },
+    {
+      "index": 10,
+      "action": "MasterMute",
+      "title": "MUTE",
+      "background": "#1B2A3D"
+    },
+    {
+      "index": 11,
+      "action": "VolumeDown",
+      "title": "VOL -",
+      "background": "#2A2A3A"
+    },
+    {
+      "index": 12,
+      "action": "VolumeUp",
+      "title": "VOL +",
+      "background": "#2A2A3A"
+    },
+    {
+      "index": 13,
+      "action": "AudioOutputSwitch",
+      "title": "OUTPUT",
+      "background": "#262A40"
+    },
+    {
+      "index": 14,
+      "action": "Screenshot",
+      "title": "SHOT",
+      "background": "#262A40"
+    }
+  ]
+}

@@ -4,55 +4,52 @@
              xmlns:loc="using:MasterHub.Avalonia.Localization"
              x:Class="MasterHub.Avalonia.Views.Window.TitleBarView"
              x:DataType="vm:MainViewModel"
-             Height="44"
-             Background="{StaticResource MainBgBrush}">
+             Height="52"
+             Background="Transparent">
 
-    <Border BorderBrush="{StaticResource BorderSubtleBrush}" BorderThickness="0,0,0,1">
-        <Grid ColumnDefinitions="Auto,*,Auto" Margin="16,0,10,0">
-            <!-- Lewa strona: Tytuł i nazwa urządzenia -->
-            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                <TextBlock Text="COOLER MASTER" FontSize="11" FontWeight="Bold"
-                           Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
-                <Border Width="1" Height="14" Background="{StaticResource BorderSubtleBrush}" />
-                <TextBlock Text="MASTERHUB STUDIO" FontSize="11" FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" />
-            </StackPanel>
+    <Grid ColumnDefinitions="Auto,*,Auto" Margin="20,0,16,0">
+        <!-- Obszar przeciągania okna pod całym paskiem (napisy go nie przechwytują) -->
+        <Border Grid.Column="0" Grid.ColumnSpan="2" Background="Transparent"
+                PointerPressed="OnTitleBarPointerPressed" />
 
-            <!-- Środek: Obszar przeciągania okna -->
-            <Border Grid.Column="1" Background="Transparent"
-                    PointerPressed="OnTitleBarPointerPressed" />
+        <!-- Okruszki: MasterHub › bieżąca strona -->
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"
+                    IsHitTestVisible="False">
+            <TextBlock Text="MasterHub" FontSize="12.5" FontWeight="SemiBold"
+                       Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
+            <PathIcon Data="{StaticResource IconChevronRight}" Width="12" Height="12"
+                      Foreground="{StaticResource TextDimBrush}" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Navigation.CurrentPageTitle}" FontSize="13" FontWeight="Bold"
+                       VerticalAlignment="Center" />
+        </StackPanel>
 
-            <!-- Prawa strona: Status USB oraz przyciski okna -->
-            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                <!-- Status połączenia USB -->
-                <Border Classes="statusBadgeCard">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <Ellipse Width="7" Height="7" Fill="{Binding ConnectionStatusColor}" />
-                        <TextBlock Text="{Binding ConnectionStatusText}" FontSize="9.5" FontWeight="Bold"
-                                   Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Border>
-
-                <!-- Kontrolki okna -->
-                <StackPanel Orientation="Horizontal" Spacing="4">
-                    <Button Classes="iconBtn" Width="32" Height="28" Click="OnMinimizeToTrayClick" ToolTip.Tip="{loc:Loc Common_MinimizeToTray}">
-                        <PathIcon Data="{StaticResource IconTray}" Width="11" Height="11" Foreground="{StaticResource TextMutedBrush}"
-                                  HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Button>
-                    <Button Classes="iconBtn" Width="32" Height="28" Click="OnMinimizeClick" ToolTip.Tip="{loc:Loc Common_Minimize}">
-                        <TextBlock Text="─" FontSize="11" Foreground="{StaticResource TextMutedBrush}"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Button>
-                    <Button Classes="iconBtn" Width="32" Height="28" Click="OnMaximizeClick" ToolTip.Tip="{loc:Loc Common_Maximize}">
-                        <TextBlock Text="◻" FontSize="11" Foreground="{StaticResource TextMutedBrush}"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Button>
-                    <Button Classes="iconBtn closeBtn" Width="32" Height="28" Click="OnCloseClick" ToolTip.Tip="{loc:Loc Common_Close}">
-                        <TextBlock Text="✕" FontSize="11" Foreground="{StaticResource AccentWarningBrush}"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
-                    </Button>
+        <!-- Prawa strona: status połączenia i przyciski okna -->
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+            <Border Background="{StaticResource CardBgBrush}" BorderBrush="{StaticResource BorderSubtleBrush}"
+                    BorderThickness="1" CornerRadius="14" Padding="12,5" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Ellipse Width="8" Height="8" Fill="{Binding ConnectionStatusColor}" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding ConnectionStatusText}" FontSize="11.5" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" />
                 </StackPanel>
+            </Border>
+
+            <StackPanel Orientation="Horizontal" Spacing="2">
+                <Button Classes="iconBtn" Width="36" Height="30" Click="OnMinimizeToTrayClick" ToolTip.Tip="{loc:Loc Common_MinimizeToTray}">
+                    <PathIcon Data="{StaticResource IconTray}" Width="12" Height="12"
+                              HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+                <Button Classes="iconBtn" Width="36" Height="30" Click="OnMinimizeClick" ToolTip.Tip="{loc:Loc Common_Minimize}">
+                    <PathIcon Data="{StaticResource IconMinus}" Width="12" Height="12"
+                              HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+                <Button Classes="iconBtn" Width="36" Height="30" Click="OnMaximizeClick" ToolTip.Tip="{loc:Loc Common_Maximize}">
+                    <PathIcon Data="{StaticResource IconMaximize}" Width="11" Height="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
+                <Button Classes="iconBtn closeBtn" Width="36" Height="30" Click="OnCloseClick" ToolTip.Tip="{loc:Loc Common_Close}">
+                    <PathIcon Data="{StaticResource IconClose}" Width="12" Height="12" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Button>
             </StackPanel>
-        </Grid>
-    </Border>
+        </StackPanel>
+    </Grid>
 </UserControl>

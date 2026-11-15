@@ -1,0 +1,131 @@
+{
+  "id": "game-action-bar",
+  "version": 1,
+  "ledColor": "#F45E6D",
+  "exes": [],
+  "name": {
+    "en": "Game action bar",
+    "pl": "Pasek akcji do gier",
+    "de": "Spiel-Aktionsleiste"
+  },
+  "description": {
+    "en": "Generic action bar: number keys 1–8, Tab, M, I and Q sent as hardware scan codes for games. Games differ – rebind the keys to your game's controls. A game that runs as administrator needs MasterHub as administrator too.",
+    "pl": "Uniwersalny pasek akcji: klawisze 1–8, Tab, M, I i Q wysyłane jako kody skanowania dla gier. Gry się różnią – dostosuj klawisze do sterowania w swojej grze. Gra uruchomiona jako administrator wymaga MasterHub jako administratora."
+  },
+  "keys": [
+    {
+      "index": 0,
+      "action": "Hotkey",
+      "title": "1",
+      "background": "#262A40",
+      "parameter": "1",
+      "sendMode": "ForGames"
+    },
+    {
+      "index": 1,
+      "action": "Hotkey",
+      "title": "2",
+      "background": "#262A40",
+      "parameter": "2",
+      "sendMode": "ForGames"
+    },
+    {
+      "index": 2,
+      "action": "Hotkey",
+      "title": "3",
+      "background": "#262A40",
+      "parameter": "3",
+      "sendMode": "ForGames"
+    },
+    {
+      "index": 3,
+      "action": "Hotkey",
+      "title": "4",
+      "background": "#262A40",
+      "parameter": "4",
+      "sendMode": "ForGames"
+    },
+    {
+      "index": 4,
+      "action": "Hotkey",
+      "title": "5",
+      "background": "#262A40",
+      "parameter": "5",
+      "sendMode": "ForGames"
+    },
+    {
+      "index": 5,
+      "action": "Hotkey",
+      "title": "6",
+      "background": "#262A40",
+      "parameter": "6",
+      "sendMode": "ForGames"
+    },
+    {
+      "index": 6,
+      "action": "Hotkey",
+      "title": "7",
+      "background": "#262A40",
+      "parameter": "7",
+      "sendMode": "ForGames"
+    },
+    {
+      "index": 7,
+      "action": "Hotkey",
+      "title": "8",
+      "background": "#262A40",
+      "parameter": "8",
+      "sendMode": "ForGames"
+    },
+    {
+      "index": 8,
+      "action": "Hotkey",
+      "title": "TAB",
+      "background": "#2A2A3A",
+      "parameter": "Tab",
+      "sendMode": "ForGames"
+    },
+    {
+      "index": 9,
+      "action": "Hotkey",
+      "title": "MAP",
+      "background": "#2A2A3A",
+      "parameter": "M",
+      "sendMode": "ForGames"
+    },
+    {
+      "index": 10,
+      "action": "Hotkey",
+      "title": "BAG",
+      "background": "#2A2A3A",
+      "parameter": "I",
+      "sendMode": "ForGames"
+    },
+    {
+      "index": 11,
+      "action": "Hotkey",
+      "title": "Q",
+      "background": "#2A2A3A",
+      "parameter": "Q",
+      "sendMode": "ForGames"
+    },
+    {
+      "index": 12,
+      "action": "VolumeDown",
+      "title": "VOL -",
+      "background": "#1B2A3D"
+    },
+    {
+      "index": 13,
+      "action": "VolumeUp",
+      "title": "VOL +",
+      "background": "#1B2A3D"
+    },
+    {
+      "index": 14,
+      "action": "DiscordMuteToggle",
+      "title": "MUTE",
+      "background": "#1F3A2E"
+    }
+  ]
+}

@@ -40,6 +40,14 @@ public sealed class AnimatedKeyRenderer : IAnimatedKeyRenderer
             }, null, FrameIntervalMs, FrameIntervalMs);
         }
 
+        /// <summary>Wstrzymuje/wznawia timer sesji bez niszczenia klatek (brak wybudzeń podczas standby).</summary>
+        public void SetPaused(bool paused)
+        {
+            if (IsDisposed) return;
+            if (paused) _timer?.Change(Timeout.Infinite, Timeout.Infinite);
+            else _timer?.Change(FrameIntervalMs, FrameIntervalMs);
+        }
+
         public void Dispose()
         {
             IsDisposed = true;
@@ -176,6 +184,15 @@ public sealed class AnimatedKeyRenderer : IAnimatedKeyRenderer
                 session.Dispose();
             }
         }
+    }
+
+    /// <summary>
+    /// Pauzuje wszystkie animacje (np. gdy ekrany decka są wygaszone przy blokadzie Windows). Do 15 timerów po 10-60 Hz
+    /// dekodowało i wysyłało klatki do wygaszonego sprzętu. Nowe sesje startują zawsze aktywne.
+    /// </summary>
+    public void SetPaused(bool paused)
+    {
+        foreach (var session in _activeSessions.Values) session.SetPaused(paused);
     }
 
     public void StopAllAnimations()

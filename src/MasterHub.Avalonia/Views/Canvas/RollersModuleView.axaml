@@ -41,7 +41,7 @@
                                     <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="2">
                                         <PathIcon Data="{StaticResource IconRotate}" Width="15" Height="15"
                                                   Foreground="{StaticResource AccentSecondaryBrush}" HorizontalAlignment="Center" />
-                                        <TextBlock Text="{Binding LastDirection}" FontSize="9"
+                                        <TextBlock Text="{Binding LastDirection}" FontSize="10.5"
                                                    Foreground="{StaticResource AccentSecondaryBrush}"
                                                    HorizontalAlignment="Center" />
                                     </StackPanel>
@@ -49,7 +49,7 @@
 
                                 <!-- Licznik kroków i akcja -->
                                 <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center">
-                                    <TextBlock Text="{loc:Loc Canvas_Step}" Classes="dim" FontSize="10" />
+                                    <TextBlock Text="{loc:Loc Canvas_Step}" Classes="dim" FontSize="10.5" />
                                     <TextBlock Text="{Binding StepsDisplay}" FontSize="11" FontWeight="Bold"
                                                Foreground="{StaticResource TextPrimaryBrush}" />
                                 </StackPanel>

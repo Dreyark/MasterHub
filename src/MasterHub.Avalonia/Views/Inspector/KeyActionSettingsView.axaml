@@ -1,27 +1,28 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctl="using:MasterHub.Avalonia.Views.Controls"
              xmlns:vm="using:MasterHub.Avalonia.ViewModels"
              xmlns:loc="using:MasterHub.Avalonia.Localization"
+             xmlns:conv="using:MasterHub.Avalonia.Converters"
              xmlns:inspector="using:MasterHub.Avalonia.Views.Inspector"
              x:Class="MasterHub.Avalonia.Views.Inspector.KeyActionSettingsView"
              x:DataType="vm:KeyItemViewModel">
 
     <StackPanel Spacing="10">
-        <!-- Przypisana akcja -->
-        <StackPanel Spacing="4">
-            <TextBlock Text="{loc:Loc Key_ActionType}" Classes="caption" />
-            <Border Classes="statusBadgeCard" Padding="10,8">
-                <Grid ColumnDefinitions="Auto,*,Auto">
-                    <TextBlock Grid.Column="0" Classes="emoji" Text="{Binding ActionIcon}" FontSize="18"
-                               FontFamily="Segoe UI Emoji, Apple Color Emoji, Noto Color Emoji, sans-serif"
-                               VerticalAlignment="Center" Margin="0,0,8,0" />
-                    <TextBlock Grid.Column="1" Text="{Binding ActionDisplayName}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" />
-                    <Border Grid.Column="2" Background="{StaticResource CardActiveBgBrush}" CornerRadius="6" Padding="6,2" Margin="4,0,0,0" IsVisible="{Binding IsMonitoringAction}">
-                        <TextBlock Text="{Binding LiveValueText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" />
-                    </Border>
-                </Grid>
-            </Border>
-        </StackPanel>
+        <!-- The action itself is shown (and changed) in the slot card above; here only its live value, then its settings -->
+        <Border Background="{StaticResource CardActiveBgBrush}" CornerRadius="6" Padding="8,3" HorizontalAlignment="Left"
+                IsVisible="{Binding IsMonitoringAction}">
+            <TextBlock Text="{Binding LiveValueText}" FontSize="11" FontWeight="Bold" Foreground="{StaticResource AccentPrimaryBrush}" />
+        </Border>
+
+        <inspector:KeyActionResultView />
+        <inspector:PowerConfirmSettingsView />
+        <inspector:MutePressModeView />
+        <inspector:KeyHotkeyModeView />
+        <inspector:KeyAudioSwitchSettingsView />
+        <inspector:KeyLiveValueSettingsView />
+        <inspector:KeyTimerSettingsView />
+        <inspector:KeySoundSettingsView />
 
         <!-- Tryb wciśnięcia przycisku -->
         <StackPanel Spacing="4">
@@ -124,6 +125,7 @@
 
         <!-- Home Assistant: Status połączenia, wybór encji lub ręczna nazwa -->
         <inspector:KeyHomeAssistantSettingsSectionView IsVisible="{Binding IsHomeAssistantAction}" />
+        <inspector:KeyMacroSettingsSectionView IsVisible="{Binding IsMacroAction}" />
 
         <!-- Wtyczki Stream Deck: Konfigurator Property Inspector i ustawienia JSON -->
         <inspector:KeyStreamDeckSettingsSectionView IsVisible="{Binding IsStreamDeckAction}" />

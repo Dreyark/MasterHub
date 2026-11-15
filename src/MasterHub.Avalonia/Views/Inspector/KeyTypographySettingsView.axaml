@@ -15,13 +15,13 @@
             <StackPanel Grid.Column="1" Spacing="4" Margin="6,0,0,0">
                 <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Grid.Column="0" Text="{loc:Loc Key_FontSizeLabel}" Classes="caption" />
-                    <TextBlock Grid.Column="1" Text="{Binding FontSize, StringFormat='{}{0} pt'}" Classes="dim" />
+                    <TextBlock Grid.Column="1" Text="{Binding FontSizeLabel}" Classes="dim" />
                 </Grid>
-                <Slider Minimum="8" Maximum="24" Value="{Binding FontSize}" />
+                <Slider Minimum="0" Maximum="36" Value="{Binding FontSize}" />
             </StackPanel>
         </Grid>
 
-        <!-- Styl tekstu: Bold, Italic, Przekreślony -->
+        <!-- Styl tekstu: Bold, Italic, Przekreślony, Zawijanie wierszy -->
         <Grid ColumnDefinitions="*,Auto" Margin="0,2,0,0">
             <TextBlock Grid.Column="0" Text="{loc:Loc Key_TextStyle}" Classes="caption" VerticalAlignment="Center" />
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
@@ -33,6 +33,9 @@
                 </ToggleButton>
                 <ToggleButton Classes="pillBtn" Width="30" Height="26" Padding="0" IsChecked="{Binding IsStrikeThrough}" ToolTip.Tip="{loc:Loc Key_StrikeTip}">
                     <TextBlock Text="S" TextDecorations="Strikethrough" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </ToggleButton>
+                <ToggleButton Classes="pillBtn" Width="30" Height="26" Padding="0" IsChecked="{Binding IsTextWrappingEnabled}" ToolTip.Tip="{loc:Loc Key_WrapTip}">
+                    <TextBlock Text="↵" FontSize="14" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </ToggleButton>
             </StackPanel>
         </Grid>

@@ -90,7 +90,9 @@ internal static class MediaFoundationVideoDecoder
         string fitMode = "Cover",
         int scale = 100,
         int offsetX = 0,
-        int offsetY = 0)
+        int offsetY = 0,
+        int targetWidth = ButtonImageRenderer.ButtonWidth,
+        int targetHeight = ButtonImageRenderer.ButtonWidth)
     {
         var frames = new List<byte[]>();
         if (string.IsNullOrWhiteSpace(videoPath) || !File.Exists(videoPath) || maxFrames <= 0)
@@ -148,25 +150,27 @@ internal static class MediaFoundationVideoDecoder
 
                 if (width <= 0 || height <= 0) return frames;
 
-                const int targetSize = ButtonImageRenderer.ButtonWidth; // 72 px
+                // the output size: 72 x 72 for a key, 480 x 272 for the whole-deck wallpaper
+                int targetW = Math.Max(1, targetWidth);
+                int targetH = Math.Max(1, targetHeight);
 
                 // Obliczenie proporcji próbkowania w zależności od trybu dopasowania (Cover, Contain, Stretch)
                 float baseScaleX, baseScaleY;
                 string mode = (fitMode ?? "Cover").Trim();
                 if (mode.Equals("Stretch", StringComparison.OrdinalIgnoreCase))
                 {
-                    baseScaleX = (float)width / targetSize;
-                    baseScaleY = (float)height / targetSize;
+                    baseScaleX = (float)width / targetW;
+                    baseScaleY = (float)height / targetH;
                 }
                 else if (mode.Equals("Contain", StringComparison.OrdinalIgnoreCase))
                 {
-                    float fitScale = Math.Min((float)targetSize / width, (float)targetSize / height);
+                    float fitScale = Math.Min((float)targetW / width, (float)targetH / height);
                     baseScaleX = 1.0f / fitScale;
                     baseScaleY = 1.0f / fitScale;
                 }
                 else // Cover (domyślnie)
                 {
-                    float fitScale = Math.Max((float)targetSize / width, (float)targetSize / height);
+                    float fitScale = Math.Max((float)targetW / width, (float)targetH / height);
                     baseScaleX = 1.0f / fitScale;
                     baseScaleY = 1.0f / fitScale;
                 }
@@ -175,8 +179,8 @@ internal static class MediaFoundationVideoDecoder
                 float finalScaleX = baseScaleX / zoomFactor;
                 float finalScaleY = baseScaleY / zoomFactor;
 
-                float cx = targetSize / 2.0f;
-                float cy = targetSize / 2.0f;
+                float cx = targetW / 2.0f;
+                float cy = targetH / 2.0f;
                 float halfSrcW = width / 2.0f;
                 float halfSrcH = height / 2.0f;
 
@@ -187,8 +191,8 @@ internal static class MediaFoundationVideoDecoder
                 float srcCenterX = halfSrcW + srcShiftX;
                 float srcCenterY = halfSrcH - srcShiftY;
 
-                byte[] destBytes = new byte[targetSize * targetSize * 4];
-                using var frameBmp = new SKBitmap(targetSize, targetSize, SKColorType.Bgra8888, SKAlphaType.Premul);
+                byte[] destBytes = new byte[targetW * targetH * 4];
+                using var frameBmp = new SKBitmap(targetW, targetH, SKColorType.Bgra8888, SKAlphaType.Premul);
                 IntPtr pFramePixels = frameBmp.GetPixels();
 
                 while (frames.Count < maxFrames)
@@ -215,7 +219,7 @@ internal static class MediaFoundationVideoDecoder
                                 {
                                     byte* pRaw = (byte*)pData;
 
-                                    for (int y = 0; y < targetSize; y++)
+                                    for (int y = 0; y < targetH; y++)
                                     {
                                         float dy = (y + 0.5f) - cy;
                                         float srcYf = srcCenterY + dy * finalScaleY;
@@ -223,12 +227,12 @@ internal static class MediaFoundationVideoDecoder
                                         bool yInBounds = (srcY >= 0 && srcY < height);
                                         int uvY = srcY / 2;
 
-                                        for (int x = 0; x < targetSize; x++)
+                                        for (int x = 0; x < targetW; x++)
                                         {
                                             float dx = (x + 0.5f) - cx;
                                             float srcXf = srcCenterX + dx * finalScaleX;
                                             int srcX = (int)srcXf;
-                                            int destIdx = (y * targetSize + x) * 4;
+                                            int destIdx = (y * targetW + x) * 4;
 
                                             if (!yInBounds || srcX < 0 || srcX >= width)
                                             {
@@ -269,7 +273,17 @@ internal static class MediaFoundationVideoDecoder
                                 }
 
                                 Marshal.Copy(destBytes, 0, pFramePixels, destBytes.Length);
-                                byte[] jpeg = ButtonImageRenderer.RenderBitmapJpeg(frameBmp);
+                                byte[] jpeg;
+                                if (targetW == ButtonImageRenderer.ButtonWidth && targetH == ButtonImageRenderer.ButtonWidth)
+                                {
+                                    jpeg = ButtonImageRenderer.RenderBitmapJpeg(frameBmp);   // a key: the frame fills the whole 72 x 72 LCD
+                                }
+                                else
+                                {
+                                    using var image = SKImage.FromBitmap(frameBmp);
+                                    using var data = JpegEncoding.Encode(image, 92);
+                                    jpeg = data.ToArray();
+                                }
                                 frames.Add(jpeg);
                             }
                         }

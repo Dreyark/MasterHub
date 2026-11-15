@@ -6,7 +6,7 @@
              x:Class="MasterHub.Avalonia.Views.Inspector.InspectorPanelView"
              x:DataType="vm:InspectorViewModel">
 
-    <Grid RowDefinitions="Auto,*" Margin="4,6">
+    <Grid RowDefinitions="Auto,*" Margin="12">
         <!-- Górna sekcja: Mini-karty stanu urządzeń -->
         <ins:DeviceHeaderCardView Grid.Row="0" DataContext="{Binding Header}" Margin="0,0,0,8" />
 
@@ -69,7 +69,7 @@
                         <Border Classes="glassCard" Margin="0,8,0,0"
                                 IsVisible="{Binding Canvas.SelectedElement, Converter={x:Static ObjectConverters.IsNull}}">
                             <StackPanel HorizontalAlignment="Center" Spacing="10" Margin="10,24">
-                                <TextBlock Text="🖱️" FontSize="36" HorizontalAlignment="Center" />
+                                <PathIcon Data="{StaticResource IconMouse}" Width="36" Height="36" HorizontalAlignment="Center" />
                                 <TextBlock Text="{loc:Loc Inspector_NoSelection}" Classes="h3" HorizontalAlignment="Center" />
                                 <TextBlock Text="{loc:Loc Inspector_NoSelectionDesc}"
                                            Classes="dim" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="280" />

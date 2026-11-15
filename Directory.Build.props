@@ -1,0 +1,11 @@
+<Project>
+  <!-- Metadata shared by every project of the solution -->
+  <PropertyGroup>
+    <Authors>Dreyark</Authors>
+    <Copyright>Copyright (c) 2026 Dreyark</Copyright>
+    <Version>0.1.0</Version>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/Dreyark/MasterHub</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+  </PropertyGroup>
+</Project>

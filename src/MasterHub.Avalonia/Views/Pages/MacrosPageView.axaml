@@ -1,0 +1,61 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels.Pages"
+             xmlns:pages="using:MasterHub.Avalonia.Views.Pages"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             xmlns:ctl="using:MasterHub.Avalonia.Views.Controls"
+             x:Class="MasterHub.Avalonia.Views.Pages.MacrosPageView"
+             x:DataType="vm:MacrosPageViewModel">
+
+    <Grid RowDefinitions="Auto,*" Margin="24">
+        <ctl:PageHeader Grid.Row="0" Icon="{StaticResource IconMacro}"
+                        Title="{loc:Loc NavLabel_Macros}" Subtitle="{loc:Loc Macro_PageSubtitle}" />
+
+        <Grid Grid.Row="1" ColumnDefinitions="270,16,*">
+            <!-- Lista makr + podpowiedź o przyciskach obsługiwanych przez Synapse -->
+            <Border Grid.Column="0" Classes="glassCard" Padding="12">
+                <Grid RowDefinitions="Auto,*,Auto">
+                    <Border Grid.Row="2" Classes="callout" Margin="0,10,0,0">
+                        <Grid ColumnDefinitions="Auto,*">
+                            <PathIcon Data="{StaticResource IconInfo}" Width="14" Height="14" VerticalAlignment="Top"
+                                      Foreground="{StaticResource AccentPrimaryBrush}" Margin="0,1,8,0" />
+                            <TextBlock Grid.Column="1" Text="{loc:Loc Macro_RazerHint}" />
+                        </Grid>
+                    </Border>
+                    <Button Grid.Row="0" Classes="accentBtn" Command="{Binding NewMacroCommand}"
+                            HorizontalAlignment="Stretch" Margin="0,0,0,10" Content="{loc:Loc Macro_New}" />
+                    <Panel Grid.Row="1">
+                        <TextBlock Text="{loc:Loc Macro_NoMacros}" Classes="dim" TextWrapping="Wrap"
+                                   IsVisible="{Binding HasNoItems}" Margin="4" />
+                        <ListBox ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedItem}"
+                                 IsVisible="{Binding !HasNoItems}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate x:DataType="vm:MacroListItemViewModel">
+                                    <Grid ColumnDefinitions="Auto,*,Auto" Margin="4,2">
+                                        <TextBlock Grid.Column="0" Text="▶" FontSize="10.5" Margin="0,0,6,0" VerticalAlignment="Center"
+                                                   Foreground="{StaticResource AccentSuccessBrush}" IsVisible="{Binding IsRunning}" />
+                                        <TextBlock Grid.Column="1" Text="{Binding Name}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="2" Text="{Binding StepCount}" Classes="dim" Margin="8,0,0,0" VerticalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Panel>
+                </Grid>
+            </Border>
+
+            <!-- Edytor wybranego makra -->
+            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                <Panel>
+                    <TextBlock Text="{loc:Loc Macro_Select}" Classes="dim" Margin="8" IsVisible="{Binding !HasSelection}" />
+                    <StackPanel Spacing="12" IsVisible="{Binding HasSelection}" Margin="0,0,8,16">
+                        <pages:MacroEditorView />
+                        <pages:MacroStepsView />
+                        <pages:MacroBindingsView />
+                        <TextBlock Text="{Binding StatusMessage}" Classes="dim" FontSize="11" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Panel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -19,6 +19,7 @@ public class LocExtension : MarkupExtension
         {
             Source = LocalizationService.Instance,
             Mode = BindingMode.OneWay,
+            Converter = UiText.Converter,
             FallbackValue = FallbackValue,
             TargetNullValue = FallbackValue
         };

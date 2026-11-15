@@ -39,8 +39,14 @@ public interface ISystemControlService
     /// <summary>Wkleja tekst do aktywnego okna przez schowek</summary>
     void PasteText(string text);
 
+    /// <summary>T-17 c: types the text character by character (Unicode) without touching the clipboard.</summary>
+    void TypeText(string text) => PasteText(text);
+
     /// <summary>Wysyła kombinację klawiszy (np. "Ctrl+Shift+S")</summary>
     void SendHotkey(string hotkeyString);
+
+    /// <summary>Wysyła kombinację klawiszy w wybranym trybie; ForGames = kody skanowania trzymane holdMs ms (gry czytające klawiaturę przez DirectInput).</summary>
+    void SendHotkey(string hotkeyString, HotkeySendMode mode, int holdMs = 0);
 
     /// <summary>Uśpia komputer (Sleep/Hibernate)</summary>
     void SystemSleep();

@@ -30,21 +30,25 @@ public partial class DialInspectorView : UserControl
 
     private async void OnBrowseImageClick(object? sender, RoutedEventArgs e)
     {
-        if (DataContext is not DialItemViewModel vm) return;
-        var topLevel = TopLevel.GetTopLevel(this);
-        if (topLevel == null) return;
-
-        var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        try
         {
-            Title = "Wybierz obraz dla tarczy Dial IPS (240x240)",
-            AllowMultiple = false,
-            FileTypeFilter = new[] { FilePickerFileTypes.ImageAll }
-        });
+            if (DataContext is not DialItemViewModel vm) return;
+            var topLevel = TopLevel.GetTopLevel(this);
+            if (topLevel == null) return;
 
-        if (files.Count > 0)
-        {
-            vm.ImagePath = files[0].Path.LocalPath;
+            var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            {
+                Title = "Wybierz obraz dla tarczy Dial IPS (240x240)",
+                AllowMultiple = false,
+                FileTypeFilter = new[] { FilePickerFileTypes.ImageAll }
+            });
+
+            if (files.Count > 0)
+            {
+                vm.ImagePath = MasterHub.Avalonia.Services.MediaPaths.ToStore(files[0].Path.LocalPath);
+            }
         }
+        catch { }
     }
 
     private void OnClearImageClick(object? sender, RoutedEventArgs e)

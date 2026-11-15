@@ -3,9 +3,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Management;
+using System.Net;
 using System.Net.Http;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
@@ -29,6 +30,7 @@ public sealed class SystemMonitorService : ISystemMonitorService
     private Timer? _timer;
     private bool _isEnabled = true;
     private int _refreshIntervalMs = 1000;
+    private volatile MonitorMetrics _requiredMetrics = MonitorMetrics.All;
     private bool _disposed;
 
     // Lista wykrytych kart graficznych
@@ -107,6 +109,10 @@ public sealed class SystemMonitorService : ISystemMonitorService
         "vlc", "mpc-hc", "mpc-hc64", "mpc-be", "mpc-be64", "obs64", "obs32", "overwolf", "OverwolfBrowser", "CrosshairX", "CrosshairV2", "MSIAfterburner"
     };
 
+    private static readonly string s_currentProcessName = Environment.ProcessPath != null
+        ? System.IO.Path.GetFileNameWithoutExtension(Environment.ProcessPath)
+        : "MasterHub";
+
     public bool IsEnabled
     {
         get
@@ -128,6 +134,12 @@ public sealed class SystemMonitorService : ISystemMonitorService
                 }
             }
         }
+    }
+
+    public MonitorMetrics RequiredMetrics
+    {
+        get => _requiredMetrics;
+        set => _requiredMetrics = value;
     }
 
     public int RefreshIntervalMs
@@ -576,6 +588,7 @@ public sealed class SystemMonitorService : ISystemMonitorService
     {
         try
         {
+            var need = _requiredMetrics;
             // 1. RAM Usage via Win32 GlobalMemoryStatusEx (poprawna struktura pamięci fizycznej)
             float sampledRamMb = _ramUsageMb;
             float sampledRamTotal = _ramTotalMb;
@@ -585,7 +598,7 @@ public sealed class SystemMonitorService : ISystemMonitorService
             {
                 dwLength = (uint)Marshal.SizeOf<MEMORYSTATUSEX>()
             };
-            if (GlobalMemoryStatusEx(ref memStatus) && memStatus.ullTotalPhys > 0)
+            if ((need & MonitorMetrics.Ram) != 0 && GlobalMemoryStatusEx(ref memStatus) && memStatus.ullTotalPhys > 0)
             {
                 sampledRamTotal = (float)(memStatus.ullTotalPhys / (1024.0 * 1024.0));
                 sampledRamMb = (float)((memStatus.ullTotalPhys - memStatus.ullAvailPhys) / (1024.0 * 1024.0));
@@ -600,7 +613,7 @@ public sealed class SystemMonitorService : ISystemMonitorService
             DateTime now = DateTime.UtcNow;
             double elapsedSeconds = (now - _lastNetworkSampleTime).TotalSeconds;
 
-            if (elapsedSeconds >= 0.2 && SampleNetworkCounters(out long curBytesRecv, out long curBytesSent))
+            if ((need & MonitorMetrics.Network) != 0 && elapsedSeconds >= 0.2 && SampleNetworkCounters(out long curBytesRecv, out long curBytesSent))
             {
                 long diffRecv = Math.Max(0, curBytesRecv - _lastBytesReceived);
                 long diffSent = Math.Max(0, curBytesSent - _lastBytesSent);
@@ -616,18 +629,27 @@ public sealed class SystemMonitorService : ISystemMonitorService
             }
 
             // 4. Zajętość dysku systemowego % oraz rzeczywista prędkość odczytu/zapisu (MB/s)
-            float sampledDiskPercent = GetDiskUsagePercent(null);
+            float sampledDiskPercent = (need & MonitorMetrics.Disk) != 0 ? GetDiskUsagePercent(null) : _diskUsagePercent;
 
             // 4. Pobranie wszystkich liczników Win32 PDH w jednym wywołaniu PdhCollectQueryData
-            SamplePdhCounters(
-                out float pdhCpuUtility,
-                out float sampledDiskReadMb,
-                out float sampledDiskWriteMb,
-                out Dictionary<string, float> luidLoads,
-                out Dictionary<uint, float> pid3DLoads);
+            float pdhCpuUtility = -1f;
+            float sampledDiskReadMb = _diskReadMbps;
+            float sampledDiskWriteMb = _diskWriteMbps;
+            var luidLoads = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            var pid3DLoads = new Dictionary<uint, float>();
+            if ((need & (MonitorMetrics.Cpu | MonitorMetrics.Disk | MonitorMetrics.Gpu | MonitorMetrics.CpuTemperature | MonitorMetrics.Fps)) != 0)
+            {
+                SamplePdhCounters(
+                    out pdhCpuUtility,
+                    out sampledDiskReadMb,
+                    out sampledDiskWriteMb,
+                    out luidLoads,
+                    out pid3DLoads);
+            }
+
 
             // 5. CPU Usage % (Rzeczywisty odczyt: PDH % Processor Utility lub Win32 GetSystemTimes)
-            float sampledCpu = SampleCpuUsage(pdhCpuUtility);
+            float sampledCpu = (need & MonitorMetrics.Cpu) != 0 ? SampleCpuUsage(pdhCpuUtility) : _cpuUsagePercent;
 
             // 6. Rzeczywiste obciążenie i temperatura kart graficznych GPU
             var currentPerGpu = new Dictionary<int, (float Load, float Temp)>();
@@ -642,34 +664,45 @@ public sealed class SystemMonitorService : ISystemMonitorService
             float selectedGpuLoad = 0f;
             float selectedGpuTemp = 0f;
 
-            if (gpuList.Count > 0)
+            bool sampleGpu = (need & (MonitorMetrics.Gpu | MonitorMetrics.CpuTemperature | MonitorMetrics.Fps)) != 0;
+            if (!sampleGpu)
             {
-                for (int i = 0; i < gpuList.Count; i++)
-                {
-                    SampleSelectedGpuMetrics(gpuList[i], luidLoads, out float gLoad, out float gTemp);
-                    float roundedLoad = MathF.Round(Math.Clamp(gLoad, 0f, 100f), 1);
-                    float roundedTemp = MathF.Round(Math.Clamp(gTemp, 0f, 120f), 1);
-                    currentPerGpu[i] = (roundedLoad, roundedTemp);
-
-                    if (i == selIdx)
-                    {
-                        selectedGpuLoad = roundedLoad;
-                        selectedGpuTemp = roundedTemp;
-                    }
-                }
+                selectedGpuLoad = _gpuUsagePercent;
+                selectedGpuTemp = _gpuTemperatureCelsius;
+                lock (_syncRoot) { foreach (var kv in _perGpuMetrics) currentPerGpu[kv.Key] = kv.Value; }
             }
             else
             {
-                SampleSelectedGpuMetrics(null, luidLoads, out float gLoad, out float gTemp);
-                selectedGpuLoad = MathF.Round(Math.Clamp(gLoad, 0f, 100f), 1);
-                selectedGpuTemp = MathF.Round(Math.Clamp(gTemp, 0f, 120f), 1);
+                if (gpuList.Count > 0)
+                {
+                    for (int i = 0; i < gpuList.Count; i++)
+                    {
+                        SampleSelectedGpuMetrics(gpuList[i], luidLoads, out float gLoad, out float gTemp);
+                        float roundedLoad = MathF.Round(Math.Clamp(gLoad, 0f, 100f), 1);
+                        float roundedTemp = MathF.Round(Math.Clamp(gTemp, 0f, 120f), 1);
+                        currentPerGpu[i] = (roundedLoad, roundedTemp);
+
+                        if (i == selIdx)
+                        {
+                            selectedGpuLoad = roundedLoad;
+                            selectedGpuTemp = roundedTemp;
+                        }
+                    }
+                }
+                else
+                {
+                    SampleSelectedGpuMetrics(null, luidLoads, out float gLoad, out float gTemp);
+                    selectedGpuLoad = MathF.Round(Math.Clamp(gLoad, 0f, 100f), 1);
+                    selectedGpuTemp = MathF.Round(Math.Clamp(gTemp, 0f, 120f), 1);
+                }
+
             }
 
             // 7. Rzeczywista temperatura procesora CPU (°C)
-            float sampledCpuTemp = SampleRealCpuTemperature(selectedGpuTemp);
+            float sampledCpuTemp = (need & MonitorMetrics.CpuTemperature) != 0 ? SampleRealCpuTemperature(selectedGpuTemp) : _cpuTemperatureCelsius;
 
             // 8. Rzeczywiste FPS dla aktywnej gry 3D (0 FPS gdy użytkownik jest na pulpicie / poza grą)
-            float sampledFps = SampleRealFps(pid3DLoads, selectedGpuLoad);
+            float sampledFps = (need & MonitorMetrics.Fps) != 0 ? SampleRealFps(pid3DLoads, selectedGpuLoad) : _currentFps;
 
             lock (_syncRoot)
             {
@@ -1003,13 +1036,33 @@ public sealed class SystemMonitorService : ISystemMonitorService
         s_lastLhmProcessCheck = DateTime.UtcNow;
         try
         {
-            s_cachedLhmProcessRunning = Process.GetProcessesByName("LibreHardwareMonitor").Length > 0;
+            s_cachedLhmProcessRunning = MasterHub.Core.SystemControl.ProcessHelper.IsProcessRunning("LibreHardwareMonitor");
         }
         catch
         {
             s_cachedLhmProcessRunning = false;
         }
         return s_cachedLhmProcessRunning;
+    }
+
+    private static bool IsLhmPortOpen()
+    {
+        try
+        {
+            using var tcp = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            var result = tcp.BeginConnect(IPAddress.Loopback, 8085, null, null);
+            bool success = result.AsyncWaitHandle.WaitOne(40, true);
+            if (success && tcp.Connected)
+            {
+                tcp.EndConnect(result);
+                return true;
+            }
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static bool TryReadLibreHardwareMonitor(out float cpuTemp, out float gpuTemp, out float gpuLoad)
@@ -1030,9 +1083,9 @@ public sealed class SystemMonitorService : ISystemMonitorService
             return false;
         }
 
-        if (!IsLhmProcessRunning())
+        if (!IsLhmProcessRunning() || !IsLhmPortOpen())
         {
-            s_lastLhmCheck = DateTime.UtcNow.AddSeconds(10);
+            s_lastLhmCheck = DateTime.UtcNow.AddSeconds(30);
             return false;
         }
 
@@ -1254,7 +1307,7 @@ public sealed class SystemMonitorService : ISystemMonitorService
 
         if (string.IsNullOrEmpty(procName) ||
             s_nonGameProcesses.Contains(procName) ||
-            string.Equals(procName, Process.GetCurrentProcess().ProcessName, StringComparison.OrdinalIgnoreCase))
+            string.Equals(procName, s_currentProcessName, StringComparison.OrdinalIgnoreCase))
         {
             // Na pulpicie, w przeglądarce lub w samej aplikacji MasterHub FPS wynosi 0
             _smoothedFps = 0f;

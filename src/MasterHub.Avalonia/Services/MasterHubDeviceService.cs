@@ -175,6 +175,12 @@ public class MasterHubDeviceService : IMasterHubDeviceService
         _manager.SetBaseLedColor(r, g, b);
     }
 
+    public void SetBaseLedMode(MasterHub.Core.Devices.LedEffect effect) => _manager.SetBaseLedMode(effect);
+
+    public void SetSliderLedMode(int sliderIndex, MasterHub.Core.Devices.LedEffect effect) => _manager.SetSliderLedMode(sliderIndex, effect);
+
+    public void SetLedSpeed(byte speed) => _manager.SetLedSpeed(speed);
+
     public void SetRollerLedColor(int rollerIndex, byte r, byte g, byte b)
     {
         _manager.SetRollerLedColor(rollerIndex, r, g, b);

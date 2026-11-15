@@ -31,9 +31,7 @@ public sealed class ObsService : IObsService
         s_lastProcessCheck = DateTime.UtcNow;
         try
         {
-            s_cachedProcessRunning = Process.GetProcessesByName("obs64").Length > 0 ||
-                                     Process.GetProcessesByName("obs32").Length > 0 ||
-                                     Process.GetProcessesByName("obs").Length > 0;
+            s_cachedProcessRunning = MasterHub.Core.SystemControl.ProcessHelper.IsAnyProcessRunning("obs64", "obs32", "obs");
         }
         catch
         {

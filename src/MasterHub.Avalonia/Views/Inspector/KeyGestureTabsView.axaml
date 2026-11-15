@@ -1,0 +1,74 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:ctl="using:MasterHub.Avalonia.Views.Controls"
+             xmlns:conv="using:MasterHub.Avalonia.Converters"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeyGestureTabsView"
+             x:DataType="vm:KeyItemViewModel">
+    <!-- Press / Hold / Double: trzy wiązania jednego klawisza. Press = główna akcja klawisza (edytor poniżej). -->
+    <StackPanel Spacing="8">
+        <Border Classes="segmented" HorizontalAlignment="Stretch">
+            <Grid ColumnDefinitions="*,*,*" ColumnSpacing="2">
+                <Button Grid.Column="0" Classes="pillBtn" Classes.active="{Binding IsPressTab}" HorizontalAlignment="Stretch"
+                        Command="{Binding SelectGestureTabCommand}" CommandParameter="0" Content="{loc:Loc Gesture_Press}" />
+                <Button Grid.Column="1" Classes="pillBtn" Classes.active="{Binding IsHoldTab}" HorizontalAlignment="Stretch"
+                        Command="{Binding SelectGestureTabCommand}" CommandParameter="1">
+                    <StackPanel Orientation="Horizontal" Spacing="5" HorizontalAlignment="Center">
+                        <TextBlock Text="{loc:Loc Gesture_Hold}" />
+                        <Ellipse Width="6" Height="6" Fill="{StaticResource AccentSuccessBrush}" IsVisible="{Binding HasHold}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button Grid.Column="2" Classes="pillBtn" Classes.active="{Binding IsDoubleTab}" HorizontalAlignment="Stretch"
+                        Command="{Binding SelectGestureTabCommand}" CommandParameter="2">
+                    <StackPanel Orientation="Horizontal" Spacing="5" HorizontalAlignment="Center">
+                        <TextBlock Text="{loc:Loc Gesture_Double}" />
+                        <Ellipse Width="6" Height="6" Fill="{StaticResource AccentSuccessBrush}" IsVisible="{Binding HasDouble}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Press: informacja, kiedy dotknięcie czeka na rozstrzygnięcie -->
+        <TextBlock Text="{loc:Loc Gesture_PressWaits}" Classes="dim" FontSize="10.5" TextWrapping="Wrap"
+                   IsVisible="{Binding HasGestures}" />
+
+        <!-- The slot's action: what it does now + "Change…" (opens the Action library: search and categories) + clear.
+             The properties below hold only the settings of that action. -->
+        <TextBlock Text="{loc:Loc Gesture_HoldHint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" IsVisible="{Binding IsHoldTab}" />
+        <TextBlock Text="{loc:Loc Gesture_DoubleHint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" IsVisible="{Binding IsDoubleTab}" />
+        <Border Classes="statusBadgeCard" Padding="10,8">
+            <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                <PathIcon Grid.Column="0" Data="{Binding ActiveSlotAction, Converter={x:Static ctl:IconConverters.ByAction}}"
+                          Width="20" Height="20" Foreground="{StaticResource AccentPrimaryBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                <TextBlock Grid.Column="1" Text="{Binding ActiveSlotName, Converter={x:Static conv:StripLeadingSymbolConverter.Instance}}"
+                           FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                           Classes.dim="{Binding !HasActiveSlotAction}" />
+                <Button Grid.Column="2" Classes="pillBtn" Padding="10,4" Margin="6,0,0,0" Click="OnChangeActionClick"
+                        Content="{loc:Loc Gesture_ChangeAction}" ToolTip.Tip="{loc:Loc Gesture_ChangeActionTip}" />
+                <Button Grid.Column="3" Classes="iconBtn" Padding="6" Margin="4,0,0,0" Command="{Binding ClearActiveSlotCommand}"
+                        IsVisible="{Binding HasActiveSlotAction}" ToolTip.Tip="{loc:Loc Key_ClearActionTip}">
+                    <PathIcon Data="{StaticResource IconTrash}" Width="12" Height="12" />
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Hold / Double: the one setting of that slot -->
+        <TextBox Text="{Binding HoldParameter, Mode=TwoWay}" PlaceholderText="{loc:Loc Gesture_ParameterHint}">
+            <TextBox.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                    <Binding Path="IsHoldTab" />
+                    <Binding Path="HasHold" />
+                </MultiBinding>
+            </TextBox.IsVisible>
+        </TextBox>
+        <TextBox Text="{Binding DoubleParameter, Mode=TwoWay}" PlaceholderText="{loc:Loc Gesture_ParameterHint}">
+            <TextBox.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                    <Binding Path="IsDoubleTab" />
+                    <Binding Path="HasDouble" />
+                </MultiBinding>
+            </TextBox.IsVisible>
+        </TextBox>
+    </StackPanel>
+</UserControl>

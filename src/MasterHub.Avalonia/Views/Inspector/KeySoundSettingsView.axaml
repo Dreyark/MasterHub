@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:MasterHub.Avalonia.ViewModels"
+             xmlns:loc="using:MasterHub.Avalonia.Localization"
+             x:Class="MasterHub.Avalonia.Views.Inspector.KeySoundSettingsView"
+             x:DataType="vm:KeyItemViewModel">
+    <!-- Soundboard (T-14): plik, głośność (do 200 %), tryb ponownego naciśnięcia i urządzenie wyjściowe (także wirtualny kabel). -->
+    <StackPanel Spacing="8" IsVisible="{Binding IsSoundAction}">
+        <StackPanel Spacing="6" DataContext="{Binding SoundEditor}" x:DataType="vm:SoundEditor">
+            <TextBlock Text="{loc:Loc Sound_File}" Classes="caption" />
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="6">
+                <TextBox Grid.Column="0" Text="{Binding FilePath, Mode=TwoWay}" PlaceholderText="C:\sounds\airhorn.mp3" />
+                <Button Grid.Column="1" Classes="pillBtn" Padding="8,6" Content="{loc:Loc Key_BrowseFile}" Click="OnBrowseClick" />
+            </Grid>
+
+            <Border Classes="callout" Padding="10,8" IsVisible="{Binding HasProblem}">
+                <TextBlock Text="{Binding ProblemText}" TextWrapping="Wrap" Foreground="{StaticResource AccentCautionBrush}" />
+            </Border>
+
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                <TextBlock Grid.Column="0" Text="{loc:Loc Sound_Volume}" Classes="caption" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="{Binding VolumePercent, StringFormat={}{0} %}" FontWeight="Bold" />
+            </Grid>
+            <Slider Value="{Binding VolumePercent, Mode=TwoWay}" Minimum="0" Maximum="200" TickFrequency="10" SmallChange="1" LargeChange="10" />
+            <TextBlock Text="{loc:Loc Sound_VolumeHint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+
+            <TextBlock Text="{loc:Loc Sound_Mode}" Classes="caption" />
+            <ComboBox ItemsSource="{Binding Modes}" SelectedItem="{Binding SelectedMode, Mode=TwoWay}" HorizontalAlignment="Stretch" />
+
+            <TextBlock Text="{loc:Loc Sound_Device}" Classes="caption" />
+            <ComboBox ItemsSource="{Binding Devices}" SelectedItem="{Binding SelectedDevice, Mode=TwoWay}" HorizontalAlignment="Stretch" />
+            <TextBlock Text="{loc:Loc Sound_DeviceHint}" Classes="dim" FontSize="10.5" TextWrapping="Wrap" />
+        </StackPanel>
+    </StackPanel>
+</UserControl>
