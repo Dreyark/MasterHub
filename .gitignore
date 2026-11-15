@@ -136,3 +136,6 @@ BenchmarkDotNet.Artifacts/
 CLAUDE.md
 graphify-out/
 docs/internal/
+
+# test results written by the CI test script
+results*/

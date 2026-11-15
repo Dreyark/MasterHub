@@ -16,19 +16,6 @@ jobs:
           cache: true
           cache-dependency-path: '**/*.csproj'
       - run: dotnet build MasterHub.slnx --nologo -c Release
-      - run: dotnet test MasterHub.slnx --nologo -c Release --no-build --logger "trx" --results-directory results
-      - name: Show failed tests
-        if: failure()
+      - name: Test
         shell: pwsh
-        run: |
-          # Failed tests become annotations on the run, so they can be read without opening the raw log.
-          foreach ($f in Get-ChildItem results -Filter *.trx -ErrorAction SilentlyContinue) {
-            [xml]$x = Get-Content $f.FullName
-            $ns = New-Object Xml.XmlNamespaceManager($x.NameTable); $ns.AddNamespace('t', 'http://microsoft.com/schemas/VisualStudio/TeamTest/2010')
-            foreach ($r in $x.SelectNodes("//t:UnitTestResult[@outcome='Failed']", $ns)) {
-              $msg = ($r.Output.ErrorInfo.Message + ' ' + $r.Output.ErrorInfo.StackTrace)
-              if ($msg.Length -gt 900) { $msg = $msg.Substring(0, 900) }
-              $msg = $msg -replace "`r", '' -replace "`n", ' | '
-              Write-Output "::error title=$($r.testName)::$msg"
-            }
-          }
+        run: ./.github/scripts/run-tests.ps1

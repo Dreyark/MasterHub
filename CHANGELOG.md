@@ -4,9 +4,10 @@ All notable changes to MasterHub. Format: [Keep a Changelog](https://keepachange
 
 ## [Unreleased]
 
-## [0.1.3] - 2026-11-15
+## [0.1.4] - 2026-11-15
 
 ### Fixed
+- The automatic checks run one test project at a time and try a failed run again (reporting every failed test), so a slow build machine no longer blocks a release. (0.1.2 and 0.1.3 were never published: their checks failed.)
 - Several timing-dependent tests (key hold, hold repeat, double tap, wallpaper timer) wait for the result instead of a fixed short time, so the automatic checks no longer fail on a slow build machine.
 
 ### Changed

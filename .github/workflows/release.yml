@@ -19,7 +19,9 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - run: dotnet build MasterHub.slnx --nologo -c Release
-      - run: dotnet test MasterHub.slnx --nologo -c Release --no-build
+      - name: Test
+        shell: pwsh
+        run: ./.github/scripts/run-tests.ps1
 
       - name: Publish (self-contained, one file per program)
         shell: pwsh
