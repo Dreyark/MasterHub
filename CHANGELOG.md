@@ -4,6 +4,13 @@ All notable changes to MasterHub. Format: [Keep a Changelog](https://keepachange
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-15
+
+Same application as 0.1.0, released from the commit whose automatic checks all pass.
+
+### Fixed
+- A timing-dependent test (hold override of a key) no longer fails on a busy build machine; CI reports failed tests as annotations.
+
 ## [0.1.0] - 2026-11-15
 
 First public release (pre-release: not every part has been tried with real hardware yet).
