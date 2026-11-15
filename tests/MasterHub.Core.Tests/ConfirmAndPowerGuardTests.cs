@@ -161,7 +161,8 @@ public class ConfirmAndPowerGuardTests
 
         // held through the override -> fires once, even though the global hold time is 10 s
         engine.HandleKeyEvent(1, true, KeyPressMode.OnHold, holdDurationMs: 60);
-        await Task.Delay(400);
+        SpinWait.SpinUntil(() => { lock (fired) return fired.Count >= 1; }, TimeSpan.FromSeconds(30));   // slow CI machines
+        await Task.Delay(50);
         engine.HandleKeyEvent(1, false, KeyPressMode.OnHold, holdDurationMs: 60);
         Assert.Equal(new[] { KeyPressMode.OnHold }, fired);
     }

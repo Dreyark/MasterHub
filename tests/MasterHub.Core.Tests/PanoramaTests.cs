@@ -216,7 +216,8 @@ public sealed class PanoramaTests : IDisposable
         using var deck = new PanoramaDeck(_ => Interlocked.Increment(ref sent));
         deck.SetSource(new[] { Jpeg(Red), Jpeg(Green) }, fps: 30);
 
-        SpinWait.SpinUntil(() => Volatile.Read(ref sent) >= 4, TimeSpan.FromSeconds(3));
+        // a generous limit: a busy build machine can starve the timer thread for seconds
+        SpinWait.SpinUntil(() => Volatile.Read(ref sent) >= 4, TimeSpan.FromSeconds(30));
 
         Assert.True(Volatile.Read(ref sent) >= 4);
     }

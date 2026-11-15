@@ -4,10 +4,13 @@ All notable changes to MasterHub. Format: [Keep a Changelog](https://keepachange
 
 ## [Unreleased]
 
-## [0.1.2] - 2026-11-15
+## [0.1.3] - 2026-11-15
+
+### Fixed
+- Several timing-dependent tests (key hold, hold repeat, double tap, wallpaper timer) wait for the result instead of a fixed short time, so the automatic checks no longer fail on a slow build machine.
 
 ### Changed
-- Releases come as a proper installer (`MasterHub-Setup-<version>.exe`, per-user, no administrator rights, uninstaller keeps your profiles) and as a portable zip with just two files (`MasterHub.Avalonia.exe`, `masterhub-cli.exe`) instead of a folder of about 260 files. Same application as 0.1.1.
+- Releases come as a proper installer (`MasterHub-Setup-<version>.exe`, per-user, no administrator rights, uninstaller keeps your profiles) and as a portable zip with just two files (`MasterHub.Avalonia.exe`, `masterhub-cli.exe`) instead of a folder of about 260 files. Same application as 0.1.1 (0.1.2 was never published: its automatic checks failed).
 
 ## [0.1.1] - 2026-11-15
 

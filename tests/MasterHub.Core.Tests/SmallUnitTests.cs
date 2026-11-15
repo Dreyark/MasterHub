@@ -117,7 +117,8 @@ public class SmallUnitTests
         engine.KeyTriggered += (_, _) => Interlocked.Increment(ref calls);
 
         engine.HandleKeyEvent(1, true, KeyPressMode.OnHoldRepeat);
-        await Task.Delay(150);
+        SpinWait.SpinUntil(() => Volatile.Read(ref calls) >= 2, TimeSpan.FromSeconds(30));   // slow CI machines
+        await Task.Delay(30);
         engine.HandleKeyEvent(1, false, KeyPressMode.OnHoldRepeat);
         int afterRelease = Volatile.Read(ref calls);
         await Task.Delay(80);

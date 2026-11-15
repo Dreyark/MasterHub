@@ -179,7 +179,8 @@ public class GestureTests
         engine.GestureTriggered += (k, g) => { lock (fired) fired.Add((k, g)); };
 
         engine.HandleGestureEvent(3, true, HoldOnly);
-        await Task.Delay(400);
+        SpinWait.SpinUntil(() => { lock (fired) return fired.Count >= 1; }, TimeSpan.FromSeconds(30));   // slow CI machines
+        await Task.Delay(300);   // time for a (wrong) second firing to show up
         engine.HandleGestureEvent(3, false, HoldOnly);
         await Task.Delay(100);
 
@@ -189,7 +190,7 @@ public class GestureTests
     [Fact]
     public async Task Engine_DoubleTap_FiresDouble_SingleTapFiresPressAfterTheWindow()
     {
-        using var engine = new KeyInteractionEngine { DoublePressIntervalMs = 120 };
+        using var engine = new KeyInteractionEngine { DoublePressIntervalMs = 500 };   // wide: the taps below must land inside it even on a slow machine
         var fired = new List<KeyGesture>();
         engine.GestureTriggered += (_, g) => { lock (fired) fired.Add(g); };
 
@@ -197,13 +198,14 @@ public class GestureTests
         engine.HandleGestureEvent(0, false, DoubleOnly);
         engine.HandleGestureEvent(0, true, DoubleOnly);
         engine.HandleGestureEvent(0, false, DoubleOnly);
-        await Task.Delay(350);
+        SpinWait.SpinUntil(() => { lock (fired) return fired.Count >= 1; }, TimeSpan.FromSeconds(30));
+        await Task.Delay(700);   // longer than the window: no stray Press may follow the Double
         lock (fired) Assert.Equal(new[] { KeyGesture.Double }, fired);
 
-        fired.Clear();
+        lock (fired) fired.Clear();
         engine.HandleGestureEvent(0, true, DoubleOnly);
         engine.HandleGestureEvent(0, false, DoubleOnly);
-        await Task.Delay(400);
+        SpinWait.SpinUntil(() => { lock (fired) return fired.Count >= 1; }, TimeSpan.FromSeconds(30));
         lock (fired) Assert.Equal(new[] { KeyGesture.Press }, fired);
     }
 
@@ -215,10 +217,10 @@ public class GestureTests
         engine.GestureTriggered += (_, _) => { calls++; throw new InvalidOperationException("boom"); };
 
         engine.HandleGestureEvent(0, true, HoldOnly);
-        await Task.Delay(200);
+        SpinWait.SpinUntil(() => Volatile.Read(ref calls) >= 1, TimeSpan.FromSeconds(30));   // slow CI machines
         engine.HandleGestureEvent(0, false, HoldOnly);
         engine.HandleGestureEvent(0, true, HoldOnly);
-        await Task.Delay(200);
+        SpinWait.SpinUntil(() => Volatile.Read(ref calls) >= 2, TimeSpan.FromSeconds(30));
 
         Assert.Equal(2, calls);
     }
