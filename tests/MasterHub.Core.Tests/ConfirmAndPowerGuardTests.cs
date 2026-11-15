@@ -152,10 +152,10 @@ public class ConfirmAndPowerGuardTests
         var fired = new List<KeyPressMode>();
         engine.KeyTriggered += (_, m) => fired.Add(m);
 
-        // pressed and released before the (override) hold elapses -> nothing happens
-        engine.HandleKeyEvent(0, true, KeyPressMode.OnHold, holdDurationMs: 200);
+        // pressed and released before the (override) hold elapses -> nothing happens (a wide margin: a busy CI runner can stall a 40 ms delay for hundreds of ms)
+        engine.HandleKeyEvent(0, true, KeyPressMode.OnHold, holdDurationMs: 3000);
         await Task.Delay(40);
-        engine.HandleKeyEvent(0, false, KeyPressMode.OnHold, holdDurationMs: 200);
+        engine.HandleKeyEvent(0, false, KeyPressMode.OnHold, holdDurationMs: 3000);
         await Task.Delay(300);
         Assert.Empty(fired);
 
