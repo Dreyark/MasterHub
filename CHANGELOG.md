@@ -4,6 +4,11 @@ All notable changes to MasterHub. Format: [Keep a Changelog](https://keepachange
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-15
+
+### Changed
+- Releases come as a proper installer (`MasterHub-Setup-<version>.exe`, per-user, no administrator rights, uninstaller keeps your profiles) and as a portable zip with just two files (`MasterHub.Avalonia.exe`, `masterhub-cli.exe`) instead of a folder of about 260 files. Same application as 0.1.1.
+
 ## [0.1.1] - 2026-11-15
 
 Same application as 0.1.0, released from the commit whose automatic checks all pass.

@@ -1,6 +1,8 @@
 name: Release
 
-# Push a tag such as v0.1.0 and this builds, tests and publishes a GitHub release with a self-contained Windows zip.
+# Push a tag such as v0.1.2: builds, tests, and publishes a GitHub release with
+#   - MasterHub-Setup-<version>.exe  (installer)
+#   - MasterHub-<tag>-win-x64.zip    (portable: just two exe files, nothing else)
 on:
   push:
     tags: ['v*']
@@ -18,11 +20,26 @@ jobs:
           dotnet-version: 10.0.x
       - run: dotnet build MasterHub.slnx --nologo -c Release
       - run: dotnet test MasterHub.slnx --nologo -c Release --no-build
-      - name: Publish (self-contained, win-x64)
+
+      - name: Publish (self-contained, one file per program)
         shell: pwsh
         run: |
-          dotnet publish src/MasterHub.Avalonia -c Release -r win-x64 --self-contained -o publish
-          dotnet publish src/MasterHub.Cli -c Release -r win-x64 --self-contained -o publish
+          $common = @('-c','Release','-r','win-x64','--self-contained','-p:PublishSingleFile=true','-p:IncludeNativeLibrariesForSelfExtract=true','-p:EnableCompressionInSingleFile=true','-p:DebugType=none','-p:DebugSymbols=false','-p:SatelliteResourceLanguages=en')
+          dotnet publish src/MasterHub.Avalonia @common -o publish
+          dotnet publish src/MasterHub.Cli @common -o publish
+          # Everything the program needs is inside the two exe files (texts are embedded); drop the symbol files and the content copy.
+          Get-ChildItem publish -Recurse | Where-Object { $_.Name -notin @('MasterHub.Avalonia.exe','masterhub-cli.exe') -and -not $_.PSIsContainer } | Remove-Item -Force
+          Get-ChildItem publish -Directory | Remove-Item -Recurse -Force
+          Get-ChildItem publish | Format-Table Name, Length
+
+      - name: Installer (Inno Setup)
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" "/DSourceDir=$((Resolve-Path publish).Path)" installer\MasterHub.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
+
       - name: Package and release
         shell: pwsh
         env:
@@ -30,10 +47,12 @@ jobs:
         run: |
           $tag = "${{ github.ref_name }}"
           $version = $tag.TrimStart('v')
+          $setup = "installer-out\MasterHub-Setup-$version.exe"
           $zip = "MasterHub-$tag-win-x64.zip"
-          Compress-Archive -Path publish\* -DestinationPath $zip -CompressionLevel Optimal
-          $hash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
-          "$hash  $zip" | Out-File -Encoding ascii "$zip.sha256"
+          Compress-Archive -Path publish\MasterHub.Avalonia.exe, publish\masterhub-cli.exe -DestinationPath $zip -CompressionLevel Optimal
+          $setupHash = (Get-FileHash $setup -Algorithm SHA256).Hash.ToLower()
+          $zipHash = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower()
+          "$setupHash  MasterHub-Setup-$version.exe`n$zipHash  $zip" | Out-File -Encoding ascii SHA256SUMS.txt
 
           # Release notes = the matching section of CHANGELOG.md
           $lines = Get-Content CHANGELOG.md
@@ -47,9 +66,9 @@ jobs:
           }
           if ($notes.Count -eq 0) { $notes = @("See CHANGELOG.md.") }
           $notes += ""
-          $notes += "SHA-256 of the zip: ``$hash``"
+          $notes += "**Installer** (``MasterHub-Setup-$version.exe``): installs for the current user, no administrator rights needed. **Portable zip**: two exe files, run ``MasterHub.Avalonia.exe``. Checksums are in ``SHA256SUMS.txt``."
           $notes | Set-Content release-notes.md -Encoding utf8
 
           $flags = @()
           if ($version.StartsWith('0.')) { $flags += '--prerelease' }
-          gh release create $tag $zip "$zip.sha256" --title "MasterHub $version" --notes-file release-notes.md @flags
+          gh release create $tag $setup $zip SHA256SUMS.txt --title "MasterHub $version" --notes-file release-notes.md @flags

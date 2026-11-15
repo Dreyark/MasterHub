@@ -188,7 +188,7 @@ flowchart TD
 ## 🚀 Getting Started
 
 ### Download
-A ready-to-run Windows build (self-contained, no .NET needed) is attached to every [release](https://github.com/Dreyark/MasterHub/releases): unzip it and start `MasterHub.Avalonia.exe`. The zip comes with a SHA-256 file. Releases below 1.0 are pre-releases.
+Get the installer (`MasterHub-Setup-<version>.exe`, no administrator rights needed) or the portable zip (two exe files) from the [latest release](https://github.com/Dreyark/MasterHub/releases). No .NET installation is needed. Checksums are in `SHA256SUMS.txt`. Releases below 1.0 are pre-releases. Uninstalling keeps your profiles and settings in `%APPDATA%MasterHub`.
 
 ### Prerequisites
 - **Windows 10 / 11 (x64)**
